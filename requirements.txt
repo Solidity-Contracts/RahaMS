@@ -1,2 +1,7 @@
 openai
 streamlit
+pandas
+altair
+requests
+python-dateutil
+python-dotenv
