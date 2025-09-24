@@ -3,10 +3,10 @@ import sqlite3
 from openai import OpenAI
 import requests
 import matplotlib.pyplot as plt
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # ========== CONFIG ==========
-st.set_page_config(page_title="Raha MS", page_icon="☀️", layout="wide")
+st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
 
 # Load API keys from secrets.toml
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
@@ -24,13 +24,8 @@ TEXTS = {
         "login": "Login",
         "register": "Register",
         "temp_monitor": "My Heat Safety",
-        "community": "Community Resources",
-        "enter_temp": "Enter your current body temperature (°C):",
-        "check_weather": "Check Weather & Save",
-        "history": "Temperature History",
-        "triggers": "Heat Triggers & Lifestyle Factors",
-        "journal": "Journal & Medications",
-        "add_entry": "Add Journal Entry",
+        "assistant": "AI Companion",
+        "journal": "Journal & Symptoms",
         "logout": "Logout"
     },
     "Arabic": {
@@ -41,13 +36,8 @@ TEXTS = {
         "login": "تسجيل الدخول",
         "register": "إنشاء حساب",
         "temp_monitor": "سلامتي من الحرارة",
-        "community": "موارد المجتمع",
-        "enter_temp": "أدخل درجة حرارة جسمك الحالية (°م):",
-        "check_weather": "تحقق من الطقس واحفظ",
-        "history": "سجل درجات الحرارة",
-        "triggers": "المحفزات والعوامل",
-        "journal": "اليوميات والأدوية",
-        "add_entry": "أضف ملاحظة",
+        "assistant": "المساعد الذكي",
+        "journal": "اليوميات والأعراض",
         "logout": "تسجيل الخروج"
     }
 }
@@ -77,11 +67,9 @@ c.execute("""CREATE TABLE IF NOT EXISTS journal(
 conn.commit()
 
 # ========== HELPER FUNCTIONS ==========
-def get_weather_with_coords(place="Abu Dhabi,AE"):
-    if not OPENWEATHER_API_KEY:
-        return None, "Missing OpenWeather API key in secrets."
+def get_weather_with_coords(city="Abu Dhabi,AE"):
     try:
-        params = {"q": place, "appid": OPENWEATHER_API_KEY, "units": "metric"}
+        params = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric"}
         r = requests.get("https://api.openweathermap.org/data/2.5/weather", params=params, timeout=6)
         r.raise_for_status()
         j = r.json()
@@ -89,21 +77,27 @@ def get_weather_with_coords(place="Abu Dhabi,AE"):
         desc = j["weather"][0]["description"]
         lat = j.get("coord", {}).get("lat")
         lon = j.get("coord", {}).get("lon")
-        return {"temp": temp, "desc": desc, "lat": lat, "lon": lon, "raw": j}, None
+        # Forecast 24h & 48h
+        f_params = {"lat": lat, "lon": lon, "exclude":"current,minutely,alerts", "appid": OPENWEATHER_API_KEY, "units":"metric"}
+        f_r = requests.get("https://api.openweathermap.org/data/2.5/onecall", params=f_params)
+        f_r.raise_for_status()
+        f_j = f_r.json()
+        forecast_24 = f_j["hourly"][0:24]
+        forecast_48 = f_j["hourly"][0:48]
+        return {"temp": temp, "desc": desc, "lat": lat, "lon": lon, "forecast_24": forecast_24, "forecast_48": forecast_48}, None
     except Exception as e:
         return None, str(e)
 
 def ai_response(prompt, lang):
-    sys_prompt = ("You are Raha MS AI Assistant. "
-                  "Provide evidence-based responses for MS, especially heat sensitivity, "
-                  "based on trusted guidelines (NMSS, MSIF, Mayo Clinic, UAE MOHAP). "
-                  "Always include a short citation of source at the end.")
+    sys_prompt = ("You are Raha MS AI Companion. "
+                  "Analyze the user's temperature, triggers, journal entries, and forecast. "
+                  "Provide culturally relevant, practical MS heat safety advice for Arab users. "
+                  "Base on NMSS, MSIF, Mayo Clinic, UAE MOHAP. ")
     if lang == "Arabic":
-        sys_prompt += " Please respond in Arabic."
-    elif lang == "English":
-        sys_prompt += " Please respond in English."
+        sys_prompt += "Respond in Arabic."
     else:
-        sys_prompt += " Respond in the same language as the user."
+        sys_prompt += "Respond in English."
+
     response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
@@ -117,50 +111,43 @@ def render_about_page(app_language: str = "English"):
     if app_language == "English":
         st.title("🧠 Welcome to Raha MS")
         st.markdown("""
-        Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
-        Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
-        """)
-        
-        st.subheader("🌡️ Why Heat Matters in MS")
-        st.info("Even a small rise in body temperature (just 0.5°C) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.")
+Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
+Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
 
-        st.subheader("✨ What This App Offers You")
-        st.markdown("""
-        - **Track** your body temperature and local weather.  
-        - **Discover** personal heat triggers (like exercise, hot food, or stress).  
-        - **Record** your health journey in a private journal.  
-        - **Get support** from the AI Assistant with evidence-based tips.  
-        - **Access** culturally relevant community advice for staying cool in the GCC.  
-        """)
+🌡️ **Why Heat Matters in MS**  
+Even a small rise in body temperature (just 0.5°C) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.
 
-        st.subheader("🤝 Our Goal")
-        st.success("To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.")
+✨ **What This App Offers You**  
+- **Track** your body temperature and local weather.  
+- **Discover** personal heat triggers (exercise, hot food, stress, etc.).  
+- **Record** symptoms and health journey in a private journal.  
+- **Get support** from the AI Companion with culturally tailored advice.  
 
-        st.caption("Raha MS is an innovation prototype, co-created with the MS community in the Gulf.")
-    
-    else:  # Arabic
+🤝 **Our Goal**  
+To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.  
+
+📚 **Extra:** You can track trends, forecast, and get advice for upcoming hot hours.
+""")
+    else:
         st.title("🧠 مرحبًا بك في راحة إم إس")
         st.markdown("""
-        إن العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة الشديدة.  
-        تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
-        """)
+العيش مع **التصلب المتعدد (MS)** في الخليج صعب بسبب الحرارة الشديدة.  
+تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
 
-        st.subheader("🌡️ لماذا تؤثر الحرارة؟")
-        st.info("حتى الارتفاع البسيط في درجة حرارة الجسم (0.5°م فقط) قد يزيد أعراض التصلب المتعدد مؤقتًا — ويعرف ذلك بـ **ظاهرة أوتهوف**.")
+🌡️ **لماذا تؤثر الحرارة؟**  
+حتى ارتفاع بسيط في درجة حرارة الجسم (0.5°م) قد يزيد أعراض التصلب المتعدد مؤقتًا — **ظاهرة أوتهوف**.
 
-        st.subheader("✨ ما الذي يقدمه التطبيق؟")
-        st.markdown("""
-        - **مراقبة** درجة حرارة جسمك والطقس من حولك.  
-        - **اكتشاف** المحفزات الشخصية للحرارة (مثل الرياضة أو الأطعمة الحارة أو التوتر).  
-        - **تسجيل** ملاحظاتك اليومية في دفتر خاص.  
-        - **الحصول** على دعم من المساعد الذكي بمعلومات موثوقة.  
-        - **الوصول** إلى نصائح ثقافية للبقاء باردًا في الخليج.  
-        """)
+✨ **ما الذي يقدمه التطبيق؟**  
+- **مراقبة** درجة حرارة جسمك والطقس من حولك.  
+- **اكتشاف** المحفزات الشخصية للحرارة (رياضة، طعام حار، توتر...).  
+- **تسجيل** الأعراض واليوميات في دفتر خاص.  
+- **الحصول** على دعم من المساعد الذكي بنصائح متناسبة ثقافيًا.  
 
-        st.subheader("🤝 هدفنا")
-        st.success("أن نمنحك أدوات بسيطة تناسب حياتك اليومية وتخفف من القلق وتمنحك شعورًا أكبر بالتحكم.")
+🤝 **هدفنا**  
+توفير أدوات بسيطة تناسب حياتك اليومية، تقلل القلق، وتمنحك شعورًا بالتحكم.  
 
-        st.caption("راحة إم إس هو نموذج ابتكاري تم تطويره بالتعاون مع مجتمع مرضى التصلب المتعدد في الخليج.")
+📚 **إضافي:** تتبع الاتجاهات، توقع الطقس، واحصل على نصائح للساعات الحارة القادمة.
+""")
 
 # ========== SIDEBAR ==========
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
@@ -172,26 +159,25 @@ T = TEXTS[app_language]
 if app_language == "Arabic":
     st.markdown("""
     <style>
-    body, .block-container { direction: rtl; text-align: right; }
-    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+    body, .block-container {direction: rtl;text-align: right;}
+    [data-testid="stSidebar"] {direction: rtl;text-align: right;}
     </style>
     """, unsafe_allow_html=True)
 
 page = st.sidebar.radio("Navigate", [
-    T["about_title"], T["login_title"], T["temp_monitor"], 
-    T["journal"], T["community"], T["logout"]
+    T["about_title"], T["login_title"], T["temp_monitor"], T["journal"], T["logout"]
 ])
 
-# ========== PAGES ==========
-# About
+# ========== ABOUT ==========
 if page == T["about_title"]:
     render_about_page(app_language)
 
-# Login/Register
+# ========== LOGIN ==========
 elif page == T["login_title"]:
     st.title(T["login_title"])
     username = st.text_input(T["username"])
     password = st.text_input(T["password"], type="password")
+
     if st.button(T["login"]):
         c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
         if c.fetchone():
@@ -199,6 +185,7 @@ elif page == T["login_title"]:
             st.success("✅ Logged in!")
         else:
             st.error("❌ Invalid credentials")
+
     if st.button(T["register"]):
         try:
             c.execute("INSERT INTO users VALUES (?,?)", (username, password))
@@ -207,25 +194,28 @@ elif page == T["login_title"]:
         except:
             st.error("❌ Username already exists")
 
-# Heat Safety Dashboard
+# ========== HEAT DASHBOARD ==========
 elif page == T["temp_monitor"]:
     if "user" not in st.session_state:
         st.warning("Please login first.")
     else:
         st.title("☀️ Heat Safety Dashboard")
-        st.write("Track your personal heat risk, log triggers, and get evidence-based advice for MS heat sensitivity.")
-
-        if "last_check" not in st.session_state:
-            st.session_state["last_check"] = None
+        st.write("🤖 Your Smart Heat Companion: AI analyzes your temperature, forecast, triggers, and journal entries to give culturally tailored MS heat safety advice.")
 
         colL, colR = st.columns([3,1])
         with colL:
             body_temp = st.number_input("🌡️ Enter your body temperature (°C):", 30.0, 45.0, 37.0)
             city = st.text_input("🏙️ City (City,CC)", value="Abu Dhabi,AE")
-            triggers = st.multiselect("✅ Today I did / experienced:",
-                ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"])
+            triggers = st.multiselect(
+                "✅ Today I did / experienced:",
+                ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
+            )
+            symptoms = st.multiselect(
+                "⚕️ Symptoms experienced today:",
+                ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
+            )
+
         with colR:
-            st.write("⚠️ Threshold: 0.5 °C difference from weather temp")
             delta_setting = 0.5
             check_btn = st.button("🔍 Check My Heat Risk")
 
@@ -243,14 +233,17 @@ elif page == T["temp_monitor"]:
                     status = "Danger"; border = "red"; icon = "🔴"; advice = "High risk: avoid heat, rest in cooled spaces, use cooling packs, contact your clinician if severe symptoms occur."
 
                 st.session_state["last_check"] = {
-                    "city": city, "body_temp": float(body_temp), "weather_temp": float(weather["temp"]),
+                    "city": city, "body_temp": body_temp, "weather_temp": weather["temp"],
                     "weather_desc": weather.get("desc",""), "status": status, "border": border,
-                    "icon": icon, "advice": advice, "triggers": triggers, "time": datetime.utcnow().isoformat()
+                    "icon": icon, "advice": advice, "triggers": triggers, "symptoms": symptoms,
+                    "forecast_24": weather["forecast_24"], "forecast_48": weather["forecast_48"],
+                    "time": datetime.utcnow().isoformat()
                 }
 
+                # Save to DB
                 try:
                     c.execute("INSERT INTO temps VALUES (?,?,?,?,?)",
-                              (st.session_state["user"], str(datetime.now()), float(body_temp), float(weather["temp"]), status))
+                              (st.session_state["user"], str(datetime.now()), body_temp, float(weather["temp"]), status))
                     conn.commit()
                 except Exception as e:
                     st.warning(f"Could not save to DB: {e}")
@@ -259,22 +252,22 @@ elif page == T["temp_monitor"]:
 
         if st.session_state.get("last_check"):
             last = st.session_state["last_check"]
-            card_html = f"""
-            <div style="background:#fff;padding:18px;border-radius:12px;
-                        border-left:10px solid {last['border']};box-shadow:0 2px 6px rgba(0,0,0,0.06);">
-              <h3 style="margin:0">{last['icon']} <strong>Status: {last['status']}</strong></h3>
-              <p style="margin:6px 0 0 0">{last['advice']}</p>
-              <p style="margin:6px 0 0 0"><small>Weather ({last['city']}): {last['weather_temp']} °C — {last['weather_desc']}</small></p>
-              <p style="margin:6px 0 0 0"><small>Your body: {last['body_temp']} °C • checked at {last['time']}</small></p>
-              triggers_list = last.get("triggers")
-              triggers_text = ', '.join(triggers_list) if triggers_list else 'None'
-              <p style="margin:6px 0 0 0"><small>Triggers today: {triggers_text}</small></p>
-            </div>
-            """
-            st.markdown(card_html, unsafe_allow_html=True)
-            st.markdown("---")
+            triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
+            symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
 
-            st.subheader("📈 Your recent temperature trend")
+            st.markdown(f"""
+<div style="background:#fff;padding:18px;border-radius:12px;border-left:10px solid {last['border']};box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+<h3 style="margin:0">{last['icon']} <strong>Status: {last['status']}</strong></h3>
+<p style="margin:6px 0 0 0">{last['advice']}</p>
+<p style="margin:6px 0 0 0"><small>Weather ({last['city']}): {last['weather_temp']} °C — {last['weather_desc']}</small></p>
+<p style="margin:6px 0 0 0"><small>Your body: {last['body_temp']} °C • checked at {last['time']}</small></p>
+<p style="margin:6px 0 0 0"><small>Triggers today: {triggers_text}</small></p>
+<p style="margin:6px 0 0 0"><small>Symptoms today: {symptoms_text}</small></p>
+</div>
+""", unsafe_allow_html=True)
+
+            # Graph
+            st.subheader("📈 Recent temperature trend")
             c.execute("SELECT date, body_temp, weather_temp, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20",
                       (st.session_state["user"],))
             rows = c.fetchall()
@@ -288,72 +281,45 @@ elif page == T["temp_monitor"]:
                 fig, ax = plt.subplots(figsize=(8,3))
                 ax.plot(dates, bt, marker='o', label="Body Temp", color="tab:blue")
                 ax.plot(dates, wt, marker='s', label="Weather Temp", color="tab:orange")
-                ax.set_ylabel("°C")
-                ax.set_xticks(range(len(dates)))
-                ax.set_xticklabels(dates, rotation=30, fontsize=8)
-                ax.legend()
                 for i, color in enumerate(status_colors):
                     ax.scatter(i, bt[i], s=100, color=color, edgecolor="black", zorder=5)
+                ax.set_xticks(range(len(dates)))
+                ax.set_xticklabels(dates, rotation=30, fontsize=8)
+                ax.set_ylabel("°C")
+                ax.legend()
                 st.pyplot(fig)
 
-            st.subheader("🤖 Smart Heat Tips")
-            if st.button("Get Personalized Advice"):
-                user_prompt = (
-                    f"My current body temperature is {last['body_temp']}°C. "
-                    f"The weather in {last['city']} is {last['weather_temp']}°C ({last['weather_desc']}). "
-                    f"My triggers today: {', '.join(last['triggers']) if last['triggers'] else 'none'}. "
-                    f"What precautions should I take to stay safe with MS today?"
-                )
+            # AI advice
+            st.subheader("🤖 Personalized Heat Advice")
+            if st.button("Get AI Advice"):
+                user_prompt = f"My body temp: {last['body_temp']}°C, weather: {last['weather_temp']}°C ({last['weather_desc']}), triggers: {triggers_text}, symptoms: {symptoms_text}. Forecast next 48h: {last['forecast_48']}. Provide culturally tailored advice for Arab MS patient."
                 advice_text = ai_response(user_prompt, app_language)
                 st.info(advice_text)
 
-# Community Resources
-elif page == T["community"]:
-    if "user" not in st.session_state:
-        st.warning("Please login first.")
-    else:
-        st.title(T["community"])
-        if app_language == "English":
-            st.write("""
-            **Tips for staying cool in hot climates (GCC / UAE)**
-            - Drink plenty of **laban (yogurt drink)** and water to stay hydrated.
-            - Avoid spicy food and heavy meals during peak heat.
-            - Wear light, loose-fitting clothing and wide-brimmed hats.
-            - Use **herbal remedies** like mint tea or chamomile to cool down naturally.
-            - Stay in shaded or air-conditioned spaces during midday.
-            - Carry a cooling spray or wet towel for quick relief.
-            - Clinics & cooling products: consider local physiotherapy centers, MS support groups, and cooling vests.
-            """)
-        else:
-            st.write("""
-            **نصائح للبقاء باردًا في المناخ الحار (الخليج / الإمارات)**
-            - شرب الكثير من **اللبن** والماء للحفاظ على الترطيب.
-            - تجنب الأطعمة الحارة والوجبات الثقيلة في ساعات الحر الشديد.
-            - ارتداء ملابس خفيفة وواسعة وقبعات واسعة الحواف.
-            - استخدام **الأعشاب الطبيعية** مثل شاي النعناع أو البابونج للتبريد.
-            - البقاء في الأماكن المظللة أو المكيفة خلال ساعات الظهيرة.
-            - حمل بخاخ تبريد أو منشفة مبللة للتخفيف السريع.
-            - العيادات ومنتجات التبريد: يمكن زيارة مراكز العلاج الطبيعي، مجموعات دعم التصلب المتعدد، وسترات التبريد.
-            """)
-
-# Journal
+# ========== JOURNAL ==========
 elif page == T["journal"]:
     if "user" not in st.session_state:
         st.warning("Please login first.")
     else:
         st.title(T["journal"])
-        entry = st.text_area(T["add_entry"])
+        st.write("Write short blocks of text for your symptoms, observations, or thoughts. The AI uses this to provide better advice.")
+
+        entry_blocks = st.text_area("Add entry (separate blocks with line breaks)")
         if st.button("Save"):
-            c.execute("INSERT INTO journal VALUES (?,?,?)",
-                      (st.session_state["user"], str(datetime.now()), entry))
-            conn.commit()
-            st.success("✅ Saved")
-        c.execute("SELECT date, entry FROM journal WHERE username=?", (st.session_state["user"],))
+            if entry_blocks.strip():
+                lines = [line.strip() for line in entry_blocks.split("\n") if line.strip()]
+                for line in lines:
+                    c.execute("INSERT INTO journal VALUES (?,?,?)", (st.session_state["user"], str(datetime.now()), line))
+                conn.commit()
+                st.success("✅ Saved")
+
+        # Display existing entries
+        c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
         rows = c.fetchall()
         for r in rows:
             st.write(f"📅 {r[0]} → {r[1]}")
 
-# Logout
+# ========== LOGOUT ==========
 elif page == T["logout"]:
     st.session_state.pop("user", None)
     st.success("✅ Logged out!")
