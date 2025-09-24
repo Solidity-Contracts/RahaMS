@@ -381,6 +381,15 @@ elif page == T["temp_monitor"]:
                     ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
                 )
                 fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+                    with st.expander("Why fasting matters in the heat (open)"):
+                    st.markdown("""
+                        - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
+                          **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
+                        - Fasting during Ramadan means no fluids between dawn and sunset; in hot climates this raises **dehydration risk**.
+                          **Hamad Medical Corporation**: https://www.hamad.qa/en/your%20health/ramadan%20health/health%20information/pages/dehydration.aspx
+                        - Dehydration reduces your body's ability to cool itself and increases heat strain.
+                          **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
+                        """)
 
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
