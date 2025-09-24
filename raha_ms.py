@@ -109,7 +109,7 @@ def ai_response(prompt, lang):
 
 def render_about_page(app_language: str = "English"):
     if app_language == "English":
-        st.title("🌸 Welcome to Raha MS")
+        st.title("🧠 Welcome to Raha MS")
         st.markdown("""
         Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
         Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
@@ -132,7 +132,7 @@ def render_about_page(app_language: str = "English"):
         st.caption("Raha MS is an innovation prototype, co-created with the MS community in the Gulf.")
     
     else:  # Arabic version
-        st.title("🌸 مرحبًا بك في راحة إم إس")
+        st.title("🧠 مرحبًا بك في راحة إم إس")
         st.markdown("""
         إن العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة الشديدة.  
         تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
