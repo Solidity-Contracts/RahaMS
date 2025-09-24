@@ -364,39 +364,36 @@ elif page == T["temp_monitor"]:
         st.title("☀️ " + T["risk_dashboard"])
         st.write("Your AI Companion analyzes **apparent temperature, humidity, your body temp, triggers, and journal context** to offer gentle, GCC‑aware tips.")
 
-    with st.form("risk_form", clear_on_submit=False):
-    colL, colR = st.columns([3,1])
-        with colL:
-        body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
-        baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
-        # city inputs
-        quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
-        city = st.text_input("🏙️ " + T["city"], value=quick)
-        triggers = st.multiselect(
-            "✅ " + T["did_today"],
-            ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
-        )
-        symptoms = st.multiselect(
-            "⚕️ " + T["symptoms_today"],
-            ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
-        )
-        fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
-        
-        # Expander should be at the same indentation level as other form elements
-    with st.expander("Why fasting matters in the heat (open)"):
-            st.markdown("""
-            - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
-              **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
-            - Fasting during Ramadan means no fluids between dawn and sunset; in hot climates this raises **dehydration risk**.
-              **Hamad Medical Corporation**: https://www.hamad.qa/en/your%20health/ramadan%20health/health%20information/pages/dehydration.aspx
-            - Dehydration reduces your body's ability to cool itself and increases heat strain.
-              **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
-            """)
-
-        with colR:
-        submitted = st.form_submit_button("🔍 " + T["check_risk"])
+        with st.form("risk_form", clear_on_submit=False):
+            colL, colR = st.columns([3,1])
+            
+            with colL:
+                body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
+                baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
+                quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
+                city = st.text_input("🏙️ " + T["city"], value=quick)
+                triggers = st.multiselect(
+                    "✅ " + T["did_today"],
+                    ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
+                )
+                symptoms = st.multiselect(
+                    "⚕️ " + T["symptoms_today"],
+                    ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
+                )
+                fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+            
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
+
+        # Expander outside the form
+        with st.expander("🌡️ Why fasting matters in MS heat safety"):
+            st.markdown("""
+            **Key considerations for fasting MS patients in hot climates:**
+            - **Uhthoff's phenomenon**: Heat can temporarily worsen MS symptoms
+            - **Dehydration risk**: No daytime fluids during fasting increases heat strain
+            - **Cooling strategies**: Plan hydration during non-fasting hours carefully
+            - **Activity timing**: Schedule activities during cooler parts of the day
+            """)
 
         if submitted:
             # remember baseline
@@ -443,7 +440,7 @@ elif page == T["temp_monitor"]:
                 except Exception as e:
                     st.warning(f"Could not save to DB: {e}")
 
-        # render last check if any - MAKE SURE THIS IS PROPERLY INDENTED
+        # render last check if any
         if st.session_state.get("last_check"):
             last = st.session_state["last_check"]
             triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
@@ -466,7 +463,7 @@ elif page == T["temp_monitor"]:
 </div>
 """, unsafe_allow_html=True)
 
-            # Chart section - FIXED INDENTATION
+            # Chart section
             st.subheader("📈 Recent temperature trend")
             c = get_conn().cursor()
             try:
@@ -496,7 +493,7 @@ elif page == T["temp_monitor"]:
             except Exception as e:
                 st.error(f"Database query error: {e}")
 
-            # AI advice section - FIXED INDENTATION
+            # AI advice section
             st.subheader("🤖 Personalized Heat Advice")
             if st.button(T["ai_advice_btn"]):
                 if not client:
