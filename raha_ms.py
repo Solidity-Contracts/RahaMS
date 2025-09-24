@@ -253,6 +253,7 @@ elif page == T["temp_monitor"]:
             body_temp = st.number_input("🌡️ Enter your body temperature (°C):", 30.0, 45.0, 37.0, key="body_temp_input")
             city = st.text_input("🏙️ City (City,CC)", value="Abu Dhabi,AE", key="city_input")
         with colR:
+            st.write("Threshold: 0.5 °C (fixed)")
             delta_setting = 0.5 # °C difference threshold (clinically determined)
             check_btn = st.button("🔍 Check My Heat Risk")
 
