@@ -381,7 +381,7 @@ elif page == T["temp_monitor"]:
                     ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
                 )
                 fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
-                    with st.expander("Why fasting matters in the heat (open)"):
+                 with st.expander("Why fasting matters in the heat (open)"):
                         st.markdown("""
                         - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
                           **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
