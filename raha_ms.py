@@ -130,7 +130,9 @@ def ai_response(prompt, lang):
 # ========== SIDEBAR NAVIGATION ==========
 
 # Display the image using st.image()
-logo_url = "https://github.com/Solidity-Contracts/RahaMS/blob/2a2213a29e1535b50bee024c95760f12258c8052/logo.png"
+# Sidebar Logo
+logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/7cea5af37e9f4ec428bf9e4627d88458bf1ee420/logo.png"
+
 st.sidebar.image(logo_url, use_container_width=True)
 
 st.sidebar.title("Raha MS")
