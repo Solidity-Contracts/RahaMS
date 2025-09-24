@@ -366,7 +366,7 @@ elif page == T["temp_monitor"]:
 
         with st.form("risk_form", clear_on_submit=False):
     colL, colR = st.columns([3,1])
-    with colL:
+        with colL:
         body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
         baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
         # city inputs
@@ -393,7 +393,7 @@ elif page == T["temp_monitor"]:
               **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
             """)
 
-    with colR:
+        with colR:
         submitted = st.form_submit_button("🔍 " + T["check_risk"])
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
