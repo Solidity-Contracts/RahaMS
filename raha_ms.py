@@ -17,6 +17,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # ========== TRANSLATION DICTIONARY ==========
 TEXTS = {
     "English": {
+        "about_title": "About Raha MS",
         "login_title": "Login / Register",
         "username": "Username",
         "password": "Password",
@@ -34,6 +35,7 @@ TEXTS = {
         "logout": "Logout"
     },
     "Arabic": {
+        "about_title": "عن تطبيق راحة إم إس",
         "login_title": "تسجيل الدخول / إنشاء حساب",
         "username": "اسم المستخدم",
         "password": "كلمة المرور",
