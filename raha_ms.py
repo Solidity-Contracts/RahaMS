@@ -134,7 +134,7 @@ def ai_response(prompt, lang):
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
-st.sidebar.title("Raha MS")
+#st.sidebar.title("Raha MS")
 
 # Language selection
 app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"])
