@@ -225,32 +225,75 @@ elif page == T["temp_monitor"]:
     if "user" not in st.session_state:
         st.warning("Please login first.")
     else:
-        st.title(T["temp_monitor"])
-        body_temp = st.number_input(T["enter_temp"], 30.0, 45.0, 37.0)
-        city = st.text_input("City", "Abu Dhabi")
+        st.title("☀️ Heat Safety Check")
+        st.write("This page helps you understand how the heat may affect your MS symptoms today.")
 
-        if st.button(T["check_weather"]):
+        # Input section
+        body_temp = st.number_input("🌡️ Enter your body temperature (°C):", 30.0, 45.0, 37.0)
+        city = st.text_input("🏙️ Enter your city:", "Abu Dhabi")
+
+        if st.button("🔍 Check My Heat Risk"):
             weather = get_weather(city)
             if weather:
                 diff = body_temp - weather
-                status = "Safe" if diff < 0.5 else "Caution" if diff < 1 else "Danger"
-                st.write(f"🌡️ Weather: {weather} °C | Body: {body_temp} °C → Status: **{status}**")
+                if diff < 0.5:
+                    status, color, advice = "Safe", "🟢", "You’re safe! Stay hydrated and enjoy your day."
+                elif diff < 1:
+                    status, color, advice = "Caution", "🟡", "Be careful: you might notice mild symptoms in this heat."
+                else:
+                    status, color, advice = "Danger", "🔴", "High risk: avoid heat exposure, stay indoors, and use cooling strategies."
 
+                # Show safety card
+                st.markdown(f"""
+                <div style="background-color:#f9f9f9;padding:20px;border-radius:15px;
+                            border-left:10px solid {'green' if status=='Safe' else 'orange' if status=='Caution' else 'red'};">
+                <h3>{color} Status: {status}</h3>
+                <p>{advice}</p>
+                <p><b>Weather:</b> {weather} °C | <b>Your body:</b> {body_temp} °C</p>
+                </div>
+                """, unsafe_allow_html=True)
+
+                # Save to DB
                 c.execute("INSERT INTO temps VALUES (?,?,?,?,?)",
                           (st.session_state["user"], str(datetime.now()), body_temp, weather, status))
                 conn.commit()
 
-        st.subheader(T["history"])
+                # Interactive heat map
+                try:
+                    import folium
+                    from streamlit_folium import st_folium
+                    geocode_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city}&limit=1&appid={OPENWEATHER_API_KEY}"
+                    geo_resp = requests.get(geocode_url).json()
+                    if geo_resp:
+                        lat, lon = geo_resp[0]["lat"], geo_resp[0]["lon"]
+                        m = folium.Map(location=[lat, lon], zoom_start=10)
+                        folium.Marker([lat, lon], popup=f"{city}: {weather} °C").add_to(m)
+                        st.subheader("🗺️ Heat Map of Your Location")
+                        st_folium(m, width=700, height=500)
+                except Exception as e:
+                    st.warning("Map could not be loaded. Please install `folium` and `streamlit-folium`.")
+
+        # Historical trends
+        st.subheader("📈 Your Heat Trends")
         c.execute("SELECT date, body_temp, weather_temp, status FROM temps WHERE username=?",
                   (st.session_state["user"],))
         rows = c.fetchall()
         if rows:
             dates, bt, wt, status = zip(*rows)
             fig, ax = plt.subplots()
-            ax.plot(dates, bt, label="Body Temp")
-            ax.plot(dates, wt, label="Weather Temp")
+            ax.plot(dates, bt, label="Body Temp", marker="o")
+            ax.plot(dates, wt, label="Weather Temp", marker="s")
+            ax.set_ylabel("Temperature (°C)")
+            ax.set_xlabel("Date")
             ax.legend()
             st.pyplot(fig)
+
+            # Color-coded timeline
+            st.subheader("🕒 Past Safety Checks")
+            for d, s in zip(dates, status):
+                icon = "🟢" if s=="Safe" else "🟡" if s=="Caution" else "🔴"
+                st.write(f"{icon} {d}: {s}")
+
 
 # ========== TRIGGERS ==========
 elif page == T["triggers"]:
