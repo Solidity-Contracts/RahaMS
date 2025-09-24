@@ -128,6 +128,11 @@ def ai_response(prompt, lang):
     return response.choices[0].message.content
 
 # ========== SIDEBAR NAVIGATION ==========
+
+# Display the image using st.image()
+logo_url = "https://github.com/Solidity-Contracts/RahaMS/blob/2a2213a29e1535b50bee024c95760f12258c8052/logo.png"
+st.sidebar.image(logo_url, use_column_width=True)
+
 st.sidebar.title("Raha MS")
 
 # Language selection
