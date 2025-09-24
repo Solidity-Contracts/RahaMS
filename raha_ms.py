@@ -364,7 +364,7 @@ elif page == T["temp_monitor"]:
         st.title("☀️ " + T["risk_dashboard"])
         st.write("Your AI Companion analyzes **apparent temperature, humidity, your body temp, triggers, and journal context** to offer gentle, GCC‑aware tips.")
 
-        with st.form("risk_form", clear_on_submit=False):
+    with st.form("risk_form", clear_on_submit=False):
     colL, colR = st.columns([3,1])
         with colL:
         body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
@@ -383,7 +383,7 @@ elif page == T["temp_monitor"]:
         fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
         
         # Expander should be at the same indentation level as other form elements
-        with st.expander("Why fasting matters in the heat (open)"):
+    with st.expander("Why fasting matters in the heat (open)"):
             st.markdown("""
             - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
               **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
