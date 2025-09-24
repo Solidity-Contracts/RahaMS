@@ -131,7 +131,7 @@ def ai_response(prompt, lang):
 
 # Display the image using st.image()
 # Sidebar Logo
-logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/7cea5af37e9f4ec428bf9e4627d88458bf1ee420/logo.png"
+logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/7cea5af37e9f4ec428bf9e4627d88458bf1ee420/logo1.png"
 
 st.sidebar.image(logo_url, use_container_width=True)
 
