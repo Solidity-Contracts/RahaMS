@@ -17,17 +17,6 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 # ========== TRANSLATION DICTIONARY ==========
 TEXTS = {
     "English": {
-        "about_title": "About Raha MS",
-        "about_desc": """**Raha MS** is designed to support people living with Multiple Sclerosis (MS) in the GCC region.  
-Heat sensitivity, known as **Uhthoff’s phenomenon**, can worsen MS symptoms with just a 0.5°C rise in body temperature.  
-The GCC’s hot and humid climate makes this especially challenging.  
-This app helps monitor temperature, log triggers, provide coping strategies, and offer AI support.  
-
-**References:**  
-- National MS Society: Heat & Temperature Sensitivity  
-- MS International Federation  
-- Mayo Clinic MS Guidelines  
-""",
         "login_title": "Login / Register",
         "username": "Username",
         "password": "Password",
@@ -45,17 +34,6 @@ This app helps monitor temperature, log triggers, provide coping strategies, and
         "logout": "Logout"
     },
     "Arabic": {
-        "about_title": "عن تطبيق راحة إم إس",
-        "about_desc": """تم تصميم **راحة إم إس** لمساعدة مرضى التصلب المتعدد في منطقة الخليج.  
-حساسية الحرارة، المعروفة باسم **ظاهرة أوتهوف**، يمكن أن تزيد الأعراض سوءًا بارتفاع طفيف في درجة حرارة الجسم (0.5 درجة مئوية).  
-وبسبب المناخ الحار والرطب في الخليج، فإن هذه المشكلة أكثر بروزًا.  
-يتيح التطبيق مراقبة درجة الحرارة، وتسجيل المحفزات، وتقديم استراتيجيات للتكيف، بالإضافة إلى مساعد ذكي.  
-
-**المراجع:**  
-- الجمعية الوطنية للتصلب المتعدد: حساسية الحرارة  
-- الاتحاد الدولي للتصلب المتعدد  
-- مايو كلينك: إرشادات التصلب المتعدد  
-""",
         "login_title": "تسجيل الدخول / إنشاء حساب",
         "username": "اسم المستخدم",
         "password": "كلمة المرور",
@@ -127,6 +105,54 @@ def ai_response(prompt, lang):
     )
     return response.choices[0].message.content
 
+def render_about_page(app_language: str = "English"):
+    if app_language == "English":
+        st.title("🌸 Welcome to Raha MS")
+        st.markdown("""
+        Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
+        Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
+        """)
+        
+        st.subheader("🌡️ Why Heat Matters in MS")
+        st.info("Even a small rise in body temperature (just 0.5°C) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.")
+
+        st.subheader("✨ What This App Offers You")
+        st.markdown("""
+        - **Track** your body temperature and local weather.  
+        - **Discover** personal heat triggers (like exercise, hot food, or stress).  
+        - **Record** your health journey in a private journal.  
+        - **Get support** from the AI Assistant with evidence-based tips.  
+        """)
+
+        st.subheader("🤝 Our Goal")
+        st.success("To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.")
+
+        st.caption("Raha MS is an innovation prototype, co-created with the MS community in the Gulf.")
+    
+    else:  # Arabic version
+        st.title("🌸 مرحبًا بك في راحة إم إس")
+        st.markdown("""
+        إن العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة الشديدة.  
+        تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
+        """)
+
+        st.subheader("🌡️ لماذا تؤثر الحرارة؟")
+        st.info("حتى الارتفاع البسيط في درجة حرارة الجسم (0.5°م فقط) قد يزيد أعراض التصلب المتعدد مؤقتًا — ويعرف ذلك بـ **ظاهرة أوتهوف**.")
+
+        st.subheader("✨ ما الذي يقدمه التطبيق؟")
+        st.markdown("""
+        - **مراقبة** درجة حرارة جسمك والطقس من حولك.  
+        - **اكتشاف** المحفزات الشخصية للحرارة (مثل الرياضة أو الأطعمة الحارة أو التوتر).  
+        - **تسجيل** ملاحظاتك اليومية في دفتر خاص.  
+        - **الحصول** على دعم من المساعد الذكي بمعلومات موثوقة.  
+        """)
+
+        st.subheader("🤝 هدفنا")
+        st.success("أن نمنحك أدوات بسيطة تناسب حياتك اليومية وتخفف من القلق وتمنحك شعورًا أكبر بالتحكم.")
+
+        st.caption("راحة إم إس هو نموذج ابتكاري تم تطويره بالتعاون مع مجتمع مرضى التصلب المتعدد في الخليج.")
+
+
 # ========== SIDEBAR NAVIGATION ==========
 
 # Display the image using st.image()
@@ -168,8 +194,7 @@ page = st.sidebar.radio("Navigate", [
 
 # ========== ABOUT ==========
 if page == T["about_title"]:
-    st.title(T["about_title"])
-    st.markdown(T["about_desc"])
+    render_about_page(app_language)
 
 # ========== LOGIN ==========
 elif page == T["login_title"]:
