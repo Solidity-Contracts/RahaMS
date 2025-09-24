@@ -111,43 +111,51 @@ def render_about_page(app_language: str = "English"):
     if app_language == "English":
         st.title("🧠 Welcome to Raha MS")
         st.markdown("""
-Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
-Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
+        Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
+        Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
+        """)
+        
+        st.subheader("🌡️ Why Heat Matters in MS")
+        st.info("Even a small rise in body temperature (just 0.5°C) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.")
 
-🌡️ **Why Heat Matters in MS**  
-Even a small rise in body temperature (just 0.5°C) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.
+        st.subheader("✨ What This App Offers You")
+        st.markdown("""
+        - **Track** your body temperature and local weather.  
+        - **Discover** personal heat triggers (like exercise, hot food, or stress).  
+        - **Record** your health journey in a private journal.  
+        - **Get support** from the AI Assistant with evidence-based tips.  
+        - **Access** culturally relevant community advice for staying cool in the GCC.  
+        """)
 
-✨ **What This App Offers You**  
-- **Track** your body temperature and local weather.  
-- **Discover** personal heat triggers (exercise, hot food, stress, etc.).  
-- **Record** symptoms and health journey in a private journal.  
-- **Get support** from the AI Companion with culturally tailored advice.  
+        st.subheader("🤝 Our Goal")
+        st.success("To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.")
 
-🤝 **Our Goal**  
-To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.  
-
-📚 **Extra:** You can track trends, forecast, and get advice for upcoming hot hours.
-""")
-    else:
+        st.caption("Raha MS is an innovation prototype, co-created with the MS community in the Gulf.")
+    
+    else:  # Arabic
         st.title("🧠 مرحبًا بك في راحة إم إس")
         st.markdown("""
-العيش مع **التصلب المتعدد (MS)** في الخليج صعب بسبب الحرارة الشديدة.  
-تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
+        إن العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة الشديدة.  
+        تم تصميم تطبيق راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
+        """)
 
-🌡️ **لماذا تؤثر الحرارة؟**  
-حتى ارتفاع بسيط في درجة حرارة الجسم (0.5°م) قد يزيد أعراض التصلب المتعدد مؤقتًا — **ظاهرة أوتهوف**.
+        st.subheader("🌡️ لماذا تؤثر الحرارة؟")
+        st.info("حتى الارتفاع البسيط في درجة حرارة الجسم (0.5°م فقط) قد يزيد أعراض التصلب المتعدد مؤقتًا — ويعرف ذلك بـ **ظاهرة أوتهوف**.")
 
-✨ **ما الذي يقدمه التطبيق؟**  
-- **مراقبة** درجة حرارة جسمك والطقس من حولك.  
-- **اكتشاف** المحفزات الشخصية للحرارة (رياضة، طعام حار، توتر...).  
-- **تسجيل** الأعراض واليوميات في دفتر خاص.  
-- **الحصول** على دعم من المساعد الذكي بنصائح متناسبة ثقافيًا.  
+        st.subheader("✨ ما الذي يقدمه التطبيق؟")
+        st.markdown("""
+        - **مراقبة** درجة حرارة جسمك والطقس من حولك.  
+        - **اكتشاف** المحفزات الشخصية للحرارة (مثل الرياضة أو الأطعمة الحارة أو التوتر).  
+        - **تسجيل** ملاحظاتك اليومية في دفتر خاص.  
+        - **الحصول** على دعم من المساعد الذكي بمعلومات موثوقة.  
+        - **الوصول** إلى نصائح ثقافية للبقاء باردًا في الخليج.  
+        """)
 
-🤝 **هدفنا**  
-توفير أدوات بسيطة تناسب حياتك اليومية، تقلل القلق، وتمنحك شعورًا بالتحكم.  
+        st.subheader("🤝 هدفنا")
+        st.success("أن نمنحك أدوات بسيطة تناسب حياتك اليومية وتخفف من القلق وتمنحك شعورًا أكبر بالتحكم.")
 
-📚 **إضافي:** تتبع الاتجاهات، توقع الطقس، واحصل على نصائح للساعات الحارة القادمة.
-""")
+        st.caption("راحة إم إس هو نموذج ابتكاري تم تطويره بالتعاون مع مجتمع مرضى التصلب المتعدد في الخليج.")
+
 
 # ========== SIDEBAR ==========
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
