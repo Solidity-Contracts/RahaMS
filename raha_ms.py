@@ -138,6 +138,25 @@ def init_db():
     )""")
     conn.commit()
 
+
+def migrate_db():
+    conn = get_conn() if 'get_conn' in globals() else sqlite3.connect("raha_ms.db", check_same_thread=False)
+    c = conn.cursor()
+    # What columns do we have now?
+    c.execute("PRAGMA table_info(temps)")
+    cols = [r[1] for r in c.fetchall()]
+
+    # Add new columns if they don't exist (SQLite appends them at the end)
+    if "feels_like" not in cols:
+        c.execute("ALTER TABLE temps ADD COLUMN feels_like REAL")
+    if "humidity" not in cols:
+        c.execute("ALTER TABLE temps ADD COLUMN humidity REAL")
+
+    conn.commit()
+
+# call on every run (safe if run repeatedly)
+migrate_db()
+
 init_db()
 
 # ================== WEATHER ==================
@@ -362,6 +381,16 @@ elif page == T["temp_monitor"]:
                     ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
                 )
                 fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+                with st.expander("Why fasting matters in the heat (open)"):
+    st.markdown("""
+- In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
+  **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
+- Fasting during Ramadan means no fluids between dawn and sunset; in hot climates this raises **dehydration risk**.
+  **Hamad Medical Corporation**: https://www.hamad.qa/en/your%20health/ramadan%20health/health%20information/pages/dehydration.aspx
+- Dehydration reduces your body's ability to cool itself and increases heat strain.
+  **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
+""")
+
 
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
@@ -435,59 +464,81 @@ elif page == T["temp_monitor"]:
 """, unsafe_allow_html=True)
 
             # Chart
-            st.subheader("📈 Recent temperature trend")
-            c = get_conn().cursor()
-            try:
-                query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20"
-                c.execute(query, (st.session_state["user"],))
-                rows = c.fetchall()
-    
-            if rows:
-                rows = rows[::-1]
-                dates = [r[0][5:16] for r in rows]  # show MM-DD HH:MM
-                bt = [r[1] for r in rows]
-                wt = [r[2] for r in rows]
-                ft = [r[3] for r in rows]
-                status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
+st.subheader("📈 Recent temperature trend")
+conn = get_conn() if 'get_conn' in globals() else sqlite3.connect("raha_ms.db", check_same_thread=False)
+c = conn.cursor()
 
-                fig, ax = plt.subplots(figsize=(9,3))
-                ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2)
-                ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
-                for i, color in enumerate(status_colors):
-                    ax.scatter(i, bt[i], s=110, edgecolor="black", zorder=5, color=color)
-                ax.set_xticks(range(len(dates)))
-                ax.set_xticklabels(dates, rotation=30, fontsize=8)
-                ax.set_ylabel("°C")
-                ax.legend()
-                st.pyplot(fig)
+# Figure out which columns exist
+c.execute("PRAGMA table_info(temps)")
+cols = {r[1] for r in c.fetchall()}
 
-            except Exception as e:
-            st.error(f"Database query error: {e}")
+if "feels_like" in cols:
+    c.execute("""
+        SELECT date, body_temp, weather_temp, feels_like, status
+        FROM temps
+        WHERE username=?
+        ORDER BY date DESC LIMIT 20
+    """, (st.session_state["user"],))
+    rows = c.fetchall()
+else:
+    # Fallback for very old DBs (should be rare after migrate_db)
+    c.execute("""
+        SELECT date, body_temp, weather_temp, status
+        FROM temps
+        WHERE username=?
+        ORDER BY date DESC LIMIT 20
+    """, (st.session_state["user"],))
+    rows = [ (d, bt, wt, wt, st) for (d, bt, wt, st) in c.fetchall() ]  # use weather_temp as proxy feels_like
 
-            # AI advice
-            st.subheader("🤖 Personalized Heat Advice")
-            if st.button(T["ai_advice_btn"]):
-                if not client:
-                    st.warning(TEXTS[app_language]["ai_unavailable"])
-                else:
-                    triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
-                    symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
-                    # keep it short to reduce token cost
-                    prompt = (
-                        f"City: {last['city']}. Now feels-like {round(last['feels_like'],1)}°C, humidity {int(last['humidity'])}%. "
-                        f"Body temp {round(last['body_temp'],1)}°C (baseline {round(last['baseline'],1)}°C). "
-                        f"Triggers: {triggers_text}. Symptoms: {symptoms_text}. "
-                        f"Peak heat next 48h: {', '.join(last['peak_hours'])}. "
-                        f"Fasting today: {last['fasting']}. "
-                        "Give 6–8 bullet tips tailored to GCC life. Short, practical, and empathetic."
-                    )
-                    advice_text, err = ai_response(prompt, app_language)
-                    if err == "no_key":
-                        st.warning(TEXTS[app_language]["ai_unavailable"])
-                    elif err:
-                        st.error(f"AI error: {err}")
-                    else:
-                        st.info(advice_text)
+if rows:
+    rows = rows[::-1]
+    dates = [r[0][5:16] for r in rows]
+    bt = [r[1] for r in rows]
+    wt = [r[2] for r in rows]
+    ft = [ (r[3] if r[3] is not None else r[2]) for r in rows ]  # fallback if feels_like is NULL in older rows
+    status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
+
+    fig, ax = plt.subplots(figsize=(9,3))
+    ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2)
+    ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
+    for i, color in enumerate(status_colors):
+        ax.scatter(i, bt[i], s=110, edgecolor="black", zorder=5, color=color)
+    ax.set_xticks(range(len(dates)))
+    ax.set_xticklabels(dates, rotation=30, fontsize=8)
+    ax.set_ylabel("°C")
+    ax.legend()
+    st.pyplot(fig)
+
+            # --- AI Companion (always visible at the bottom) ---
+st.markdown("---")
+st.subheader("🤖 AI Companion")
+
+if not client:
+    st.warning("AI is unavailable. Set OPENAI_API_KEY in secrets.")
+else:
+    default_q = "How can I stay cool and pace activities in the GCC this week?"
+    user_q = st.text_area("Ask anything (English or Arabic):", value=default_q, height=90)
+    use_ctx = st.checkbox("Use my latest heat check as context", value=True)
+
+    if st.button("Ask the assistant"):
+        context = ""
+        last = st.session_state.get("last_check")
+        if use_ctx and last:
+            context = (
+                f"City: {last['city']}. Now feels-like {round(last['feels_like'],1)}°C, "
+                f"humidity {int(last['humidity'])}%. Body temp {round(last['body_temp'],1)}°C "
+                f"(baseline {round(last.get('baseline', 37.0),1)}°C). "
+                f"Triggers: {', '.join(last['triggers']) if last['triggers'] else 'None'}. "
+                f"Symptoms: {', '.join(last['symptoms']) if last['symptoms'] else 'None'}. "
+                f"Peak heat: {', '.join(last.get('peak_hours', [])) or 'n/a'}. "
+                f"Fasting today: {last.get('fasting', False)}."
+            )
+        prompt = (context + "\n\nQuestion: " + user_q).strip()
+        reply, err = ai_response(prompt, app_language)
+        if err:
+            st.error(f"AI error: {err}")
+        else:
+            st.info(reply)
 
 # JOURNAL
 elif page == T["journal"]:
