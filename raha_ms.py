@@ -365,32 +365,36 @@ elif page == T["temp_monitor"]:
         st.write("Your AI Companion analyzes **apparent temperature, humidity, your body temp, triggers, and journal context** to offer gentle, GCC‑aware tips.")
 
         with st.form("risk_form", clear_on_submit=False):
-            colL, colR = st.columns([3,1])
-            with colL:
-                body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
-                baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
-                # city inputs
-                quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
-                city = st.text_input("🏙️ " + T["city"], value=quick)
-                triggers = st.multiselect(
-                    "✅ " + T["did_today"],
-                    ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
-                )
-                symptoms = st.multiselect(
-                    "⚕️ " + T["symptoms_today"],
-                    ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
-                )
-                fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
-                 with st.expander("Why fasting matters in the heat (open)"):
-                        st.markdown("""
-                        - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
-                          **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
-                        - Fasting during Ramadan means no fluids between dawn and sunset; in hot climates this raises **dehydration risk**.
-                          **Hamad Medical Corporation**: https://www.hamad.qa/en/your%20health/ramadan%20health/health%20information/pages/dehydration.aspx
-                        - Dehydration reduces your body's ability to cool itself and increases heat strain.
-                          **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
-                        """)
+    colL, colR = st.columns([3,1])
+    with colL:
+        body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
+        baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
+        # city inputs
+        quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
+        city = st.text_input("🏙️ " + T["city"], value=quick)
+        triggers = st.multiselect(
+            "✅ " + T["did_today"],
+            ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
+        )
+        symptoms = st.multiselect(
+            "⚕️ " + T["symptoms_today"],
+            ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
+        )
+        fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+        
+        # Expander should be at the same indentation level as other form elements
+        with st.expander("Why fasting matters in the heat (open)"):
+            st.markdown("""
+            - In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
+              **National MS Society**: https://www.nationalmssociety.org/managing-ms/living-with-ms/diet-exercise-and-healthy-behaviors/heat-temperature
+            - Fasting during Ramadan means no fluids between dawn and sunset; in hot climates this raises **dehydration risk**.
+              **Hamad Medical Corporation**: https://www.hamad.qa/en/your%20health/ramadan%20health/health%20information/pages/dehydration.aspx
+            - Dehydration reduces your body's ability to cool itself and increases heat strain.
+              **CDC – Heat and Your Health**: https://www.cdc.gov/heat-health/about/index.html
+            """)
 
+    with colR:
+        submitted = st.form_submit_button("🔍 " + T["check_risk"])
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
 
