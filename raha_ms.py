@@ -461,6 +461,9 @@ elif page == T["temp_monitor"]:
                 ax.legend()
                 st.pyplot(fig)
 
+            except Exception as e:
+            st.error(f"Database query error: {e}")
+
             # AI advice
             st.subheader("🤖 Personalized Heat Advice")
             if st.button(T["ai_advice_btn"]):
