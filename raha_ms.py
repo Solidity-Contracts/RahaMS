@@ -437,11 +437,10 @@ elif page == T["temp_monitor"]:
             # Chart
             st.subheader("📈 Recent temperature trend")
             c = get_conn().cursor()
-            try:
-    
-    query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20"
-    c.execute(query, (st.session_state["user"],))
-    rows = c.fetchall()
+            try
+                query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20"
+                c.execute(query, (st.session_state["user"],))
+                rows = c.fetchall()
     
             if rows:
                 rows = rows[::-1]
