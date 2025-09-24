@@ -140,6 +140,27 @@ st.sidebar.image(logo_url, use_container_width=True)
 app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"])
 T = TEXTS[app_language]
 
+# Apply RTL layout if Arabic is chosen
+if app_language == "Arabic":
+    st.markdown(
+        """
+        <style>
+        /* Make whole app RTL */
+        body, .block-container {
+            direction: rtl;
+            text-align: right;
+        }
+        /* Sidebar also RTL */
+        [data-testid="stSidebar"] {
+            direction: rtl;
+            text-align: right;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+
+
 page = st.sidebar.radio("Navigate", [
     T["about_title"], T["login_title"], T["temp_monitor"], 
     T["triggers"], T["assistant"], T["journal"], T["logout"]
