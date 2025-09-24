@@ -121,10 +121,9 @@ def render_about_page(app_language: str = "English"):
         st.subheader("✨ What This App Offers You")
         st.markdown("""
         - **Track** your body temperature and local weather.  
-        - **Discover** personal heat triggers (like exercise, hot food, or stress).  
-        - **Record** your health journey in a private journal.  
-        - **Get support** from the AI Assistant with evidence-based tips.  
-        - **Access** culturally relevant community advice for staying cool in the GCC.  
+        - **Discover** personal heat triggers (exercise, hot food, stress, etc.).  
+        - **Record** symptoms and health journey in a private journal.  
+        - **Get support** from the AI Companion with culturally tailored advice.    
         """)
 
         st.subheader("🤝 Our Goal")
@@ -145,10 +144,9 @@ def render_about_page(app_language: str = "English"):
         st.subheader("✨ ما الذي يقدمه التطبيق؟")
         st.markdown("""
         - **مراقبة** درجة حرارة جسمك والطقس من حولك.  
-        - **اكتشاف** المحفزات الشخصية للحرارة (مثل الرياضة أو الأطعمة الحارة أو التوتر).  
-        - **تسجيل** ملاحظاتك اليومية في دفتر خاص.  
-        - **الحصول** على دعم من المساعد الذكي بمعلومات موثوقة.  
-        - **الوصول** إلى نصائح ثقافية للبقاء باردًا في الخليج.  
+        - **اكتشاف** المحفزات الشخصية للحرارة (رياضة، طعام حار، توتر...).  
+        - **تسجيل** الأعراض واليوميات في دفتر خاص.  
+        - **الحصول** على دعم من المساعد الذكي بنصائح متناسبة ثقافيًا.  
         """)
 
         st.subheader("🤝 هدفنا")
