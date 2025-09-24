@@ -357,13 +357,19 @@ elif page == T["login_title"]:
     st.caption("⚠️ Prototype note: passwords are stored in plain text. For a pilot, switch to a hashed scheme (bcrypt/PBKDF2).")
 
 # HEAT DASHBOARD
+# HEAT DASHBOARD WITH INTEGRATED AI ASSISTANT
 elif page == T["temp_monitor"]:
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
         st.title("☀️ " + T["risk_dashboard"])
-        st.write("Your AI Companion analyzes **apparent temperature, humidity, your body temp, triggers, and journal context** to offer gentle, GCC‑aware tips.")
+        st.write("**Your Heat Safety Check** with integrated Raha Assistant - track temperatures and get instant AI advice.")
+        
+        # Initialize chat history for this page only
+        if "heat_chat_messages" not in st.session_state:
+            st.session_state.heat_chat_messages = []
 
+        # ========== HEAT CHECK FORM ==========
         with st.form("risk_form", clear_on_submit=False):
             colL, colR = st.columns([3,1])
             
@@ -385,64 +391,64 @@ elif page == T["temp_monitor"]:
             with colR:
                 submitted = st.form_submit_button("🔍 " + T["check_risk"])
 
-        # Expander outside the form
-        with st.expander("🌡️ Why fasting matters in MS heat safety"):
+        # Expander for educational content
+        with st.expander("💡 Quick Heat Safety Tips"):
             st.markdown("""
-            **Key considerations for fasting MS patients in hot climates:**
-            - **Uhthoff's phenomenon**: Heat can temporarily worsen MS symptoms
-            - **Dehydration risk**: No daytime fluids during fasting increases heat strain
-            - **Cooling strategies**: Plan hydration during non-fasting hours carefully
-            - **Activity timing**: Schedule activities during cooler parts of the day
+            **For MS Patients in Hot Climates:**
+            • **Cooling vests** can lower body temp by 2-3°C
+            • **Plan outings** before 10 AM or after 4 PM  
+            • **Stay hydrated** - aim for 2-3 liters daily
+            • **Recognize Uhthoff's** - blurred vision, fatigue, weakness
+            • **Cool showers** can provide immediate relief
             """)
 
         if submitted:
-            # remember baseline
+            # [Keep your existing submission logic here - same as before]
             st.session_state["baseline"] = baseline
-
             weather, err = get_weather(city)
             if weather is None:
                 st.error(f"{T['weather_fail']}: {err}")
             else:
-                # compute risk using feels_like & humidity + personal/triggers
                 risk = compute_risk(
                     weather["feels_like"], weather["humidity"],
                     float(body_temp), float(baseline), triggers, symptoms
                 )
-
-                # save to session + DB
                 checkpoint = {
-                    "city": city,
-                    "body_temp": float(body_temp),
-                    "baseline": float(baseline),
-                    "weather_temp": weather["temp"],
-                    "feels_like": weather["feels_like"],
-                    "humidity": weather["humidity"],
-                    "weather_desc": weather["desc"],
-                    "status": risk["status"],
-                    "color": risk["color"],
-                    "icon": risk["icon"],
-                    "advice": risk["advice"],
-                    "triggers": triggers, "symptoms": symptoms,
-                    "peak_hours": weather["peak_hours"],
-                    "forecast": weather["forecast"],
-                    "fasting": fasting,
-                    "time": datetime.utcnow().isoformat()
+                    "city": city, "body_temp": float(body_temp), "baseline": float(baseline),
+                    "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
+                    "humidity": weather["humidity"], "weather_desc": weather["desc"],
+                    "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
+                    "advice": risk["advice"], "triggers": triggers, "symptoms": symptoms,
+                    "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
+                    "fasting": fasting, "time": datetime.utcnow().isoformat()
                 }
                 st.session_state["last_check"] = checkpoint
+                
+                # Auto-generate AI analysis after check
+                if client:
+                    auto_prompt = f"""
+                    Based on this heat safety check:
+                    - Body temp: {checkpoint['body_temp']}°C (baseline: {checkpoint['baseline']}°C)
+                    - Feels like: {checkpoint['feels_like']}°C, Humidity: {checkpoint['humidity']}%
+                    - Risk status: {checkpoint['status']}
+                    - Triggers: {', '.join(triggers) if triggers else 'None'}
+                    - Symptoms: {', '.join(symptoms) if symptoms else 'None'}
+                    - Fasting: {'Yes' if fasting else 'No'}
+                    
+                    Provide 3-4 specific, actionable recommendations for this MS patient in GCC climate.
+                    """
+                    auto_advice, err = ai_response(auto_prompt, app_language)
+                    if not err:
+                        st.session_state.heat_chat_messages.append({
+                            "role": "assistant", 
+                            "content": f"**Automatic Analysis for Your Current Check:**\n\n{auto_advice}"
+                        })
 
-                try:
-                    c = get_conn().cursor()
-                    c.execute("INSERT INTO temps VALUES (?,?,?,?,?,?,?)",
-                              (st.session_state["user"], str(datetime.now()),
-                               checkpoint["body_temp"], checkpoint["weather_temp"],
-                               checkpoint["feels_like"], checkpoint["humidity"], checkpoint["status"]))
-                    get_conn().commit()
-                except Exception as e:
-                    st.warning(f"Could not save to DB: {e}")
-
-        # render last check if any
+        # ========== RESULTS SECTION ==========
         if st.session_state.get("last_check"):
             last = st.session_state["last_check"]
+            
+            # Display risk card (your existing code)
             triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
             symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
             left_color = last['color']
@@ -455,16 +461,111 @@ elif page == T["temp_monitor"]:
     <span class="badge">Weather: {last['city']}</span>
     <span class="badge">Feels-like: {round(last['feels_like'],1)}°C</span>
     <span class="badge">Humidity: {int(last['humidity'])}%</span>
-    <span class="badge">Body: {round(last['body_temp'],1)}°C (baseline {round(last['baseline'],1)}°C)</span>
-    <span class="badge">Checked: {last['time'][:16]}</span>
+    <span class="badge">Body: {round(last['body_temp'],1)}°C</span>
   </div>
-  <p class="small" style="margin-top:6px">Triggers: {triggers_text} • Symptoms: {symptoms_text}</p>
-  <p class="small" style="margin-top:6px">Peak heat next 48h: {"; ".join(last['peak_hours'])}</p>
 </div>
 """, unsafe_allow_html=True)
 
-            # Chart section
-            st.subheader("📈 Recent temperature trend")
+            # ========== INTEGRATED AI ASSISTANT ==========
+            st.markdown("---")
+            st.subheader("🤖 Raha Assistant - Ask About Your Results")
+            st.write("**Chat with your AI assistant** about your heat safety check or ask general MS heat questions.")
+            
+            # Display chat messages
+            for message in st.session_state.heat_chat_messages:
+                if message["role"] == "user":
+                    with st.chat_message("user"):
+                        st.markdown(message["content"])
+                else:
+                    with st.chat_message("assistant"):
+                        st.markdown(message["content"])
+            
+            # Chat input specifically for heat safety questions
+            chat_col1, chat_col2 = st.columns([4, 1])
+            
+            with chat_col1:
+                user_question = st.text_input(
+                    "Ask about your results, cooling strategies, or symptoms...",
+                    placeholder="Example: How can I cool down quickly? What do these symptoms mean?"
+                )
+            
+            with chat_col2:
+                send_question = st.button("Send", use_container_width=True)
+            
+            # Quick action buttons
+            st.write("**Quick questions:**")
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("❄️ Cooling tips", use_container_width=True):
+                    user_question = "What are the most effective cooling strategies for my current situation?"
+                if st.button("⚠️ Symptom help", use_container_width=True):
+                    user_question = "How should I manage these symptoms in the heat?"
+            
+            with col2:
+                if st.button("📅 Daily planning", use_container_width=True):
+                    user_question = "How should I plan my day based on this heat risk?"
+                if st.button("💧 Hydration", use_container_width=True):
+                    user_question = "What's the best hydration strategy for my situation?"
+            
+            with col3:
+                if st.button("🔄 Activity advice", use_container_width=True):
+                    user_question = "What activities are safe for me right now?"
+                if st.button("🚨 Emergency signs", use_container_width=True):
+                    user_question = "What are the warning signs I should watch for?"
+            
+            # Process user question
+            if (user_question and send_question) or user_question:
+                if not client:
+                    st.warning(TEXTS[app_language]["ai_unavailable"])
+                else:
+                    # Add user message to chat
+                    st.session_state.heat_chat_messages.append({"role": "user", "content": user_question})
+                    
+                    with st.chat_message("user"):
+                        st.markdown(user_question)
+                    
+                    # Generate AI response with current context
+                    with st.chat_message("assistant"):
+                        with st.spinner("Raha Assistant is analyzing..."):
+                            context_prompt = f"""
+                            Current Heat Safety Check Context:
+                            - Body Temperature: {last['body_temp']}°C (Baseline: {last['baseline']}°C)
+                            - Environmental: Feels like {last['feels_like']}°C, {last['humidity']}% humidity
+                            - Risk Level: {last['status']}
+                            - Triggers Today: {triggers_text}
+                            - Symptoms Today: {symptoms_text}
+                            - Fasting: {'Yes' if last['fasting'] else 'No'}
+                            - Peak Heat Hours: {', '.join(last['peak_hours'][:2])}
+                            
+                            User's Question: {user_question}
+                            
+                            Provide specific, actionable advice for this MS patient in GCC climate.
+                            Focus on practical solutions and next steps.
+                            """
+                            
+                            response, err = ai_response(context_prompt, app_language)
+                            if err:
+                                response = "I'm having trouble responding right now. Please try again."
+                            
+                            st.markdown(response)
+                    
+                    # Add assistant response to chat history
+                    st.session_state.heat_chat_messages.append({"role": "assistant", "content": response})
+                    
+                    # Clear the input by rerunning
+                    st.rerun()
+            
+            # Clear chat button
+            if st.button("🗑️ Clear Chat", type="secondary"):
+                st.session_state.heat_chat_messages = []
+                st.rerun()
+
+            # ========== VISUALIZATION SECTION ==========
+            st.markdown("---")
+            st.subheader("📈 Temperature Trends")
+            
+            # [Keep your existing chart code here]
             c = get_conn().cursor()
             try:
                 query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20"
@@ -473,49 +574,25 @@ elif page == T["temp_monitor"]:
                 
                 if rows:
                     rows = rows[::-1]
-                    dates = [r[0][5:16] for r in rows]  # show MM-DD HH:MM
+                    dates = [r[0][5:16] for r in rows]
                     bt = [r[1] for r in rows]
-                    wt = [r[2] for r in rows]
                     ft = [r[3] for r in rows]
                     status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
 
-                    fig, ax = plt.subplots(figsize=(9,3))
-                    ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2)
-                    ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
+                    fig, ax = plt.subplots(figsize=(10,4))
+                    ax.plot(range(len(dates)), bt, marker='o', label="Body Temp", linewidth=2, color='red')
+                    ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2, color='orange')
                     for i, color in enumerate(status_colors):
-                        ax.scatter(i, bt[i], s=110, edgecolor="black", zorder=5, color=color)
+                        ax.scatter(i, bt[i], s=120, edgecolor="black", zorder=5, color=color)
                     ax.set_xticks(range(len(dates)))
-                    ax.set_xticklabels(dates, rotation=30, fontsize=8)
-                    ax.set_ylabel("°C")
+                    ax.set_xticklabels(dates, rotation=45, fontsize=9)
+                    ax.set_ylabel("Temperature (°C)")
                     ax.legend()
+                    ax.grid(True, alpha=0.3)
                     st.pyplot(fig)
                     
             except Exception as e:
-                st.error(f"Database query error: {e}")
-
-            # AI advice section
-            st.subheader("🤖 Personalized Heat Advice")
-            if st.button(T["ai_advice_btn"]):
-                if not client:
-                    st.warning(TEXTS[app_language]["ai_unavailable"])
-                else:
-                    triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
-                    symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
-                    prompt = (
-                        f"City: {last['city']}. Now feels-like {round(last['feels_like'],1)}°C, humidity {int(last['humidity'])}%. "
-                        f"Body temp {round(last['body_temp'],1)}°C (baseline {round(last['baseline'],1)}°C). "
-                        f"Triggers: {triggers_text}. Symptoms: {symptoms_text}. "
-                        f"Peak heat next 48h: {', '.join(last['peak_hours'])}. "
-                        f"Fasting today: {last['fasting']}. "
-                        "Give 6–8 bullet tips tailored to GCC life. Short, practical, and empathetic."
-                    )
-                    advice_text, err = ai_response(prompt, app_language)
-                    if err == "no_key":
-                        st.warning(TEXTS[app_language]["ai_unavailable"])
-                    elif err:
-                        st.error(f"AI error: {err}")
-                    else:
-                        st.info(advice_text)
+                st.error(f"Chart error: {e}")
 
 # JOURNAL PAGE - THIS SHOULD NOW WORK PROPERLY
 elif page == T["journal"]:
