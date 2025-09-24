@@ -2,3 +2,5 @@ streamlit
 openai
 matplotlib
 requests
+folium
+streamlit-folium
