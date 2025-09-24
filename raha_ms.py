@@ -179,7 +179,7 @@ if app_language == "Arabic":
 
 page = st.sidebar.radio("Navigate", [
     T["about_title"], T["login_title"], T["temp_monitor"], 
-    T["community"], T["journal"], T["logout"]
+    T["journal"], T["community"], T["logout"]
 ])
 
 # ========== PAGES ==========
@@ -266,7 +266,7 @@ elif page == T["temp_monitor"]:
               <p style="margin:6px 0 0 0">{last['advice']}</p>
               <p style="margin:6px 0 0 0"><small>Weather ({last['city']}): {last['weather_temp']} °C — {last['weather_desc']}</small></p>
               <p style="margin:6px 0 0 0"><small>Your body: {last['body_temp']} °C • checked at {last['time']}</small></p>
-              triggers_list = last.get('triggers') or []
+              triggers_list = last.get("triggers")
               triggers_text = ', '.join(triggers_list) if triggers_list else 'None'
               <p style="margin:6px 0 0 0"><small>Triggers today: {triggers_text}</small></p>
             </div>
