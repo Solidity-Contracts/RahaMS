@@ -4,33 +4,28 @@ from openai import OpenAI
 import requests
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
-import time
+from math import isnan
 
-# ========== CONFIG ==========
-st.set_page_config(
-    page_title="Raha MS", 
-    page_icon="🌡️", 
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# ================== CONFIG ==================
+st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
 
-# Initialize session state
-if 'user' not in st.session_state:
-    st.session_state.user = None
-if 'last_check' not in st.session_state:
-    st.session_state.last_check = None
-if 'language' not in st.session_state:
-    st.session_state.language = "English"
+# Secrets (fail gracefully if missing)
+OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
+OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHER_API_KEY", "")
 
-# Load API keys from secrets.toml
-try:
-    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
-    OPENWEATHER_API_KEY = st.secrets["OPENWEATHER_API_KEY"]
-    client = OpenAI(api_key=OPENAI_API_KEY)
-except Exception as e:
-    st.error(f"API configuration error: {e}")
+client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 
-# ========== TRANSLATION DICTIONARY ==========
+# GCC quick picks
+GCC_CITIES = [
+    "Abu Dhabi,AE", "Dubai,AE", "Sharjah,AE",
+    "Doha,QA", "Al Rayyan,QA",
+    "Kuwait City,KW",
+    "Manama,BH",
+    "Riyadh,SA", "Jeddah,SA", "Dammam,SA",
+    "Muscat,OM"
+]
+
+# ================== I18N ==================
 TEXTS = {
     "English": {
         "about_title": "About Raha MS",
@@ -43,9 +38,27 @@ TEXTS = {
         "assistant": "AI Companion",
         "journal": "Journal & Symptoms",
         "logout": "Logout",
-        "welcome": "Welcome to Raha MS",
-        "heat_risk": "Heat Risk Assessment",
-        "personal_advice": "Personalized Advice"
+        "risk_dashboard": "Heat Safety Dashboard",
+        "enter_temp": "Enter your body temperature (°C):",
+        "city": "City (City,CC)",
+        "quick_pick": "Quick pick (GCC):",
+        "did_today": "Today I did / experienced:",
+        "symptoms_today": "Symptoms experienced today:",
+        "check_risk": "Check My Heat Risk",
+        "personal_baseline": "My usual/normal body temperature (°C):",
+        "fasting_today": "Fasting today?",
+        "ai_advice_btn": "Get AI Advice",
+        "journal_title": "Journal & Symptoms",
+        "journal_hint": "Write brief notes. Separate blocks with line breaks.",
+        "save": "Save",
+        "login_first": "Please login first.",
+        "logged_in": "✅ Logged in!",
+        "bad_creds": "❌ Invalid credentials",
+        "account_created": "✅ Account created! Please login.",
+        "user_exists": "❌ Username already exists",
+        "logged_out": "✅ Logged out!",
+        "weather_fail": "Weather lookup failed",
+        "ai_unavailable": "AI is unavailable. Set OPENAI_API_KEY in secrets."
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -58,445 +71,448 @@ TEXTS = {
         "assistant": "المساعد الذكي",
         "journal": "اليوميات والأعراض",
         "logout": "تسجيل الخروج",
-        "welcome": "مرحبًا بك في راحة إم إس",
-        "heat_risk": "تقييم خطر الحرارة",
-        "personal_advice": "نصائح مخصصة"
+        "risk_dashboard": "لوحة سلامة الحرارة",
+        "enter_temp": "أدخل حرارة جسمك (°م):",
+        "city": "المدينة (City,CC)",
+        "quick_pick": "اختيار سريع (الخليج):",
+        "did_today": "اليوم قمتُ بـ / تعرضتُ لـ:",
+        "symptoms_today": "الأعراض اليوم:",
+        "check_risk": "تحقق من خطري الحراري",
+        "personal_baseline": "حرارتي المعتادة (°م):",
+        "fasting_today": "صائم اليوم؟",
+        "ai_advice_btn": "الحصول على نصيحة ذكية",
+        "journal_title": "اليوميات والأعراض",
+        "journal_hint": "اكتب ملاحظات قصيرة. افصل بين المقاطع بسطر جديد.",
+        "save": "حفظ",
+        "login_first": "يرجى تسجيل الدخول أولاً.",
+        "logged_in": "✅ تم تسجيل الدخول",
+        "bad_creds": "❌ بيانات غير صحيحة",
+        "account_created": "✅ تم إنشاء الحساب! الرجاء تسجيل الدخول.",
+        "user_exists": "❌ اسم المستخدم موجود",
+        "logged_out": "✅ تم تسجيل الخروج!",
+        "weather_fail": "فشل جلب الطقس",
+        "ai_unavailable": "الخدمة الذكية غير متاحة. أضف مفتاح OPENAI_API_KEY."
     }
 }
 
-# ========== DATABASE HELPER ==========
-def get_db_connection():
-    """Get database connection with proper error handling"""
-    try:
-        conn = sqlite3.connect("raha_ms.db", check_same_thread=False)
-        conn.execute("PRAGMA foreign_keys = ON")
-        return conn
-    except Exception as e:
-        st.error(f"Database connection error: {e}")
-        return None
+# ================== STYLES (accessibility) ==================
+ACCESSIBLE_CSS = """
+<style>
+/* larger targets & font, high contrast */
+html, body, [class*="css"]  { font-size: 18px; }
+.big-card {background:#fff;padding:18px;border-radius:14px;border-left:10px solid var(--left);box-shadow:0 2px 8px rgba(0,0,0,0.06);}
+.badge {display:inline-block;padding:6px 10px;border-radius:999px;border:1px solid rgba(0,0,0,0.1);margin-right:6px;}
+.small {opacity:0.75;font-size:14px;}
+h3 { margin-top: 0.2rem; }
+.stButton>button { padding: 0.6rem 1.1rem; font-weight: 600; }
+</style>
+"""
+st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
+
+# ================== DB ==================
+@st.cache_resource
+def get_conn():
+    # check_same_thread=False to avoid thread issues on rerun
+    return sqlite3.connect("raha_ms.db", check_same_thread=False)
 
 def init_db():
-    """Initialize database tables"""
-    conn = get_db_connection()
-    if conn:
-        try:
-            c = conn.cursor()
-            c.execute("""CREATE TABLE IF NOT EXISTS users(
-                username TEXT PRIMARY KEY,
-                password TEXT,
-                created_date TEXT
-            )""")
-            
-            c.execute("""CREATE TABLE IF NOT EXISTS temps(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                date TEXT,
-                body_temp REAL,
-                weather_temp REAL,
-                status TEXT,
-                triggers TEXT,
-                symptoms TEXT
-            )""")
-            
-            c.execute("""CREATE TABLE IF NOT EXISTS journal(
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT,
-                date TEXT,
-                entry TEXT
-            )""")
-            conn.commit()
-        except Exception as e:
-            st.error(f"Database initialization error: {e}")
-        finally:
-            conn.close()
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("""CREATE TABLE IF NOT EXISTS users(
+        username TEXT PRIMARY KEY,
+        password TEXT
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS temps(
+        username TEXT,
+        date TEXT,
+        body_temp REAL,
+        weather_temp REAL,
+        feels_like REAL,
+        humidity REAL,
+        status TEXT
+    )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS journal(
+        username TEXT,
+        date TEXT,
+        entry TEXT
+    )""")
+    conn.commit()
 
-# Initialize database
 init_db()
 
-# ========== MS-FRIENDLY STYLING ==========
-st.markdown("""
-<style>
-    /* High contrast for MS visual impairments */
-    .main .block-container {
-        padding-top: 2rem;
-    }
-    .stButton>button {
-        width: 100%;
-        border-radius: 10px;
-        height: 3em;
-        font-size: 16px;
-    }
-    .big-font {
-        font-size: 18px !important;
-    }
-    .risk-safe {
-        background-color: #d4edda;
-        border-left: 5px solid #28a745;
-        padding: 15px;
-        margin: 10px 0;
-        border-radius: 5px;
-    }
-    .risk-caution {
-        background-color: #fff3cd;
-        border-left: 5px solid #ffc107;
-        padding: 15px;
-        margin: 10px 0;
-        border-radius: 5px;
-    }
-    .risk-danger {
-        background-color: #f8d7da;
-        border-left: 5px solid #dc3545;
-        padding: 15px;
-        margin: 10px 0;
-        border-radius: 5px;
-    }
-</style>
-""", unsafe_allow_html=True)
+# ================== WEATHER ==================
+@st.cache_data(ttl=600)  # 10 minutes
+def get_weather(city="Abu Dhabi,AE"):
+    """Return current weather + 48h forecast windows using OWM 'weather' and 'forecast' endpoints."""
+    if not OPENWEATHER_API_KEY:
+        return None, "Missing OPENWEATHER_API_KEY"
 
-# ========== HELPER FUNCTIONS ==========
-def get_weather_with_coords(city="Abu Dhabi,AE"):
-    """Get weather data with error handling"""
     try:
-        params = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric"}
-        r = requests.get("https://api.openweathermap.org/data/2.5/weather", params=params, timeout=10)
-        r.raise_for_status()
-        j = r.json()
-        temp = float(j["main"]["temp"])
-        desc = j["weather"][0]["description"]
-        
-        # Get forecast data
-        lat = j["coord"]["lat"]
-        lon = j["coord"]["lon"]
-        f_params = {"lat": lat, "lon": lon, "exclude":"current,minutely,alerts", 
-                   "appid": OPENWEATHER_API_KEY, "units":"metric"}
-        f_r = requests.get("https://api.openweathermap.org/data/2.5/onecall", params=f_params, timeout=10)
-        f_r.raise_for_status()
-        f_j = f_r.json()
-        
+        base = "https://api.openweathermap.org/data/2.5/"
+        # current
+        params_now = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "en"}
+        r_now = requests.get(base + "weather", params=params_now, timeout=6)
+        r_now.raise_for_status()
+        jn = r_now.json()
+
+        temp = float(jn["main"]["temp"])
+        feels = float(jn["main"]["feels_like"])
+        hum = float(jn["main"]["humidity"])
+        desc = jn["weather"][0]["description"]
+        lat = jn.get("coord", {}).get("lat")
+        lon = jn.get("coord", {}).get("lon")
+
+        # 5-day / 3h forecast (pick next 48h)
+        params_fc = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "en"}
+        r_fc = requests.get(base + "forecast", params=params_fc, timeout=8)
+        r_fc.raise_for_status()
+        jf = r_fc.json()
+        items = jf.get("list", [])[:16]  # next 48h (16 slots × 3h)
+        forecast = [{
+            "dt": it["dt"],
+            "time": it["dt_txt"],
+            "temp": float(it["main"]["temp"]),
+            "feels_like": float(it["main"]["feels_like"]),
+            "humidity": float(it["main"]["humidity"]),
+            "desc": it["weather"][0]["description"]
+        } for it in items]
+
+        # derive simple "peak heat hours": top 4 feels_like in the next 48h
+        top = sorted(forecast, key=lambda x: x["feels_like"], reverse=True)[:4]
+        peak_hours = [f'{t["time"][5:16]} (~{round(t["feels_like"])}°C, {int(t["humidity"])}%)' for t in top]
+
         return {
-            "temp": temp, 
-            "desc": desc, 
-            "forecast_24": f_j.get("hourly", [])[:24],
-            "forecast_48": f_j.get("hourly", [])[:48]
+            "temp": temp, "feels_like": feels, "humidity": hum, "desc": desc,
+            "lat": lat, "lon": lon, "forecast": forecast, "peak_hours": peak_hours
         }, None
     except Exception as e:
-        return None, f"Weather service error: {str(e)}"
+        return None, str(e)
 
-def ai_response(prompt, lang):
-    """Get AI response with error handling"""
+# ================== RISK MODEL ==================
+TRIGGER_WEIGHTS = {
+    "Exercise": 2, "Sauna": 3, "Spicy food": 1, "Hot drinks": 1,
+    "Stress": 1, "Direct sun exposure": 2, "Fever": 3, "Hormonal cycle": 1
+}
+SYMPTOM_WEIGHT = 0.5  # per symptom selected
+
+def risk_from_env(feels_like_c: float, humidity: float) -> int:
+    """Return base environmental risk points from apparent temp + humidity."""
+    # coarse bands tailored for GCC humidity; keep simple & explainable
+    score = 0
+    if feels_like_c >= 39:          # very hot
+        score += 3
+    elif feels_like_c >= 35:
+        score += 2
+    elif feels_like_c >= 32:
+        score += 1
+    # humidity amplifies heat retention
+    if humidity >= 60 and feels_like_c >= 32:
+        score += 1
+    return score
+
+def risk_from_person(body_temp: float, baseline: float) -> int:
+    """Uhthoff-aware: +1 if ≥0.5°C above baseline, +2 if ≥1.0°C."""
     try:
-        sys_prompt = """You are Raha MS AI Companion, a helpful assistant for Multiple Sclerosis patients in GCC countries. 
-        Provide practical, culturally sensitive advice about heat management and MS symptoms. 
-        Be empathetic, concise, and focus on actionable tips."""
-        
-        if lang == "Arabic":
-            sys_prompt += "Respond in clear, simple Arabic."
-        else:
-            sys_prompt += "Respond in clear, simple English."
+        delta = body_temp - baseline
+    except Exception:
+        delta = 0.0
+    if delta >= 1.0: return 2
+    if delta >= 0.5: return 1
+    return 0
 
+def compute_risk(feels_like, humidity, body_temp, baseline, triggers, symptoms):
+    score = 0
+    score += risk_from_env(feels_like, humidity)
+    score += risk_from_person(body_temp, baseline or 37.0)
+    score += sum(TRIGGER_WEIGHTS.get(t, 0) for t in triggers)
+    score += SYMPTOM_WEIGHT * len(symptoms)
+
+    if score >= 7:  status, color, icon, text = "Danger", "red", "🔴", "High risk: stay in cooled spaces, avoid exertion, use cooling packs, and rest. Seek clinical advice for severe symptoms."
+    elif score >= 5: status, color, icon, text = "High", "orangered", "🟠", "Elevated risk: limit time outside (esp. midday), pre‑cool and pace activities."
+    elif score >= 3: status, color, icon, text = "Caution", "orange", "🟡", "Mild risk: hydrate, take breaks, prefer shade/AC, and monitor symptoms."
+    else:            status, color, icon, text = "Safe", "green", "🟢", "You look safe. Keep cool and hydrated."
+    return {"score": score, "status": status, "color": color, "icon": icon, "advice": text}
+
+# ================== AI ==================
+def ai_response(prompt, lang):
+    sys_prompt = (
+        "You are Raha MS AI Companion. Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
+        "Use calm language and short bullet points. Consider fasting, prayer times, home AC use, cooling garments, and pacing. "
+        "This is general education, not medical care."
+    )
+    if lang == "Arabic":
+        sys_prompt += " Respond only in Arabic."
+    else:
+        sys_prompt += " Respond only in English."
+
+    if not client:
+        return None, "no_key"
+
+    try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500
+            messages=[{"role": "system", "content": sys_prompt},
+                      {"role": "user", "content": prompt}],
+            temperature=0.6,
         )
-        return response.choices[0].message.content
+        return response.choices[0].message.content, None
     except Exception as e:
-        return f"⚠️ Unable to get AI advice right now. Error: {str(e)}"
+        return None, str(e)
 
-def render_about_page(lang):
-    """About page with MS-friendly information"""
+# ================== ABOUT PAGE ==================
+def render_about_page(lang: str = "English"):
+    T = TEXTS[lang]
     if lang == "English":
         st.title("🧠 Welcome to Raha MS")
         st.markdown("""
-        <div class='big-font'>
-        Living with <strong>Multiple Sclerosis (MS)</strong> in the GCC can be challenging, especially with intense heat.  
-        Raha MS is designed <strong>with and for people living with MS</strong> to bring comfort and support to your daily life.
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("🌡️ Why Heat Matters")
-            st.info("Even a small rise in body temperature (0.5°C) can temporarily worsen MS symptoms — known as **Uhthoff's phenomenon**.")
-            
-            st.subheader("🎯 Simple Daily Use")
-            st.markdown("""
-            - **Quick check-ins** (30 seconds)
-            - **Large, clear buttons** for easy tapping
-            - **Voice-friendly** for hands-free use
-            - **Low cognitive load** design
-            """)
-        
-        with col2:
-            st.subheader("💡 GCC-Specific Features")
-            st.markdown("""
-            - **Regional weather patterns**
-            - **Cultural considerations**
-            - **Local cooling strategies**
-            - **Arabic/English support**
-            """)
-            
-            st.subheader("🔒 Your Privacy")
-            st.success("Your data stays on your device. We never share personal health information.")
-    
-    else:  # Arabic
+Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging due to heat and humidity.  
+Raha MS helps you **see heat risk at a glance**, **track your body temp**, and get **gentle, culturally aware tips**.
+""")
+        st.subheader("🌡️ Why heat matters")
+        st.info("Even a small rise in body temperature can temporarily worsen MS symptoms (Uhthoff’s phenomenon). Cooling and pacing help.")
+        st.subheader("✨ What you can do here")
+        st.markdown("- **Track** body temperature and local weather\n- **Spot triggers** (exercise, sun, sauna…)\n- **Journal** symptoms & patterns\n- **Get tips** from the AI Companion")
+        st.caption("Privacy: Your data stays on this device (SQLite). No sharing.")
+    else:
         st.title("🧠 مرحبًا بك في راحة إم إس")
         st.markdown("""
-        <div style='text-align: right; font-size: 18px;'>
-        العيش مع <strong>التصلب المتعدد (MS)</strong> في الخليج قد يكون صعبًا بسبب الحرارة الشديدة.  
-        تم تصميم تطبيق راحة إم إس <strong>بالتعاون مع مرضى التصلب المتعدد</strong> ليمنحك الراحة والدعم.
-        </div>
-        """, unsafe_allow_html=True)
-        
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("🌡️ لماذا تؤثر الحرارة؟")
-            st.info("حتى الارتفاع البسيط في درجة حرارة الجسم (0.5°م) قد يزيد أعراض التصلب المتعدد مؤقتًا — **ظاهرة أوتهوف**.")
-            
-            st.subheader("🎯 استخدام يومي بسيط")
-            st.markdown("""
-            - **فحص سريع** (30 ثانية)
-            - **أزرار كبيرة** وواضحة
-            - **يدعم الصوت** للاستخدام بدون يدين
-            - **تصميم بسيط** يريح الذهن
-            """)
-        
-        with col2:
-            st.subheader("💡 ميزات خاصة للخليج")
-            st.markdown("""
-            - **أنماط الطقس الإقليمية**
-            - **اعتبارات ثقافية**
-            - **استراتيجات تبريد محلية**
-            - **دعم العربية/الإنجليزية**
-            """)
-            
-            st.subheader("🔒 خصوصيتك")
-            st.success("بياناتك تبقى على جهازك. نحن لا نشارك معلوماتك الصحية الشخصية.")
+العيش مع **التصلب المتعدد** في الخليج صعب بسبب الحرارة والرطوبة.  
+يساعدك التطبيق على **رؤية الخطر الحراري بسرعة**، و**تسجيل حرارة جسمك**، والحصول على **نصائح لطيفة ومناسبة ثقافيًا**.
+""")
+        st.subheader("🌡️ لماذا تؤثر الحرارة؟")
+        st.info("ارتفاع بسيط في حرارة الجسم قد يزيد الأعراض مؤقتًا (ظاهرة أوتهوف). التبريد والتنظيم يساعدان.")
+        st.subheader("✨ ماذا يوفر التطبيق؟")
+        st.markdown("- **متابعة** حرارة الجسم والطقس\n- **تحديد المحفزات** (رياضة، شمس، ساونا…)\n- **كتابة اليوميات** والأعراض\n- **الحصول على نصائح** من المساعد الذكي")
+        st.caption("الخصوصية: بياناتك تبقى على هذا الجهاز (SQLite). لا يتم مشاركتها.")
 
-# ========== SIDEBAR ==========
-# Logo and language selection
+# ================== SIDEBAR ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
-# Language selection with session state
-app_language = st.sidebar.selectbox(
-    "🌐 Language / اللغة", 
-    ["English", "Arabic"],
-    key="language_selector"
-)
+app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"])
 T = TEXTS[app_language]
 
-# Apply RTL for Arabic
+# RTL for Arabic
 if app_language == "Arabic":
     st.markdown("""
     <style>
-    .main .block-container {
-        direction: rtl;
-        text-align: right;
-    }
-    .stRadio > label {
-        direction: rtl;
-        text-align: right;
-    }
+    body, .block-container { direction: rtl; text-align: right; }
+    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
     </style>
     """, unsafe_allow_html=True)
 
-# Navigation based on login status
-if st.session_state.user:
-    pages = [T["about_title"], T["temp_monitor"], T["journal"], T["logout"]]
-else:
-    pages = [T["about_title"], T["login_title"]]
+page = st.sidebar.radio("Navigate", [
+    T["about_title"], T["login_title"], T["temp_monitor"], T["journal"], T["logout"]
+])
 
-page = st.sidebar.radio("Navigate", pages)
-
-# ========== PAGE ROUTING ==========
+# ================== PAGES ==================
+# ABOUT
 if page == T["about_title"]:
     render_about_page(app_language)
 
+# LOGIN
 elif page == T["login_title"]:
     st.title(T["login_title"])
-    
-    tab1, tab2 = st.tabs([T["login"], T["register"]])
-    
-    with tab1:
-        with st.form("login_form"):
-            username = st.text_input(T["username"], key="login_user")
-            password = st.text_input(T["password"], type="password", key="login_pass")
-            if st.form_submit_button(T["login"], use_container_width=True):
-                conn = get_db_connection()
-                if conn:
-                    c = conn.cursor()
-                    c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-                    if c.fetchone():
-                        st.session_state.user = username
-                        st.success("✅ Login successful!")
-                        time.sleep(1)
-                        st.rerun()
-                    else:
-                        st.error("❌ Invalid credentials")
-                    conn.close()
-    
-    with tab2:
-        with st.form("register_form"):
-            username = st.text_input(T["username"], key="reg_user")
-            password = st.text_input(T["password"], type="password", key="reg_pass")
-            if st.form_submit_button(T["register"], use_container_width=True):
-                if len(username) < 3:
-                    st.error("Username must be at least 3 characters")
-                else:
-                    conn = get_db_connection()
-                    if conn:
-                        try:
-                            c = conn.cursor()
-                            c.execute("INSERT INTO users VALUES (?,?,?)", 
-                                     (username, password, datetime.now().isoformat()))
-                            conn.commit()
-                            st.success("✅ Account created! Please login.")
-                        except sqlite3.IntegrityError:
-                            st.error("❌ Username already exists")
-                        finally:
-                            conn.close()
+    username = st.text_input(T["username"])
+    password = st.text_input(T["password"], type="password")
 
-elif page == T["temp_monitor"] and st.session_state.user:
-    st.title("🌡️ " + T["heat_risk"])
-    
-    # Simple, large interface for MS users
-    col1, col2 = st.columns([2, 1])
-    
+    col1, col2 = st.columns(2)
     with col1:
-        st.markdown('<div class="big-font">**Quick Health Check**</div>', unsafe_allow_html=True)
-        
-        # Large, easy-to-use inputs
-        body_temp = st.number_input(
-            "Your body temperature (°C):",
-            min_value=35.0, max_value=42.0, value=37.0, step=0.1,
-            key="body_temp"
-        )
-        
-        city = st.text_input("Your city:", value="Abu Dhabi,AE", key="city_input")
-        
-        # Simple trigger selection with large buttons
-        st.write("Today I experienced:")
-        triggers = st.multiselect(
-            "Select triggers (optional):",
-            ["Exercise", "Hot bath", "Spicy food", "Stress", "Sun exposure", "Fever", "None"],
-            key="triggers"
-        )
-    
+        if st.button(T["login"]):
+            c = get_conn().cursor()
+            c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+            if c.fetchone():
+                st.session_state["user"] = username
+                st.success(T["logged_in"])
+            else:
+                st.error(T["bad_creds"])
     with col2:
-        st.write("")  # Spacer
-        if st.button("🔍 Check My Safety", use_container_width=True, type="primary"):
-            with st.spinner("Checking weather and assessing risk..."):
-                weather, error = get_weather_with_coords(city)
-                
-                if error:
-                    st.error(f"Weather error: {error}")
+        if st.button(T["register"]):
+            try:
+                c = get_conn().cursor()
+                c.execute("INSERT INTO users VALUES (?,?)", (username, password))
+                get_conn().commit()
+                st.success(T["account_created"])
+            except Exception:
+                st.error(T["user_exists"])
+    st.caption("⚠️ Prototype note: passwords are stored in plain text. For a pilot, switch to a hashed scheme (bcrypt/PBKDF2).")
+
+# HEAT DASHBOARD
+elif page == T["temp_monitor"]:
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        st.title("☀️ " + T["risk_dashboard"])
+        st.write("Your AI Companion analyzes **apparent temperature, humidity, your body temp, triggers, and journal context** to offer gentle, GCC‑aware tips.")
+
+        with st.form("risk_form", clear_on_submit=False):
+            colL, colR = st.columns([3,1])
+            with colL:
+                body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
+                baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
+                # city inputs
+                quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
+                city = st.text_input("🏙️ " + T["city"], value=quick)
+                triggers = st.multiselect(
+                    "✅ " + T["did_today"],
+                    ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
+                )
+                symptoms = st.multiselect(
+                    "⚕️ " + T["symptoms_today"],
+                    ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
+                )
+                fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+
+            with colR:
+                submitted = st.form_submit_button("🔍 " + T["check_risk"])
+
+        if submitted:
+            # remember baseline
+            st.session_state["baseline"] = baseline
+
+            weather, err = get_weather(city)
+            if weather is None:
+                st.error(f"{T['weather_fail']}: {err}")
+            else:
+                # compute risk using feels_like & humidity + personal/triggers
+                risk = compute_risk(
+                    weather["feels_like"], weather["humidity"],
+                    float(body_temp), float(baseline), triggers, symptoms
+                )
+
+                # save to session + DB
+                checkpoint = {
+                    "city": city,
+                    "body_temp": float(body_temp),
+                    "baseline": float(baseline),
+                    "weather_temp": weather["temp"],
+                    "feels_like": weather["feels_like"],
+                    "humidity": weather["humidity"],
+                    "weather_desc": weather["desc"],
+                    "status": risk["status"],
+                    "color": risk["color"],
+                    "icon": risk["icon"],
+                    "advice": risk["advice"],
+                    "triggers": triggers, "symptoms": symptoms,
+                    "peak_hours": weather["peak_hours"],
+                    "forecast": weather["forecast"],
+                    "fasting": fasting,
+                    "time": datetime.utcnow().isoformat()
+                }
+                st.session_state["last_check"] = checkpoint
+
+                try:
+                    c = get_conn().cursor()
+                    c.execute("INSERT INTO temps VALUES (?,?,?,?,?,?,?)",
+                              (st.session_state["user"], str(datetime.now()),
+                               checkpoint["body_temp"], checkpoint["weather_temp"],
+                               checkpoint["feels_like"], checkpoint["humidity"], checkpoint["status"]))
+                    get_conn().commit()
+                except Exception as e:
+                    st.warning(f"Could not save to DB: {e}")
+
+        # render last check if any
+        if st.session_state.get("last_check"):
+            last = st.session_state["last_check"]
+            triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
+            symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
+            left_color = last['color']
+
+            st.markdown(f"""
+<div class="big-card" style="--left:{left_color}">
+  <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
+  <p style="margin:6px 0 0 0">{last['advice']}</p>
+  <div class="small" style="margin-top:8px">
+    <span class="badge">Weather: {last['city']}</span>
+    <span class="badge">Feels-like: {round(last['feels_like'],1)}°C</span>
+    <span class="badge">Humidity: {int(last['humidity'])}%</span>
+    <span class="badge">Body: {round(last['body_temp'],1)}°C (baseline {round(last['baseline'],1)}°C)</span>
+    <span class="badge">Checked: {last['time'][:16]}</span>
+  </div>
+  <p class="small" style="margin-top:6px">Triggers: {triggers_text} • Symptoms: {symptoms_text}</p>
+  <p class="small" style="margin-top:6px">Peak heat next 48h: {"; ".join(last['peak_hours'])}</p>
+</div>
+""", unsafe_allow_html=True)
+
+            # Chart
+            st.subheader("📈 Recent temperature trend")
+            c = get_conn().cursor()
+            c.execute("""
+                SELECT date, body_temp, weather_temp, feels_like, status FROM temps
+                WHERE username=?
+                ORDER BY date DESC LIMIT 20
+            """, (st.session_state["user"],))
+            rows = c.fetchall()
+            if rows:
+                rows = rows[::-1]
+                dates = [r[0][5:16] for r in rows]  # show MM-DD HH:MM
+                bt = [r[1] for r in rows]
+                wt = [r[2] for r in rows]
+                ft = [r[3] for r in rows]
+                status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
+
+                fig, ax = plt.subplots(figsize=(9,3))
+                ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2)
+                ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
+                for i, color in enumerate(status_colors):
+                    ax.scatter(i, bt[i], s=110, edgecolor="black", zorder=5, color=color)
+                ax.set_xticks(range(len(dates)))
+                ax.set_xticklabels(dates, rotation=30, fontsize=8)
+                ax.set_ylabel("°C")
+                ax.legend()
+                st.pyplot(fig)
+
+            # AI advice
+            st.subheader("🤖 Personalized Heat Advice")
+            if st.button(T["ai_advice_btn"]):
+                if not client:
+                    st.warning(TEXTS[app_language]["ai_unavailable"])
                 else:
-                    # Calculate risk based on MS guidelines
-                    temp_diff = body_temp - weather["temp"]
-                    
-                    if temp_diff <= 0.5:
-                        status = "Safe"
-                        color_class = "risk-safe"
-                        icon = "✅"
-                        advice = "Good condition! Maintain hydration and normal activities."
-                    elif temp_diff <= 1.5:
-                        status = "Caution"
-                        color_class = "risk-caution"
-                        icon = "⚠️"
-                        advice = "Moderate risk. Limit heat exposure and use cooling strategies."
+                    triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
+                    symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
+                    # keep it short to reduce token cost
+                    prompt = (
+                        f"City: {last['city']}. Now feels-like {round(last['feels_like'],1)}°C, humidity {int(last['humidity'])}%. "
+                        f"Body temp {round(last['body_temp'],1)}°C (baseline {round(last['baseline'],1)}°C). "
+                        f"Triggers: {triggers_text}. Symptoms: {symptoms_text}. "
+                        f"Peak heat next 48h: {', '.join(last['peak_hours'])}. "
+                        f"Fasting today: {last['fasting']}. "
+                        "Give 6–8 bullet tips tailored to GCC life. Short, practical, and empathetic."
+                    )
+                    advice_text, err = ai_response(prompt, app_language)
+                    if err == "no_key":
+                        st.warning(TEXTS[app_language]["ai_unavailable"])
+                    elif err:
+                        st.error(f"AI error: {err}")
                     else:
-                        status = "High Risk"
-                        color_class = "risk-danger"
-                        icon = "🚨"
-                        advice = "High risk! Avoid heat, use cooling, contact clinician if symptoms worsen."
-                    
-                    # Save to database
-                    conn = get_db_connection()
-                    if conn:
-                        try:
-                            c = conn.cursor()
-                            c.execute(
-                                "INSERT INTO temps (username, date, body_temp, weather_temp, status, triggers, symptoms) VALUES (?,?,?,?,?,?,?)",
-                                (st.session_state.user, datetime.now().isoformat(), body_temp, 
-                                 weather["temp"], status, ", ".join(triggers), "")
-                            )
-                            conn.commit()
-                        except Exception as e:
-                            st.warning(f"Note: Could not save to history: {e}")
-                        finally:
-                            conn.close()
-                    
-                    # Display results
-                    st.markdown(f"""
-                    <div class='{color_class}'>
-                    <h3>{icon} {status}</h3>
-                    <p><strong>Advice:</strong> {advice}</p>
-                    <p><strong>Weather:</strong> {weather['temp']}°C ({weather['desc']})</p>
-                    <p><strong>Your temp:</strong> {body_temp}°C</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                    
-                    # AI Advice section
-                    st.subheader("🤖 " + T["personal_advice"])
-                    if st.button("Get Personalized Advice", key="ai_advice"):
-                        prompt = f"""
-                        MS patient in GCC region. 
-                        Body temp: {body_temp}°C, Weather: {weather['temp']}°C.
-                        Triggers: {triggers}. 
-                        Risk level: {status}.
-                        Provide brief, practical advice in {app_language}.
-                        """
-                        advice = ai_response(prompt, app_language)
-                        st.info(advice)
+                        st.info(advice_text)
 
-elif page == T["journal"] and st.session_state.user:
-    st.title("📝 " + T["journal"])
-    
-    # Simple journal interface
-    with st.form("journal_form"):
-        entry = st.text_area("How are you feeling today?", height=100,
-                           placeholder="Note any symptoms, concerns, or observations...")
-        if st.form_submit_button("Save Entry", use_container_width=True):
-            if entry.strip():
-                conn = get_db_connection()
-                if conn:
-                    try:
-                        c = conn.cursor()
-                        c.execute("INSERT INTO journal (username, date, entry) VALUES (?,?,?)",
-                                 (st.session_state.user, datetime.now().isoformat(), entry))
-                        conn.commit()
-                        st.success("✅ Entry saved!")
-                    except Exception as e:
-                        st.error(f"Error saving entry: {e}")
-                    finally:
-                        conn.close()
-    
-    # Display recent entries
-    st.subheader("Recent Entries")
-    conn = get_db_connection()
-    if conn:
-        entries = conn.execute(
-            "SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC LIMIT 5",
-            (st.session_state.user,)
-        ).fetchall()
-        conn.close()
-        
-        for date, entry in entries:
-            with st.expander(f"📅 {date[:16]}"):
-                st.write(entry)
+# JOURNAL
+elif page == T["journal"]:
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        st.title("📒 " + T["journal_title"])
+        st.write(TEXTS[app_language]["journal_hint"])
 
+        entry_blocks = st.text_area("✍️", height=160)
+        if st.button(TEXTS[app_language]["save"]):
+            if entry_blocks.strip():
+                lines = [line.strip() for line in entry_blocks.split("\n") if line.strip()]
+                c = get_conn().cursor()
+                for line in lines:
+                    c.execute("INSERT INTO journal VALUES (?,?,?)", (st.session_state["user"], str(datetime.now()), line))
+                get_conn().commit()
+                st.success("✅ Saved")
+
+        # Display existing entries
+        c = get_conn().cursor()
+        c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
+        rows = c.fetchall()
+        for r in rows:
+            st.write(f"📅 {r[0][:16]} → {r[1]}")
+
+# LOGOUT
 elif page == T["logout"]:
-    st.session_state.user = None
-    st.session_state.last_check = None
-    st.success("✅ Logged out successfully!")
-    time.sleep(1)
-    st.rerun()
-
-# Footer with emergency information
-st.sidebar.markdown("---")
-st.sidebar.markdown("**Emergency Contacts**")
-st.sidebar.info("If experiencing severe symptoms, contact your healthcare provider immediately.")
+    st.session_state.pop("user", None)
+    st.success(TEXTS[app_language]["logged_out"])
