@@ -79,12 +79,27 @@ c.execute("""CREATE TABLE IF NOT EXISTS journal(
 conn.commit()
 
 # ========== HELPER FUNCTIONS ==========
-def get_weather(city="Abu Dhabi"):
-    url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={OPENWEATHER_API_KEY}&units=metric"
-    resp = requests.get(url).json()
-    if "main" in resp:
-        return resp["main"]["temp"]
-    return None
+def get_weather_with_coords(place="Abu Dhabi,AE"):
+    """
+    Returns (weather_dict, error_message)
+    weather_dict = { 'temp': float, 'desc': str, 'lat': float, 'lon': float }
+    """
+    if not OPENWEATHER_API_KEY:
+        return None, "Missing OpenWeather API key in secrets."
+    try:
+        # Use OpenWeather current weather by city (returns coords)
+        params = {"q": place, "appid": OPENWEATHER_API_KEY, "units": "metric"}
+        r = requests.get("https://api.openweathermap.org/data/2.5/weather", params=params, timeout=6)
+        r.raise_for_status()
+        j = r.json()
+        temp = float(j["main"]["temp"])
+        desc = j["weather"][0]["description"]
+        lat = j.get("coord", {}).get("lat")
+        lon = j.get("coord", {}).get("lon")
+        return {"temp": temp, "desc": desc, "lat": lat, "lon": lon, "raw": j}, None
+    except Exception as e:
+        return None, str(e)
+
 
 def ai_response(prompt, lang):
     sys_prompt = ("You are Raha MS AI Assistant. "
@@ -226,73 +241,121 @@ elif page == T["temp_monitor"]:
         st.warning("Please login first.")
     else:
         st.title("☀️ Heat Safety Check")
-        st.write("This page helps you understand how the heat may affect your MS symptoms today.")
+        st.write("Check how today's heat may affect your MS symptoms. The safety card and map stay visible until you do another check.")
 
-        # Input section
-        body_temp = st.number_input("🌡️ Enter your body temperature (°C):", 30.0, 45.0, 37.0)
-        city = st.text_input("🏙️ Enter your city:", "Abu Dhabi")
+        # ensure persistent storage for last check
+        if "last_check" not in st.session_state:
+            st.session_state["last_check"] = None
 
-        if st.button("🔍 Check My Heat Risk"):
-            weather = get_weather(city)
-            if weather:
-                diff = body_temp - weather
-                if diff < 0.5:
-                    status, color, advice = "Safe", "🟢", "You’re safe! Stay hydrated and enjoy your day."
-                elif diff < 1:
-                    status, color, advice = "Caution", "🟡", "Be careful: you might notice mild symptoms in this heat."
+        # layout: inputs on left, quick actions on right
+        colL, colR = st.columns([3,1])
+        with colL:
+            body_temp = st.number_input("🌡️ Enter your body temperature (°C):", 30.0, 45.0, 37.0, key="body_temp_input")
+            city = st.text_input("🏙️ City (City,CC)", value="Abu Dhabi,AE", key="city_input")
+        with colR:
+            delta_setting = st.number_input("Δ threshold (°C)", min_value=0.1, max_value=2.0, value=0.5, step=0.1)
+            check_btn = st.button("🔍 Check My Heat Risk")
+
+        # When user clicks Check
+        if check_btn:
+            weather, err = get_weather_with_coords(city)
+            if weather is None:
+                st.error(f"Weather lookup failed: {err}")
+            else:
+                diff = float(body_temp) - float(weather["temp"])
+                # define status
+                if diff < delta_setting:
+                    status = "Safe"; border = "green"; icon = "🟢"; advice = "You’re safe. Stay hydrated and enjoy your day."
+                elif diff < (delta_setting + 0.5):
+                    status = "Caution"; border = "orange"; icon = "🟡"; advice = "Caution: you may notice mild symptoms. Consider limiting outdoor time and using cooling strategies."
                 else:
-                    status, color, advice = "Danger", "🔴", "High risk: avoid heat exposure, stay indoors, and use cooling strategies."
+                    status = "Danger"; border = "red"; icon = "🔴"; advice = "High risk: avoid heat exposure, rest in cooled spaces, use cooling packs, and contact your clinician if severe symptoms occur."
 
-                # Show safety card
-                st.markdown(f"""
-                <div style="background-color:#f9f9f9;padding:20px;border-radius:15px;
-                            border-left:10px solid {'green' if status=='Safe' else 'orange' if status=='Caution' else 'red'};">
-                <h3>{color} Status: {status}</h3>
-                <p>{advice}</p>
-                <p><b>Weather:</b> {weather} °C | <b>Your body:</b> {body_temp} °C</p>
-                </div>
-                """, unsafe_allow_html=True)
+                # persist last_check in session state (so it survives reruns)
+                st.session_state["last_check"] = {
+                    "city": city,
+                    "body_temp": float(body_temp),
+                    "weather_temp": float(weather["temp"]),
+                    "weather_desc": weather.get("desc",""),
+                    "lat": weather.get("lat"),
+                    "lon": weather.get("lon"),
+                    "status": status,
+                    "border": border,
+                    "icon": icon,
+                    "advice": advice,
+                    "time": datetime.utcnow().isoformat()
+                }
 
-                # Save to DB
-                c.execute("INSERT INTO temps VALUES (?,?,?,?,?)",
-                          (st.session_state["user"], str(datetime.now()), body_temp, weather, status))
-                conn.commit()
+                # save to DB
+                try:
+                    c.execute("INSERT INTO temps VALUES (?,?,?,?,?)",
+                              (st.session_state["user"], str(datetime.now()), float(body_temp), float(weather["temp"]), status))
+                    conn.commit()
+                except Exception as e:
+                    st.warning(f"Could not save to DB: {e}")
 
-                # Interactive heat map
+                # immediate visual (also rendered below from session_state)
+                st.success(f"{icon} {status} — {advice}")
+
+        # --- Render last check persistently (if available) ---
+        if st.session_state.get("last_check"):
+            last = st.session_state["last_check"]
+            # Safety card (persistent)
+            card_html = f"""
+            <div style="background:#fff;padding:18px;border-radius:12px;
+                        border-left:10px solid {last['border']};box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+              <h3 style="margin:0">{last['icon']} <strong>Status: {last['status']}</strong></h3>
+              <p style="margin:6px 0 0 0">{last['advice']}</p>
+              <p style="margin:6px 0 0 0"><small>Weather ({last['city']}): {last['weather_temp']} °C — {last['weather_desc']}</small></p>
+              <p style="margin:6px 0 0 0"><small>Your body: {last['body_temp']} °C • checked at {last['time']}</small></p>
+            </div>
+            """
+            st.markdown(card_html, unsafe_allow_html=True)
+            st.markdown("---")
+
+            # Show interactive map if coords present
+            if last.get("lat") is not None and last.get("lon") is not None:
                 try:
                     import folium
                     from streamlit_folium import st_folium
-                    geocode_url = f"http://api.openweathermap.org/geo/1.0/direct?q={city}&limit=1&appid={OPENWEATHER_API_KEY}"
-                    geo_resp = requests.get(geocode_url).json()
-                    if geo_resp:
-                        lat, lon = geo_resp[0]["lat"], geo_resp[0]["lon"]
-                        m = folium.Map(location=[lat, lon], zoom_start=10)
-                        folium.Marker([lat, lon], popup=f"{city}: {weather} °C").add_to(m)
-                        st.subheader("🗺️ Heat Map of Your Location")
-                        st_folium(m, width=700, height=500)
+
+                    m = folium.Map(location=[last["lat"], last["lon"]], zoom_start=11)
+                    # Add a marker and a colored circle radius to visualize risk
+                    folium.Circle(
+                        location=[last["lat"], last["lon"]],
+                        radius=1200,  # meters - visual guide
+                        color=last["border"],
+                        fill=True,
+                        fill_opacity=0.25
+                    ).add_to(m)
+                    folium.Marker([last["lat"], last["lon"]],
+                                  popup=f"{last['city']}: {last['weather_temp']} °C ({last['weather_desc']})").add_to(m)
+
+                    st.subheader("🗺️ Location & Heat context")
+                    st_folium(m, width=700, height=420)
                 except Exception as e:
-                    st.warning("Map could not be loaded. Please install `folium` and `streamlit-folium`.")
-
-        # Historical trends
-        st.subheader("📈 Your Heat Trends")
-        c.execute("SELECT date, body_temp, weather_temp, status FROM temps WHERE username=?",
-                  (st.session_state["user"],))
-        rows = c.fetchall()
-        if rows:
-            dates, bt, wt, status = zip(*rows)
-            fig, ax = plt.subplots()
-            ax.plot(dates, bt, label="Body Temp", marker="o")
-            ax.plot(dates, wt, label="Weather Temp", marker="s")
-            ax.set_ylabel("Temperature (°C)")
-            ax.set_xlabel("Date")
-            ax.legend()
-            st.pyplot(fig)
-
-            # Color-coded timeline
-            st.subheader("🕒 Past Safety Checks")
-            for d, s in zip(dates, status):
-                icon = "🟢" if s=="Safe" else "🟡" if s=="Caution" else "🔴"
-                st.write(f"{icon} {d}: {s}")
+                    st.warning("Map not available. Please add `folium` and `streamlit-folium` to requirements.txt and reinstall. Error: " + str(e))
+            else:
+                st.info("Location coordinates not available for this city — map unavailable.")
+            
+            # Show the small timeline and last N entries graph
+            st.subheader("📈 Your recent temperature trend")
+            c.execute("SELECT date, body_temp, weather_temp, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20",
+                      (st.session_state["user"],))
+            rows = c.fetchall()
+            if rows:
+                # rows are ordered newest-first; reverse for plotting
+                rows = rows[::-1]
+                dates = [r[0] for r in rows]
+                bt = [r[1] for r in rows]
+                wt = [r[2] for r in rows]
+                fig, ax = plt.subplots(figsize=(8,3))
+                ax.plot(dates, bt, marker='o', label="Body Temp")
+                ax.plot(dates, wt, marker='s', label="Weather Temp")
+                ax.set_ylabel("°C")
+                ax.set_xticklabels(dates, rotation=30, fontsize=8)
+                ax.legend()
+                st.pyplot(fig)
 
 
 # ========== TRIGGERS ==========
