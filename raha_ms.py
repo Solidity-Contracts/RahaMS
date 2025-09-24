@@ -12,7 +12,7 @@ st.set_page_config(page_title="Raha MS", page_icon="☀️", layout="wide")
 OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 OPENWEATHER_API_KEY = st.secrets["OPENWEATHER_API_KEY"]
 
-openai.api_key = OPENAI_API_KEY
+client = OpenAI(api_key=OPENAI_API_KEY)
 
 # ========== TRANSLATION DICTIONARY ==========
 TEXTS = {
@@ -118,14 +118,14 @@ def ai_response(prompt, lang):
     else:
         sys_prompt += " Respond in the same language as the user."
 
-    resp = openai.ChatCompletion.create(
+    response = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
             {"role": "system", "content": sys_prompt},
             {"role": "user", "content": prompt}
         ]
     )
-    return resp["choices"][0]["message"]["content"]
+    return response["choices"][0]["message"]["content"]
 
 # ========== SIDEBAR NAVIGATION ==========
 st.sidebar.title("Raha MS")
