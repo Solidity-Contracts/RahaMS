@@ -106,7 +106,14 @@ TEXTS = {
         "sleep": "Sleep (hours)",
         "fatigue": "Fatigue",
         "free_note": "Free note (optional)",
-        "emergency": "Emergency"
+        "emergency": "Emergency",
+
+        "triggers_today": "Triggers today",
+        "symptoms_today": "Symptoms today",
+        "instant_plan_title": "Instant plan",
+        "do_now": "Do now",
+        "plan_later": "Plan later",
+        "watch_for": "Watch for",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -170,7 +177,9 @@ TEXTS = {
         "sleep": "النوم (ساعات)",
         "fatigue": "التعب",
         "free_note": "ملاحظة حرة (اختياري)",
-        "emergency": "الطوارئ"
+        "emergency": "الطوارئ",
+
+        
     }
 }
 
@@ -1033,6 +1042,13 @@ st.sidebar.image(logo_url, use_container_width=True)
 app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"])
 T = TEXTS[app_language]
 
+# ---- Global session defaults  ----
+st.session_state.setdefault("baseline", 37.0)
+st.session_state.setdefault("use_temp_baseline", True)  # harmless if you still show it in Settings
+# BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don’t crash
+if "temp_baseline" not in st.session_state:
+    st.session_state["temp_baseline"] = st.session_state["baseline"]
+
 # RTL for Arabic
 if app_language == "Arabic":
     st.markdown("""
@@ -1254,24 +1270,24 @@ elif page == T["temp_monitor"]:
             st.rerun()
 
         # Status card (with inline tooltips)
-if st.session_state.get("last_check"):
-    last = st.session_state["last_check"]
-    lang_key = "AR" if app_language == "Arabic" else "EN"
+        if st.session_state.get("last_check"):
+            last = st.session_state["last_check"]
+            lang_key = "AR" if app_language == "Arabic" else "EN"
 
-    chips = []
-    chips.append(_badge("City" if lang_key=="EN" else "المدينة", last['city'], EXPLAIN[lang_key]["city"]))
-    chips.append(_badge("Feels-like" if lang_key=="EN" else "الإحساس الحراري",
-                        f"{round(last['feels_like'],1)}°C", EXPLAIN[lang_key]["feels_like"]))
-    chips.append(_badge("Humidity" if lang_key=="EN" else "الرطوبة",
-                        f"{int(last['humidity'])}%", EXPLAIN[lang_key]["humidity"]))
-    chips.append(_badge("Core" if lang_key=="EN" else "الأساسية",
-                        f"{round(last['body_temp'],1)}°C", EXPLAIN[lang_key]["core"]))
-    chips.append(_badge("Peripheral" if lang_key=="EN" else "الطرفية",
-                        f"{round(last['peripheral_temp'],1)}°C", EXPLAIN[lang_key]["peripheral"]))
-    chips.append(_badge("Baseline" if lang_key=="EN" else "الأساس",
-                        f"{round(last['baseline'],1)}°C", EXPLAIN[lang_key]["baseline"]))
+            chips = []
+            chips.append(_badge("City" if lang_key=="EN" else "المدينة", last['city'], EXPLAIN[lang_key]["city"]))
+            chips.append(_badge("Feels-like" if lang_key=="EN" else "الإحساس الحراري",
+                                f"{round(last['feels_like'],1)}°C", EXPLAIN[lang_key]["feels_like"]))
+            chips.append(_badge("Humidity" if lang_key=="EN" else "الرطوبة",
+                                f"{int(last['humidity'])}%", EXPLAIN[lang_key]["humidity"]))
+            chips.append(_badge("Core" if lang_key=="EN" else "الأساسية",
+                                f"{round(last['body_temp'],1)}°C", EXPLAIN[lang_key]["core"]))
+            chips.append(_badge("Peripheral" if lang_key=="EN" else "الطرفية",
+                                f"{round(last['peripheral_temp'],1)}°C", EXPLAIN[lang_key]["peripheral"]))
+            chips.append(_badge("Baseline" if lang_key=="EN" else "الأساس",
+                                f"{round(last['baseline'],1)}°C", EXPLAIN[lang_key]["baseline"]))
 
-    st.markdown(f"""
+            st.markdown(f"""
 <div class="big-card" style="--left:{last['color']}">
   <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
   <p style="margin:6px 0 0 0">{last['advice']}</p>
@@ -1280,62 +1296,92 @@ if st.session_state.get("last_check"):
 </div>
 """, unsafe_allow_html=True)
 
+        # If above threshold, show “log reason” form
+        if st.session_state["live_core_smoothed"]:
+            latest = st.session_state["live_core_smoothed"][-1]
+            delta = latest - st.session_state["baseline"]
 
+            if delta >= ALERT_DELTA_C:
+                st.markdown(f"### {T['log_now']}")
 
-        # If above threshold, show “log reason” form (unchanged logic)
-if st.session_state["live_core_smoothed"]:
-    latest = st.session_state["live_core_smoothed"][-1]
-    delta = latest - (st.session_state["temp_baseline"] if st.session_state["use_temp_baseline"] else st.session_state["baseline"])
-    
-    if delta >= ALERT_DELTA_C:
-        st.markdown(f"### {T['log_now']}")
+                with st.form("log_reason_form", clear_on_submit=True):
+                    trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+                    chosen = st.multiselect(T["triggers_today"], trigger_options, max_selections=6)
+                    other_text = st.text_input(T["other"], "")
+                    symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+                    selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
+                    note_text = st.text_input(T["notes"], "")
 
-        # Use a form to avoid losing button clicks to reruns
-        with st.form("log_reason_form", clear_on_submit=True):
-            trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-            chosen = st.multiselect(T["triggers_today"], trigger_options, max_selections=6)
-            other_text = st.text_input(T["other"], "")
-            symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-            selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
-            note_text = st.text_input(T["notes"], "")
+                    has_reason = (len(chosen) > 0) or (other_text.strip() != "")
+                    if has_reason and st.session_state.get("last_check"):
+                        do_now, plan_later, watch_for = tailored_tips(
+                            chosen + ([other_text] if other_text.strip() else []),
+                            st.session_state["last_check"]["feels_like"],
+                            st.session_state["last_check"]["humidity"],
+                            delta, app_language
+                        )
+                        with st.expander(f"🧊 {T['instant_plan_title']}", expanded=False):
+                            st.write(f"**{T['do_now']}**")
+                            st.write("- " + "\n- ".join(do_now) if do_now else "—")
+                            st.write(f"**{T['plan_later']}**")
+                            st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
+                            st.write(f"**{T['watch_for']}**")
+                            st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
 
-            # Tailored tips preview (optional)
-            has_reason = (len(chosen) > 0) or (other_text.strip() != "")
-            if has_reason and st.session_state.get("last_check"):
-                do_now, plan_later, watch_for = tailored_tips(
-                    chosen + ([other_text] if other_text.strip() else []),
-                    st.session_state["last_check"]["feels_like"],
-                    st.session_state["last_check"]["humidity"],
-                    delta, app_language
-                )
-                with st.expander(f"🧊 {T['instant_plan_title']}", expanded=False):
-                    st.write(f"**{T['do_now']}**")
-                    st.write("- " + "\n- ".join(do_now) if do_now else "—")
-                    st.write(f"**{T['plan_later']}**")
-                    st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
-                    st.write(f"**{T['watch_for']}**")
-                    st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
+                    submitted = st.form_submit_button(T["save_entry"])
 
-            submitted = st.form_submit_button(T["save_entry"])
+                if submitted:
+                    st.session_state["live_running"] = False
+                    entry = {
+                        "type":"ALERT",
+                        "at": utc_iso_now(),
+                        "body_temp": round(latest,1),
+                        "baseline": round(st.session_state['baseline'],1),
+                        "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
+                        "symptoms": selected_symptoms,
+                        "note": note_text.strip()
+                    }
+                    try:
+                        insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                        st.success(T["saved"])
+                    except Exception as e:
+                        st.warning(f"Could not save note: {e}")
 
-        if submitted:
-            # pause live so we don't race with the rerun loop
-            st.session_state["live_running"] = False
+        # Trend chart (each dot = one sample)
+        st.markdown("---")
+        st.subheader("📈 Temperature Trend")
+        c = get_conn().cursor()
+        try:
+            query = """
+                SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
+                FROM temps WHERE username=? ORDER BY date DESC LIMIT 120
+            """
+            c.execute(query, (st.session_state.get("user","guest"),))
+            rows = c.fetchall()
+            if rows:
+                rows = rows[::-1]
+                dates = [r[0] for r in rows]
+                core = [r[1] for r in rows]
+                periph = [r[2] for r in rows]
+                feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
 
-            entry = {
-                "type":"ALERT",
-                "at": utc_iso_now(),
-                "body_temp": round(latest,1),
-                "baseline": round((st.session_state['temp_baseline'] if st.session_state['use_temp_baseline'] else st.session_state['baseline']),1),
-                "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
-                "symptoms": selected_symptoms,
-                "note": note_text.strip()
-            }
-            try:
-                insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                st.success(T["saved"])
-            except Exception as e:
-                st.warning(f"Could not save note: {e}")
+                fig, ax = plt.subplots(figsize=(10,4))
+                ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
+                ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
+                ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
+                ax.set_xticks(range(len(dates)))
+                ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
+                ax.set_ylabel("°C")
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
+                st.pyplot(fig)
+
+                st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
+            else:
+                st.info("No data yet. Start monitoring to build your trend.")
+        except Exception as e:
+            st.error(f"Chart error: {e}")
 
         # Trend chart (each dot = one sample)
         st.markdown("---")
