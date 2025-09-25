@@ -34,7 +34,7 @@ GCC_CITIES = [
 ]
 
 # ===== Live/Alert config =====
-SIM_INTERVAL_SEC = 60            # default realistic sampling every 60s
+SIM_INTERVAL_SEC = 60            # realistic default sampling every 60s
 DB_WRITE_EVERY_N = 3             # write to DB every Nth sample during live
 ALERT_DELTA_C = 0.5              # ≥ 0.5°C above baseline
 ALERT_CONFIRM = 2                # confirm with N consecutive samples
@@ -50,7 +50,6 @@ TEXTS = {
         "journal": "Journal",
         "assistant": "AI Companion",
         "settings": "Settings",
-        "logout": "Logout",
 
         "login_title": "Login / Register",
         "username": "Username",
@@ -63,34 +62,10 @@ TEXTS = {
         "user_exists": "❌ Username already exists",
         "login_first": "Please login first.",
         "logged_out": "✅ Logged out!",
+        "logout": "Logout",
 
         "risk_dashboard": "Heat Safety Monitor",
-        "enter_temp": "Enter your body temperature (°C):",
-        "city": "City (City,CC)",
         "quick_pick": "Quick pick (GCC):",
-        "did_today": "Today I did / experienced:",
-        "symptoms_today": "Symptoms today:",
-        "check_risk": "Check My Heat Risk",
-        "personal_baseline": "My usual/normal body temperature (°C):",
-        "fasting_today": "Fasting today?",
-        "ai_advice_btn": "Get AI Advice",
-        "journal_title": "Journal",
-        "journal_hint": "Write brief notes. Separate blocks with line breaks.",
-        "save": "Save",
-        "weather_fail": "Weather lookup failed",
-        "ai_unavailable": "AI is unavailable. Set OPENAI_API_KEY in secrets.",
-
-        "baseline_setting": "Baseline body temperature (°C)",
-        "use_temp_baseline": "Use this baseline for monitoring alerts",
-        "contacts": "Emergency Contacts",
-        "primary_phone": "Primary phone",
-        "secondary_phone": "Secondary phone",
-        "save_settings": "Save settings",
-        "saved": "Saved",
-
-        "monitor_now": "Start monitoring",
-        "stop": "Stop",
-        "reset": "Reset session",
         "sensor_update": "Sensor/sample update (sec)",
         "status": "Status",
         "peak_heat": "Peak heat next 48h",
@@ -105,7 +80,15 @@ TEXTS = {
         "ask_ai_tips": "Ask AI for tailored tips",
         "ai_prompt_hint": "Ask something…",
         "assistant_title": "Your AI Companion",
-        "assistant_hint": "I can help with cooling, pacing, planning around prayer/fasting, and more."
+        "assistant_hint": "I can help with cooling, pacing, planning around prayer/fasting, and more.",
+
+        "baseline_setting": "Baseline body temperature (°C)",
+        "use_temp_baseline": "Use this baseline for monitoring alerts",
+        "contacts": "Emergency Contacts",
+        "primary_phone": "Primary phone",
+        "secondary_phone": "Secondary phone",
+        "save_settings": "Save settings",
+        "saved": "Saved",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -114,7 +97,6 @@ TEXTS = {
         "journal": "اليوميات",
         "assistant": "المساعد الذكي",
         "settings": "الإعدادات",
-        "logout": "تسجيل الخروج",
 
         "login_title": "تسجيل الدخول / إنشاء حساب",
         "username": "اسم المستخدم",
@@ -127,34 +109,10 @@ TEXTS = {
         "user_exists": "❌ اسم المستخدم موجود",
         "login_first": "يرجى تسجيل الدخول أولاً.",
         "logged_out": "✅ تم تسجيل الخروج!",
+        "logout": "تسجيل الخروج",
 
         "risk_dashboard": "مراقبة السلامة الحرارية",
-        "enter_temp": "أدخل حرارة جسمك (°م):",
-        "city": "المدينة (City,CC)",
         "quick_pick": "اختيار سريع (الخليج):",
-        "did_today": "اليوم قمتُ بـ / تعرضتُ لـ:",
-        "symptoms_today": "الأعراض اليوم:",
-        "check_risk": "تحقق من خطري الحراري",
-        "personal_baseline": "حرارتي المعتادة (°م):",
-        "fasting_today": "صائم اليوم؟",
-        "ai_advice_btn": "الحصول على نصيحة ذكية",
-        "journal_title": "اليوميات",
-        "journal_hint": "اكتب ملاحظات قصيرة. افصل بين المقاطع بسطر جديد.",
-        "save": "حفظ",
-        "weather_fail": "فشل جلب الطقس",
-        "ai_unavailable": "الخدمة الذكية غير متاحة. أضف مفتاح OPENAI_API_KEY.",
-
-        "baseline_setting": "درجة حرارة الجسم الأساسية (°م)",
-        "use_temp_baseline": "استخدام هذه القيمة لتنبيهات المراقبة",
-        "contacts": "جهات اتصال الطوارئ",
-        "primary_phone": "الهاتف الأساسي",
-        "secondary_phone": "هاتف إضافي",
-        "save_settings": "حفظ الإعدادات",
-        "saved": "تم الحفظ",
-
-        "monitor_now": "ابدأ المراقبة",
-        "stop": "إيقاف",
-        "reset": "إعادة تعيين",
         "sensor_update": "تحديث العينة (ثانية)",
         "status": "الحالة",
         "peak_heat": "ذروة الحر خلال 48 ساعة",
@@ -169,7 +127,15 @@ TEXTS = {
         "ask_ai_tips": "اسأل الذكاء عن نصائح مخصصة",
         "ai_prompt_hint": "اسأل شيئًا…",
         "assistant_title": "مرافقك الذكي",
-        "assistant_hint": "يمكنني المساعدة في التبريد والتنظيم والتخطيط حول الصلاة/الصيام وغير ذلك."
+        "assistant_hint": "يمكنني المساعدة في التبريد والتنظيم والتخطيط حول الصلاة/الصيام وغير ذلك.",
+
+        "baseline_setting": "درجة حرارة الجسم الأساسية (°م)",
+        "use_temp_baseline": "استخدام هذه القيمة لتنبيهات المراقبة",
+        "contacts": "جهات اتصال الطوارئ",
+        "primary_phone": "الهاتف الأساسي",
+        "secondary_phone": "هاتف إضافي",
+        "save_settings": "حفظ الإعدادات",
+        "saved": "تم الحفظ",
     }
 }
 
@@ -233,6 +199,7 @@ def init_db():
         username TEXT,
         date TEXT,
         body_temp REAL,
+        peripheral_temp REAL,
         weather_temp REAL,
         feels_like REAL,
         humidity REAL,
@@ -249,6 +216,8 @@ def migrate_db():
     conn = get_conn(); c = conn.cursor()
     c.execute("PRAGMA table_info(temps)")
     cols = [r[1] for r in c.fetchall()]
+    if "peripheral_temp" not in cols:
+        c.execute("ALTER TABLE temps ADD COLUMN peripheral_temp REAL")
     if "feels_like" not in cols:
         c.execute("ALTER TABLE temps ADD COLUMN feels_like REAL")
     if "humidity" not in cols:
@@ -257,12 +226,12 @@ def migrate_db():
 
 init_db(); migrate_db()
 
-def insert_temp_row(u, dt, body, wtemp, feels, hum, status):
+def insert_temp_row(u, dt, body, peripheral, wtemp, feels, hum, status):
     c = get_conn().cursor()
     c.execute("""
-      INSERT INTO temps (username, date, body_temp, weather_temp, feels_like, humidity, status)
-      VALUES (?,?,?,?,?,?,?)
-    """, (u, dt, body, wtemp, feels, hum, status))
+      INSERT INTO temps (username, date, body_temp, peripheral_temp, weather_temp, feels_like, humidity, status)
+      VALUES (?,?,?,?,?,?,?,?)
+    """, (u, dt, body, peripheral, wtemp, feels, hum, status))
     get_conn().commit()
 
 def insert_journal(u, dt, entry_obj):
@@ -402,11 +371,23 @@ def should_alert(temp_series, baseline, delta=ALERT_DELTA_C, confirm=ALERT_CONFI
     recent = temp_series[-confirm:]
     return all((t - baseline) >= delta for t in recent)
 
-def simulate_next(prev):
-    drift = random.uniform(-0.05, 0.08)                # small natural noise
-    surge = random.uniform(0.2, 0.5) if random.random() < 0.12 else 0.0  # sporadic uptick
+def simulate_core_next(prev):
+    # Core: small drift, occasional upward surges
+    drift = random.uniform(-0.05, 0.08)
+    surge = random.uniform(0.2, 0.5) if random.random() < 0.12 else 0.0
     next_t = prev + drift + surge
     return max(35.5, min(41.0, round(next_t, 2)))
+
+def simulate_peripheral_next(prev_core, prev_periph, feels_like):
+    """
+    Peripheral (skin/wearable) usually lower than core and reacts faster to ambient heat.
+    We bias towards (core - 0.4~1.0°C) and add a small ambient response.
+    """
+    target = prev_core - random.uniform(0.4, 1.0)
+    ambient_push = (feels_like - 32.0) * 0.02  # small push if very hot
+    noise = random.uniform(-0.10, 0.10)
+    next_p = prev_periph + (target - prev_periph) * 0.3 + ambient_push + noise
+    return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
 def ai_response(prompt, lang):
@@ -429,7 +410,7 @@ def ai_response(prompt, lang):
     except Exception:
         return None, "err"
 
-# ================== ABOUT PAGE (your friendly version) ==================
+# ================== ABOUT PAGE (friendly) ==================
 def render_about_page(lang: str = "English"):
     if lang == "English":
         st.title("🧠 Welcome to Raha MS")
@@ -536,18 +517,18 @@ def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
 
     for r in reasons:
         rl = r.lower()
-        if "exercise" in rl:
+        if "exercise" in rl or "رياضة" in rl:
             do_now += ["Stop/pause activity", "Pre-cool next time 15 min"]
             plan_later += ["Shorter intervals, more breaks"]
-        if "sun" in rl:
+        if "sun" in rl or "شمس" in rl:
             do_now += ["Move to shade/indoors"]
-        if "sauna" in rl or "hot bath" in rl:
+        if "sauna" in rl or "hot bath" in rl or "ساونا" in rl:
             do_now += ["Cool shower afterwards", "Avoid for now"]
-        if "car" in rl:
+        if "car" in rl or "سيارة" in rl:
             do_now += ["Pre-cool car 5–10 min"]
-        if "kitchen" in rl or "cooking" in rl:
+        if "kitchen" in rl or "cooking" in rl or "مطبخ" in rl:
             plan_later += ["Ventilate kitchen, cook earlier"]
-        if "fever" in rl or "illness" in rl:
+        if "fever" in rl or "illness" in rl or "حمّى" in rl:
             watch_for += ["Persistent high temp", "New neurological symptoms"]
 
     do_now = list(dict.fromkeys(do_now))[:6]
@@ -555,7 +536,7 @@ def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
     watch_for = list(dict.fromkeys(watch_for))[:6]
     return do_now, plan_later, watch_for
 
-# ================== SIDEBAR (logo, language, login) ==================
+# ================== SIDEBAR (logo, language, login+logout) ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
@@ -571,30 +552,36 @@ if app_language == "Arabic":
     </style>
     """, unsafe_allow_html=True)
 
-# Sidebar Login/Register (moved here)
+# Sidebar Login/Register + Logout here
 with st.sidebar.expander(T["login_title"], expanded=("user" not in st.session_state)):
-    username = st.text_input(T["username"], key="sb_user")
-    password = st.text_input(T["password"], type="password", key="sb_pass")
+    if "user" not in st.session_state:
+        username = st.text_input(T["username"], key="sb_user")
+        password = st.text_input(T["password"], type="password", key="sb_pass")
 
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button(T["login"], key="sb_login_btn"):
-            c = get_conn().cursor()
-            c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-            if c.fetchone():
-                st.session_state["user"] = username
-                st.success(T["logged_in"])
-            else:
-                st.error(T["bad_creds"])
-    with col2:
-        if st.button(T["register"], key="sb_reg_btn"):
-            try:
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(T["login"], key="sb_login_btn"):
                 c = get_conn().cursor()
-                c.execute("INSERT INTO users VALUES (?,?)", (username, password))
-                get_conn().commit()
-                st.success(T["account_created"])
-            except Exception:
-                st.error(T["user_exists"])
+                c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+                if c.fetchone():
+                    st.session_state["user"] = username
+                    st.success(T["logged_in"])
+                else:
+                    st.error(T["bad_creds"])
+        with col2:
+            if st.button(T["register"], key="sb_reg_btn"):
+                try:
+                    c = get_conn().cursor()
+                    c.execute("INSERT INTO users VALUES (?,?)", (username, password))
+                    get_conn().commit()
+                    st.success(T["account_created"])
+                except Exception:
+                    st.error(T["user_exists"])
+    else:
+        st.write(f"**{st.session_state['user']}**")
+        if st.button(T["logout"], key="sb_logout_btn"):
+            st.session_state.pop("user", None)
+            st.success(T["logged_out"])
 
 # Floating emergency button (visible even if sidebar collapsed)
 call_number = st.session_state.get("primary_phone") or st.session_state.get("secondary_phone")
@@ -602,10 +589,10 @@ if call_number:
     emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
     st.markdown(f'<a class="fab-call" href="tel:{call_number}">📞 {emergency_label}</a>', unsafe_allow_html=True)
 
-# Navigation (Login page removed; Settings page added)
+# Navigation (no Logout page; it lives in the sidebar now)
 page = st.sidebar.radio(
     "Navigate",
-    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["settings"], T["logout"]]
+    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["settings"]]
 )
 
 # ================== SETTINGS PAGE ==================
@@ -641,7 +628,7 @@ def render_settings_page():
 if page == T["about_title"]:
     render_about_page(app_language)
 
-# HEAT MONITOR (continuous)
+# HEAT MONITOR (continuous; core + peripheral simulation)
 elif page == T["temp_monitor"]:
     if "user" not in st.session_state:
         st.warning(T["login_first"])
@@ -651,12 +638,15 @@ elif page == T["temp_monitor"]:
 
         # Session defaults
         st.session_state.setdefault("live_running", False)
-        st.session_state.setdefault("live_smoothed", [])
-        st.session_state.setdefault("live_raw", [])
+        st.session_state.setdefault("live_core_smoothed", [])
+        st.session_state.setdefault("live_core_raw", [])
+        st.session_state.setdefault("live_periph_smoothed", [])
+        st.session_state.setdefault("live_periph_raw", [])
         st.session_state.setdefault("live_tick", 0)
         st.session_state.setdefault("last_db_write_tick", -999)
         st.session_state.setdefault("last_alert_ts", 0.0)
         st.session_state.setdefault("_last_tick_ts", 0.0)
+        st.session_state.setdefault("baseline", 37.0)
 
         colA, colB, colC = st.columns([1.2, 1, 1])
         with colA:
@@ -664,22 +654,28 @@ elif page == T["temp_monitor"]:
         with colB:
             interval = st.slider("⏱️ " + T["sensor_update"], 10, 120, SIM_INTERVAL_SEC, 5, key="interval_slider")
         with colC:
-            if not st.session_state["live_running"] and st.button("▶️ " + T["monitor_now"], use_container_width=True):
+            if not st.session_state["live_running"] and st.button("▶️ Start monitoring", use_container_width=True):
                 st.session_state["live_running"] = True
-                start = round(st.session_state["baseline"] + random.uniform(-0.2, 0.2), 2)
-                st.session_state["live_smoothed"] = [start]
-                st.session_state["live_raw"] = [start]
+                core_start = round(st.session_state["baseline"] + random.uniform(-0.2, 0.2), 2)
+                periph_start = round(core_start - random.uniform(0.5, 0.9), 2)
+
+                st.session_state["live_core_smoothed"] = [core_start]
+                st.session_state["live_core_raw"] = [core_start]
+                st.session_state["live_periph_smoothed"] = [periph_start]
+                st.session_state["live_periph_raw"] = [periph_start]
                 st.session_state["live_tick"] = 0
                 st.session_state["last_db_write_tick"] = -999
                 st.session_state["last_alert_ts"] = 0.0
                 st.session_state["_last_tick_ts"] = 0.0
                 st.rerun()
-            if st.session_state["live_running"] and st.button("⏸️ " + T["stop"], use_container_width=True):
+            if st.session_state["live_running"] and st.button("⏸️ " + T["settings"], use_container_width=True, key="pause_btn"):
                 st.session_state["live_running"] = False
                 st.rerun()
-            if st.button("🔁 " + T["reset"], use_container_width=True):
-                st.session_state["live_smoothed"] = []
-                st.session_state["live_raw"] = []
+            if st.button("🔁 Reset session", use_container_width=True):
+                st.session_state["live_core_smoothed"] = []
+                st.session_state["live_core_raw"] = []
+                st.session_state["live_periph_smoothed"] = []
+                st.session_state["live_periph_raw"] = []
                 st.session_state["live_tick"] = 0
                 st.session_state["last_db_write_tick"] = -999
                 st.session_state["last_alert_ts"] = 0.0
@@ -693,21 +689,36 @@ elif page == T["temp_monitor"]:
             last_tick_ts = st.session_state.get("_last_tick_ts", 0.0)
             if st.session_state["live_running"] and (now - last_tick_ts) >= st.session_state["interval_slider"]:
                 st.session_state["_last_tick_ts"] = now
-                prev = st.session_state["live_raw"][-1] if st.session_state["live_raw"] else st.session_state["baseline"]
-                raw = simulate_next(prev)
-                st.session_state["live_raw"].append(raw)
-                smoothed = moving_avg(st.session_state["live_raw"], SMOOTH_WINDOW)
-                st.session_state["live_smoothed"].append(smoothed)
+
+                # Core update
+                prev_core = st.session_state["live_core_raw"][-1] if st.session_state["live_core_raw"] else st.session_state["baseline"]
+                core_raw = simulate_core_next(prev_core)
+                st.session_state["live_core_raw"].append(core_raw)
+                core_smoothed = moving_avg(st.session_state["live_core_raw"], SMOOTH_WINDOW)
+                st.session_state["live_core_smoothed"].append(core_smoothed)
+
+                # Peripheral update (responds to ambient)
+                prev_periph = st.session_state["live_periph_raw"][-1] if st.session_state["live_periph_raw"] else (core_smoothed - 0.7)
+                periph_raw = simulate_peripheral_next(core_smoothed, prev_periph, weather["feels_like"])
+                st.session_state["live_periph_raw"].append(periph_raw)
+                periph_smoothed = moving_avg(st.session_state["live_periph_raw"], SMOOTH_WINDOW)
+                st.session_state["live_periph_smoothed"].append(periph_smoothed)
+
                 st.session_state["live_tick"] += 1
 
-                # Risk update
-                latest_body = smoothed
+                # Risk update (based on core vs baseline)
+                latest_body = core_smoothed
                 risk = compute_risk(weather["feels_like"], weather["humidity"],
                                     latest_body, st.session_state["baseline"], [], [])
                 st.session_state["last_check"] = {
-                    "city": city, "body_temp": latest_body, "baseline": st.session_state["baseline"],
-                    "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
-                    "humidity": weather["humidity"], "weather_desc": weather["desc"],
+                    "city": city,
+                    "body_temp": latest_body,
+                    "peripheral_temp": periph_smoothed,
+                    "baseline": st.session_state["baseline"],
+                    "weather_temp": weather["temp"],
+                    "feels_like": weather["feels_like"],
+                    "humidity": weather["humidity"],
+                    "weather_desc": weather["desc"],
                     "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
                     "advice": risk["advice"], "triggers": [], "symptoms": [],
                     "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
@@ -715,17 +726,18 @@ elif page == T["temp_monitor"]:
                 }
 
                 # Alert condition: baseline+0.5°C for 2 samples, cooldown 5 min
-                if should_alert(st.session_state["live_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
+                if should_alert(st.session_state["live_core_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
                     if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
                         st.session_state["last_alert_ts"] = now
-                        st.warning("⚠️ Temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
+                        st.warning("⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
 
                 # DB write every Nth sample
                 if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
                     try:
                         insert_temp_row(
                             st.session_state.get("user", "guest"), dubai_now_str(),
-                            latest_body, weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
+                            latest_body, periph_smoothed,
+                            weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
                         )
                         st.session_state["last_db_write_tick"] = st.session_state["live_tick"]
                     except Exception as e:
@@ -742,28 +754,29 @@ elif page == T["temp_monitor"]:
   <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
   <p style="margin:6px 0 0 0">{last['advice']}</p>
   <div class="small" style="margin-top:8px">
-    <span class="badge">Weather: {last['city']}</span>
+    <span class="badge">City: {last['city']}</span>
     <span class="badge">Feels-like: {round(last['feels_like'],1)}°C</span>
     <span class="badge">Humidity: {int(last['humidity'])}%</span>
-    <span class="badge">Body: {round(last['body_temp'],1)}°C</span>
+    <span class="badge">Core: {round(last['body_temp'],1)}°C</span>
+    <span class="badge">Peripheral: {round(last['peripheral_temp'],1)}°C</span>
     <span class="badge">Baseline: {round(last['baseline'],1)}°C</span>
   </div>
   <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last['peak_hours'])) if last.get('peak_hours') else "—"}</p>
 </div>
 """, unsafe_allow_html=True)
 
-            # Log reason form when above threshold
-            if st.session_state["live_smoothed"]:
-                latest = st.session_state["live_smoothed"][-1]
-                delta = latest - st.session_state["baseline"]
+            # Log reason form when core above threshold
+            if st.session_state["live_core_smoothed"]:
+                core_latest = st.session_state["live_core_smoothed"][-1]
+                delta = core_latest - st.session_state["baseline"]
                 if delta >= ALERT_DELTA_C:
                     st.markdown(f"### {T['log_now']}")
                     with st.form("log_reason_form", clear_on_submit=True):
                         trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-                        chosen = st.multiselect(T["did_today"], trigger_options, max_selections=6)
+                        chosen = st.multiselect("Triggers", trigger_options, max_selections=6)
                         other_text = st.text_input(T["other"], "")
                         symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-                        selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
+                        selected_symptoms = st.multiselect("Symptoms", symptoms_list)
                         note_text = st.text_input(T["notes"], "")
 
                         has_reason = (len(chosen) > 0) or (other_text.strip() != "")
@@ -789,7 +802,8 @@ elif page == T["temp_monitor"]:
                         entry = {
                             "type":"ALERT",
                             "at": utc_iso_now(),
-                            "body_temp": round(latest,1),
+                            "core_temp": round(core_latest,1),
+                            "peripheral_temp": round(st.session_state["live_periph_smoothed"][-1],1) if st.session_state["live_periph_smoothed"] else None,
                             "baseline": round(st.session_state["baseline"],1),
                             "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
                             "symptoms": selected_symptoms,
@@ -801,29 +815,35 @@ elif page == T["temp_monitor"]:
                         except Exception as e:
                             st.warning(f"Could not save note: {e}")
 
-            # Temperature Chart (only here)
+            # Temperature Chart (Core + Peripheral + Feels-like)
             st.markdown("---")
             st.subheader("📈 Temperature Trend")
             c = get_conn().cursor()
             try:
-                query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 60"
+                query = """
+                    SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
+                    FROM temps WHERE username=? ORDER BY date DESC LIMIT 60
+                """
                 c.execute(query, (st.session_state.get("user","guest"),))
                 rows = c.fetchall()
                 if rows:
                     rows = rows[::-1]
                     dates = [r[0] for r in rows]
-                    bt = [r[1] for r in rows]
-                    ft = [(r[3] if r[3] is not None else r[2]) for r in rows]
+                    core = [r[1] for r in rows]
+                    periph = [r[2] for r in rows]
+                    feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
 
                     fig, ax = plt.subplots(figsize=(10,4))
-                    ax.plot(range(len(dates)), bt, marker='o', label="Body Temp", linewidth=2)
-                    ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
+                    ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
+                    ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
+                    ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
+
                     ax.set_xticks(range(len(dates)))
-                    ax.set_xticklabels([d[5:16] for d in dates], rotation=45, fontsize=9)  # Dubai-local formatted when saved
+                    ax.set_xticklabels([d[5:16] for d in dates], rotation=45, fontsize=9)
                     ax.set_ylabel("°C")
                     ax.legend()
                     ax.grid(True, alpha=0.3)
-                    ax.set_title("Body vs Feels-like (Dubai time)")
+                    ax.set_title("Core vs Peripheral vs Feels-like (Dubai time)")
                     st.pyplot(fig)
                 else:
                     st.info("No data yet. Start monitoring to build your trend.")
@@ -901,7 +921,7 @@ elif page == T["planner"]:
             if client and st.button(T["ask_ai_tips"]):
                 q = f"My plan: {act}. Notes: {other_notes}. Current city feels-like {round(fl,1)}°C, humidity {int(hum)}%."
                 ans, err2 = ai_response(q, app_language)
-                st.info(ans if ans else (T["ai_unavailable"]))
+                st.info(ans if ans else (TEXTS[app_language]["ai_unavailable"] if "ai_unavailable" in TEXTS[app_language] else "AI unavailable."))
 
             st.markdown("---")
             st.subheader("📍 Plan by place")
@@ -927,22 +947,18 @@ elif page == T["journal"]:
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("📒 " + T["journal_title"])
-        st.caption(TEXTS[app_language]["journal_hint"])
+        st.title("📒 " + TEXTS[app_language]["journal"])
+        st.caption(TEXTS[app_language].get("journal_hint", "Write brief notes."))
 
         # Add a quick free-form entry
         entry_blocks = st.text_area("✍️", height=140)
-        if st.button(TEXTS[app_language]["save"]):
+        if st.button(TEXTS[app_language].get("save", "Save")):
             if entry_blocks.strip():
-                entry = {
-                    "type": "NOTE",
-                    "at": utc_iso_now(),
-                    "text": entry_blocks.strip()
-                }
+                entry = {"type": "NOTE", "at": utc_iso_now(), "text": entry_blocks.strip()}
                 insert_journal(st.session_state["user"], utc_iso_now(), entry)
                 st.success("✅ Saved")
 
-        # List entries
+        # List entries (no chart here, to avoid duplication)
         c = get_conn().cursor()
         c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
         rows = c.fetchall()
@@ -953,7 +969,6 @@ elif page == T["journal"]:
                 obj = json.loads(r[1])
             except Exception:
                 obj = {"type":"NOTE", "text": r[1]}
-            # Show Dubai time if possible
             try:
                 when_dt = datetime.fromisoformat(r[0])
             except Exception:
@@ -982,10 +997,7 @@ elif page == T["assistant"]:
                 recent_journal.append({"type":"NOTE","text":e})
 
         last_check = st.session_state.get("last_check")
-        context_blurb = {
-            "recent_journal": recent_journal,
-            "last_check": last_check
-        }
+        context_blurb = {"recent_journal": recent_journal, "last_check": last_check}
 
         # Conversation state
         st.session_state.setdefault("chat", [])
@@ -1003,11 +1015,11 @@ elif page == T["assistant"]:
                     prompt = f"Context:\n{json.dumps(context_blurb, ensure_ascii=False)}\n\nUser question:\n{user_q}\n"
                     ans, err = ai_response(prompt, app_language)
                     if err:
-                        ans = TEXTS[app_language]["ai_unavailable"]
+                        ans = TEXTS[app_language].get("ai_unavailable", "AI unavailable.")
                     st.session_state["chat"].append({"role":"assistant","content":ans})
                 st.experimental_rerun()
             else:
-                st.warning(TEXTS[app_language]["ai_unavailable"])
+                st.warning(TEXTS[app_language].get("ai_unavailable", "AI unavailable."))
 
         if st.button("🗑️ Clear", type="secondary"):
             st.session_state["chat"] = []
@@ -1019,8 +1031,3 @@ elif page == T["settings"]:
         st.warning(T["login_first"])
     else:
         render_settings_page()
-
-# LOGOUT
-elif page == T["logout"]:
-    st.session_state.pop("user", None)
-    st.success(TEXTS[app_language]["logged_out"])
