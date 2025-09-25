@@ -1283,9 +1283,9 @@ if st.session_state.get("last_check"):
 
 
         # If above threshold, show “log reason” form (unchanged logic)
-        if st.session_state["live_core_smoothed"]:
-            core_latest = st.session_state["live_core_smoothed"][-1]
-            delta = core_latest - st.session_state["baseline"]
+    if st.session_state["live_core_smoothed"]:
+        core_latest = st.session_state["live_core_smoothed"][-1]
+        delta = core_latest - st.session_state["baseline"]
             if delta >= ALERT_DELTA_C:
                 st.markdown(f"### {T['log_now']}")
                 with st.form("log_reason_form", clear_on_submit=True):
