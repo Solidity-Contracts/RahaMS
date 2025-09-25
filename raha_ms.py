@@ -868,7 +868,7 @@ with st.sidebar.expander(exp_title, expanded=True):
             st.rerun()
 
 # Emergency in sidebar (click-to-call)
-with st.sidebar.expander("🚑 " + T["emergency"], expanded=False):
+with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
     st.session_state.setdefault("primary_phone", "")
     st.session_state.setdefault("secondary_phone", "")
     if st.session_state["primary_phone"]:
@@ -877,12 +877,6 @@ with st.sidebar.expander("🚑 " + T["emergency"], expanded=False):
         st.markdown(f"**Secondary:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
     if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
         st.caption("Set numbers in Settings to enable quick call.")
-
-# Floating emergency call button (if any number set)
-call_number = st.session_state.get("primary_phone") or st.session_state.get("secondary_phone")
-if call_number:
-    emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
-    st.markdown(f'<a class="fab-call" href="tel:{call_number}">📞 {emergency_label}</a>', unsafe_allow_html=True)
 
 # Navigation (added Exports)
 page = st.sidebar.radio(
