@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from collections import defaultdict
+from datetime import datetime as _dt
+
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -698,15 +700,41 @@ with st.sidebar.expander("Edit emergency contacts", expanded=False):
         save_contacts(st.session_state["user"], pn, pp, sn, sp)
         st.success(T["contacts_saved"])
 
-st.sidebar.caption("If unwell: move to AC • drink cool water • cooling pack • call emergency")
+# Floating Emergency Button (appears only if a primary contact is saved)
+if saved_pp:
+    # Arabic/English label
+    emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
 
-# ===== NEW: Top Quick Menu for mobile discoverability =====
-with st.expander(T["quick_menu"], expanded=False):
-    st.caption("Most features live in the left menu. On phones, tap the menu icon or use this quick menu.")
-    if options:
-        st.selectbox("🚑 Quick dial", options, index=0, key="quick_dial_clone")
-    else:
-        st.text("Add an emergency contact in the sidebar settings.")
+    # Simple style for a floating circular button (bottom-right)
+    st.markdown("""
+    <style>
+      .fab-call {
+        position: fixed;
+        right: 18px;
+        bottom: 18px;
+        z-index: 9999;
+        background: #ef4444; /* red-500 */
+        color: white;
+        border-radius: 9999px;
+        padding: 14px 18px;
+        font-weight: 700;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+        text-decoration: none;
+      }
+      .fab-call:hover { background:#dc2626; text-decoration:none; }
+      @media (min-width: 992px) {
+        /* On desktop, keep it smaller and subtle */
+        .fab-call { padding: 10px 14px; font-weight: 600; }
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Render as a tel: link (phones will show the dialer)
+    st.markdown(
+        f'<a class="fab-call" href="tel:{saved_pp}">📞 {emergency_label}</a>',
+        unsafe_allow_html=True
+    )
+
 
 # Navigation
 page = st.sidebar.radio("Navigate", [
@@ -851,23 +879,60 @@ def render_monitor():
         }
 
         # Alert handling
-        if should_alert(st.session_state["live_smoothed"], active_baseline, ALERT_DELTA_C, ALERT_CONFIRM):
-            if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
-                st.session_state["last_alert_ts"] = now
-                st.warning("⚠️ Rise ≥ 0.5 °C above baseline detected. Consider cooling and rest. You can log a reason below for tailored tips.")
-            # Auto-save minimal alert entry
-            if st.session_state["auto_save_alerts"] and (now - st.session_state.get("_last_auto_saved_at", 0.0) >= 180):
-                try:
-                    entry = {
-                        "type":"ALERT_AUTO",
-                        "at": utc_iso_now(),
-                        "body_temp": round(smoothed,1),
-                        "baseline": round(active_baseline,1)
-                    }
-                    insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                    st.session_state["_last_auto_saved_at"] = now
-                except Exception as e:
-                    st.warning(f"Auto-save failed: {e}")
+        # reason picker + tailored tips when above threshold
+if st.session_state["live_smoothed"]:
+    latest = st.session_state["live_smoothed"][-1]
+    delta = latest - (st.session_state["temp_baseline"] if st.session_state["use_temp_baseline"] else st.session_state["baseline"])
+    if delta >= ALERT_DELTA_C:
+        st.markdown(f"### {T['log_now']}")
+
+        # Use a form to avoid losing button clicks to reruns
+        with st.form("log_reason_form", clear_on_submit=True):
+            trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+            chosen = st.multiselect(T["triggers_today"], trigger_options, max_selections=6)
+            other_text = st.text_input(T["other"], "")
+            symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+            selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
+            note_text = st.text_input(T["notes"], "")
+
+            # Tailored tips preview (optional)
+            has_reason = (len(chosen) > 0) or (other_text.strip() != "")
+            if has_reason and st.session_state.get("last_check"):
+                do_now, plan_later, watch_for = tailored_tips(
+                    chosen + ([other_text] if other_text.strip() else []),
+                    st.session_state["last_check"]["feels_like"],
+                    st.session_state["last_check"]["humidity"],
+                    delta, app_language
+                )
+                with st.expander(f"🧊 {T['instant_plan_title']}", expanded=False):
+                    st.write(f"**{T['do_now']}**")
+                    st.write("- " + "\n- ".join(do_now) if do_now else "—")
+                    st.write(f"**{T['plan_later']}**")
+                    st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
+                    st.write(f"**{T['watch_for']}**")
+                    st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
+
+            submitted = st.form_submit_button(T["save_entry"])
+
+        if submitted:
+            # pause live so we don't race with the rerun loop
+            st.session_state["live_running"] = False
+
+            entry = {
+                "type":"ALERT",
+                "at": utc_iso_now(),
+                "body_temp": round(latest,1),
+                "baseline": round((st.session_state['temp_baseline'] if st.session_state['use_temp_baseline'] else st.session_state['baseline']),1),
+                "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
+                "symptoms": selected_symptoms,
+                "note": note_text.strip()
+            }
+            try:
+                insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                st.success(T["saved"])
+            except Exception as e:
+                st.warning(f"Could not save note: {e}")
+
 
         # DB write every Nth sample
         if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
@@ -961,30 +1026,53 @@ def render_monitor():
         st.info("No temperature data yet.")
 
 # ================== PLANNER ==================
-def best_windows_from_forecast(forecast, window_hours=2, top_k=3,
-                               max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
+def best_windows_from_forecast(
+    forecast, window_hours=2, top_k=8,  # return more; we’ll group & show clearly
+    max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)
+):
+    """
+    Returns a list of windows with parsed start_dt/end_dt for robust sorting.
+    Each item: {start_dt, end_dt, avg_feels, avg_hum}
+    """
+    # Acceptable slots (skip mid-day)
     slots = []
-    for it in forecast[:16]:
-        t = it["time"]
+    for it in forecast[:16]:  # next 48h (3h steps)
+        t = it["time"]  # 'YYYY-MM-DD HH:MM:SS'
         hour = int(t[11:13])
         if avoid_hours[0] <= hour < avoid_hours[1]:
             continue
         if it["feels_like"] <= max_feels_like and it["humidity"] <= max_humidity:
             slots.append(it)
+
+    # Build 2×3h or 1×3h windows
     cand = []
     for i in range(len(slots)):
         group = [slots[i]]
+        # try to extend with next contiguous 3h slot on same day
         if i+1 < len(slots):
             t1, t2 = slots[i]["time"], slots[i+1]["time"]
-            if t1[:10]==t2[:10] and (int(t2[11:13]) - int(t1[11:13]) == 3):
+            if t1[:10] == t2[:10] and (int(t2[11:13]) - int(t1[11:13]) == 3):
                 group.append(slots[i+1])
-        avg_feels = sum(g["feels_like"] for g in group)/len(group)
-        avg_hum = sum(g["humidity"] for g in group)/len(group)
-        start = group[0]["time"][:16]
-        end_h = int(group[-1]["time"][11:13]) + 3
-        end = group[-1]["time"][:11] + f"{end_h:02d}" + group[-1]["time"][13:16]
-        cand.append({"start":start,"end":end,"avg_feels":round(avg_feels,1),"avg_hum":int(avg_hum)})
-    cand.sort(key=lambda x: (x["avg_feels"], x["avg_hum"]))
+
+        avg_feels = round(sum(g["feels_like"] for g in group)/len(group), 1)
+        avg_hum = int(sum(g["humidity"] for g in group)/len(group))
+
+        start_dt = _dt.strptime(group[0]["time"][:16], "%Y-%m-%d %H:%M")
+        if len(group) > 1:
+            end_raw = group[-1]["time"][:16]
+            end_dt = _dt.strptime(end_raw, "%Y-%m-%d %H:%M") + timedelta(hours=3)
+        else:
+            end_dt = start_dt + timedelta(hours=3)
+
+        cand.append({
+            "start_dt": start_dt,
+            "end_dt": end_dt,
+            "avg_feels": avg_feels,
+            "avg_hum": avg_hum
+        })
+
+    # Sort windows chronologically
+    cand.sort(key=lambda x: x["start_dt"])
     return cand[:top_k]
 
 def render_planner():
@@ -997,26 +1085,44 @@ def render_planner():
     if weather is None:
         st.error(f"{T['weather_fail']}: {err}"); return
 
-    st.subheader("✅ Recommended cooler windows")
-    windows = best_windows_from_forecast(weather["forecast"], window_hours=2, top_k=4, max_feels_like=35.0, max_humidity=65)
-    if not windows:
-        st.info("No optimal windows found; consider early morning or after sunset.")
-    else:
-        cols = st.columns(len(windows))
-        for i, w in enumerate(windows):
-            with cols[i]:
-                st.markdown(f"**{w['start'][5:16]} → {w['end'][11:16]}**")
+   st.subheader("✅ Recommended cooler windows")
+
+windows = best_windows_from_forecast(
+    weather["forecast"],
+    window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65
+)
+
+if not windows:
+    st.info("No optimal windows found; consider early morning or after sunset.")
+else:
+    # Group by date for clean headings
+    by_day = defaultdict(list)
+    for w in windows:
+        day_key = w["start_dt"].strftime("%a %d %b")
+        by_day[day_key].append(w)
+
+    for day in sorted(by_day.keys(), key=lambda d: _dt.strptime(d, "%a %d %b")):
+        st.markdown(f"#### {day}")
+        day_windows = by_day[day]
+        cols = st.columns(min(3, len(day_windows)))
+        for i, w in enumerate(day_windows):
+            with cols[i % len(cols)]:
+                st.markdown(f"**{w['start_dt'].strftime('%H:%M')} → {w['end_dt'].strftime('%H:%M')}**")
                 st.caption(f"Feels-like ~{w['avg_feels']}°C • Humidity {w['avg_hum']}%")
-                act = st.selectbox("Plan:", ["Walk","Groceries","Beach","Errand"], key=f"plan_{i}")
-                other_act = st.text_input(T["other_activity"], key=f"plan_other_{i}")
+                act = st.selectbox("Plan:", ["Walk","Groceries","Beach","Errand"], key=f"plan_{day}_{i}")
+                other_act = st.text_input(T["other_activity"], key=f"plan_other_{day}_{i}")
                 final_act = other_act.strip() if other_act.strip() else act
-                if st.button(T["add_to_journal"], key=f"add_{i}"):
-                    entry = {"type":"PLAN", "at": utc_iso_now(),
-                             "city": city, "start": w["start"], "end": w["end"], "activity": final_act,
-                             "feels_like": w["avg_feels"], "humidity": w["avg_hum"]}
+                if st.button(T["add_to_journal"], key=f"add_{day}_{i}"):
+                    entry = {
+                        "type":"PLAN", "at": utc_iso_now(),
+                        "city": city,
+                        "start": w["start_dt"].strftime("%Y-%m-%d %H:%M"),
+                        "end": w["end_dt"].strftime("%Y-%m-%d %H:%M"),
+                        "activity": final_act,
+                        "feels_like": w["avg_feels"], "humidity": w["avg_hum"]
+                    }
                     insert_journal(st.session_state["user"], utc_iso_now(), entry)
                     st.success("Saved to Journal")
-
     st.markdown("---")
     st.subheader("🤔 What-if planner")
     act = st.selectbox("Activity type", ["Light walk (20–30 min)","Moderate exercise (45 min)","Outdoor errand (30–60 min)","Beach (60–90 min)"], key="what_if")
