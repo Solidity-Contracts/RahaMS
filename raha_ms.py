@@ -1203,7 +1203,7 @@ elif page == T["temp_monitor"]:
                 st.stop()
             else:
                 fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%Y-%m-%d %H:%M") if fetched_ts else "—"
-                st.caption(f"Weather last updated: {fetched_label} (Dubai)")
+                st.caption(f"Weather last updated: {fetched_label}")
         with colW2:
             if st.button("🔄 Refresh weather now", use_container_width=True):
                 # Bust the city cache and refetch
