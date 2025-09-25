@@ -1352,8 +1352,6 @@ elif page == T["journal"]:
   <div style="margin-top:6px">{body}</div>
 </div>
 """, unsafe_allow_html=True)
-                with st.expander("Details"):
-                    st.json(obj)
                 shown += 1
 
             # Pager controls
