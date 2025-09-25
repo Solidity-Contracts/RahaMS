@@ -543,7 +543,7 @@ Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, 
 **Raha MS** was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
 """)
         st.subheader("🌡️ Why Heat Matters in MS")
-        st.info("Even a small rise in body temperature (as little as **0.5°C**) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**. Cooling and pacing help.")
+        st.info("Even a small rise in **core body temperature** (as little as **0.5°C**) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**. Cooling and pacing help.")
         st.subheader("✨ What This App Offers You")
         st.markdown("""
 - **Track** your body temperature and local weather.  
