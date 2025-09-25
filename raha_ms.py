@@ -645,13 +645,19 @@ def render_planner():
         st.error(f"{T['weather_fail']}: {err}")
         return
 
+    if app_language == "Arabic":
+    tabs = st.tabs(["✅ أفضل الأوقات", "🤔 ماذا لو", "📍 الأماكن"])
+else:
     tabs = st.tabs(["✅ Best windows", "🤔 What-if", "📍 Places"])
 
     # -----------------------------
     # TAB 1: Best windows (compact)
     # -----------------------------
     with tabs[0]:
-        st.caption("We scanned the next 48h for cooler 2-hour windows.")
+        if app_language == "Arabic":
+    st.caption("فحصنا الـ48 ساعة القادمة للعثور على فترات أكثر برودة (ساعتين).")
+else:
+    st.caption("We scanned the next 48h for cooler 2-hour windows.")
         windows = best_windows_from_forecast(
             weather["forecast"], window_hours=2, top_k=12, max_feels_like=35.0, max_humidity=65
         )
@@ -1656,14 +1662,16 @@ elif page == T["exports"]:
 
         # Also offer raw CSVs directly
         st.markdown("— or download raw CSVs —")
+        temp_label = "درجات الحرارة.csv" if app_language == "Arabic" else "Temps.csv"
         st.download_button(
-            "Temps.csv",
+            temp_label,
             data=df_t.to_csv(index=False).encode("utf-8"),
             file_name="Temps.csv", mime="text/csv",
             use_container_width=True
         )
+        journal_label = "اليوميات.csv" if app_language == "Arabic" else "Journal.csv"
         st.download_button(
-            "Journal.csv",
+            journal_label,
             data=df_j.to_csv(index=False).encode("utf-8"),
             file_name="Journal.csv", mime="text/csv",
             use_container_width=True
