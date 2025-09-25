@@ -887,7 +887,7 @@ if call_number:
 # Navigation (added Exports)
 page = st.sidebar.radio(
     "Navigate",
-    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["settings"], T["exports"]]
+    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["exports"], T["settings"]]
 )
 
 # ================== SETTINGS ==================
