@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
+import json
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -672,24 +673,45 @@ def pretty_alert(entry, lang="English"):
         body = "\n\n".join(lines)
     return header, body
 
-# ---------- Journal formatting helpers ----------
+# ---------- Journal formatting helpers (robust) ----------
 
-TYPE_ICONS_EN = {
-    "PLAN": "🗓️", "ALERT": "🚨", "ALERT_AUTO": "🚨", "DAILY": "🧩", "NOTE": "📝"
-}
+TYPE_ICONS_EN = {"PLAN":"🗓️","ALERT":"🚨","ALERT_AUTO":"🚨","DAILY":"🧩","NOTE":"📝"}
 TYPE_ICONS_AR = TYPE_ICONS_EN  # same icons
+
+def utc_iso_now():
+    return datetime.now(timezone.utc).isoformat()
 
 def _to_dubai_label(iso_str: str) -> str:
     """Safely convert ISO/any stored date to 'YYYY-MM-DD HH:MM' Dubai."""
     try:
         dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
     except Exception:
         try:
-            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M")
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
         except Exception:
             dt = datetime.now(timezone.utc)
     return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+def _as_list(v):
+    """Coerce v into a list of strings: supports None, str, list, JSON-encoded list."""
+    if v is None:
+        return []
+    if isinstance(v, list):
+        return [str(x) for x in v]
+    if isinstance(v, str):
+        # Try to parse JSON list from a string if it looks like one
+        s = v.strip()
+        if (s.startswith("[") and s.endswith("]")) or (s.startswith("(") and s.endswith(")")):
+            try:
+                parsed = json.loads(s.replace("(", "[").replace(")", "]"))
+                if isinstance(parsed, list):
+                    return [str(x) for x in parsed]
+            except Exception:
+                pass
+        return [v]
+    return [str(v)]
 
 def pretty_plan(entry, lang="English"):
     when = _to_dubai_label(entry.get("at", utc_iso_now()))
@@ -714,8 +736,8 @@ def pretty_alert(entry, lang="English"):
     periph = entry.get("peripheral_temp")
     base = entry.get("baseline")
     delta = (core - base) if (core is not None and base is not None) else None
-    reasons = entry.get("reasons", [])
-    symptoms = entry.get("symptoms", [])
+    reasons = _as_list(entry.get("reasons"))
+    symptoms = _as_list(entry.get("symptoms"))
     note = entry.get("note", "")
     if lang == "Arabic":
         header = f"**{when}** — **تنبيه حراري**"
@@ -747,8 +769,8 @@ def pretty_daily(entry, lang="English"):
     hyd  = entry.get("hydration_glasses", "—")
     sleep = entry.get("sleep_hours", "—")
     fatigue = entry.get("fatigue", "—")
-    triggers = entry.get("triggers", [])
-    symptoms = entry.get("symptoms", [])
+    triggers = _as_list(entry.get("triggers"))
+    symptoms = _as_list(entry.get("symptoms"))
     note = entry.get("note", "")
     if lang == "Arabic":
         header = f"**{when}** — **مُسجّل يومي**"
@@ -793,18 +815,18 @@ def render_entry_card(raw_entry_json, lang="English"):
         obj = json.loads(raw_entry_json)
     except Exception:
         # Plain text fallback
-        obj = {"type":"NOTE", "at": utc_iso_now(), "text": raw_entry_json}
+        obj = {"type":"NOTE", "at": utc_iso_now(), "text": str(raw_entry_json)}
 
     t = obj.get("type", "NOTE")
     icon = (TYPE_ICONS_AR if lang=="Arabic" else TYPE_ICONS_EN).get(t, "📝")
 
-    # route to pretty maker
     if t == "PLAN":
         header, body = pretty_plan(obj, lang)
     elif t in ("ALERT","ALERT_AUTO"):
         header, body = pretty_alert(obj, lang)
     elif t == "DAILY":
         header, body = pretty_daily(obj, lang)
+        # ^ This is where your previous crash happened; now it's safe.
     else:
         header, body = pretty_note(obj, lang)
 
