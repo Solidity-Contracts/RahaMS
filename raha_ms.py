@@ -1,6 +1,8 @@
 import streamlit as st
 import sqlite3, json, requests, random, time
 import matplotlib.pyplot as plt
+import pandas as pd
+from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from collections import defaultdict
@@ -72,6 +74,7 @@ TEXTS = {
         "quick_tips": "Quick tips",
         "other": "Other",
         "notes": "Notes",
+        "save": "Save",
         "save_entry": "Save to Journal",
         "log_now": "Log what happened?",
         "other_activity": "Other activity (optional)",
@@ -81,6 +84,7 @@ TEXTS = {
         "ai_prompt_hint": "Ask something…",
         "assistant_title": "Your AI Companion",
         "assistant_hint": "I can help with cooling, pacing, planning around prayer/fasting, and more.",
+        "export_excel": "📥 Export all data (Excel)",
 
         "baseline_setting": "Baseline body temperature (°C)",
         "use_temp_baseline": "Use this baseline for monitoring alerts",
@@ -89,6 +93,9 @@ TEXTS = {
         "secondary_phone": "Secondary phone",
         "save_settings": "Save settings",
         "saved": "Saved",
+        "weather_fail": "Weather lookup failed",
+        "ai_unavailable": "AI is unavailable. Set OPENAI_API_KEY in secrets.",
+        "journal_hint": "Write brief notes. You can also add reasons from the monitor & plans from the planner."
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -119,6 +126,7 @@ TEXTS = {
         "quick_tips": "نصائح سريعة",
         "other": "أخرى",
         "notes": "ملاحظات",
+        "save": "حفظ",
         "save_entry": "حفظ في اليوميات",
         "log_now": "تسجيل ما حدث؟",
         "other_activity": "نشاط آخر (اختياري)",
@@ -128,6 +136,7 @@ TEXTS = {
         "ai_prompt_hint": "اسأل شيئًا…",
         "assistant_title": "مرافقك الذكي",
         "assistant_hint": "يمكنني المساعدة في التبريد والتنظيم والتخطيط حول الصلاة/الصيام وغير ذلك.",
+        "export_excel": "📥 تصدير كل البيانات (Excel)",
 
         "baseline_setting": "درجة حرارة الجسم الأساسية (°م)",
         "use_temp_baseline": "استخدام هذه القيمة لتنبيهات المراقبة",
@@ -136,6 +145,9 @@ TEXTS = {
         "secondary_phone": "هاتف إضافي",
         "save_settings": "حفظ الإعدادات",
         "saved": "تم الحفظ",
+        "weather_fail": "فشل جلب الطقس",
+        "ai_unavailable": "الخدمة الذكية غير متاحة. أضف مفتاح OPENAI_API_KEY.",
+        "journal_hint": "اكتب ملاحظات قصيرة. يمكنك أيضًا إضافة الأسباب من المراقبة والخطط من المخطط."
     }
 }
 
@@ -238,6 +250,41 @@ def insert_journal(u, dt, entry_obj):
     c = get_conn().cursor()
     c.execute("INSERT INTO journal VALUES (?,?,?)", (u, dt, json.dumps(entry_obj)))
     get_conn().commit()
+
+def fetch_temps_df(user):
+    c = get_conn().cursor()
+    c.execute("""
+        SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, humidity, status
+        FROM temps
+        WHERE username=?
+        ORDER BY date ASC
+    """, (user,))
+    rows = c.fetchall()
+    cols = ["date","core_temp","peripheral_temp","weather_temp","feels_like","humidity","status"]
+    return pd.DataFrame(rows, columns=cols)
+
+def fetch_journal_df(user):
+    c = get_conn().cursor()
+    c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date ASC", (user,))
+    rows = c.fetchall()
+    parsed = []
+    for dt, raw in rows:
+        try:
+            obj = json.loads(raw)
+            parsed.append({"date": dt, **obj})
+        except Exception:
+            parsed.append({"date": dt, "type": "NOTE", "text": raw})
+    return pd.DataFrame(parsed)
+
+def build_export_excel(user) -> bytes:
+    temps = fetch_temps_df(user)
+    journal = fetch_journal_df(user)
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
+        temps.to_excel(writer, index=False, sheet_name="Temps")
+        journal.to_excel(writer, index=False, sheet_name="Journal")
+    output.seek(0)
+    return output.read()
 
 def utc_iso_now():
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -552,8 +599,10 @@ if app_language == "Arabic":
     </style>
     """, unsafe_allow_html=True)
 
-# Sidebar Login/Register + Logout here
-with st.sidebar.expander(T["login_title"], expanded=("user" not in st.session_state)):
+# Sidebar Login/Register + Logout
+exp_title = (f"{T['login_title']} — {st.session_state['user']}"
+             if "user" in st.session_state else T["login_title"])
+with st.sidebar.expander(exp_title, expanded=True):
     if "user" not in st.session_state:
         username = st.text_input(T["username"], key="sb_user")
         password = st.text_input(T["password"], type="password", key="sb_pass")
@@ -566,6 +615,7 @@ with st.sidebar.expander(T["login_title"], expanded=("user" not in st.session_st
                 if c.fetchone():
                     st.session_state["user"] = username
                     st.success(T["logged_in"])
+                    st.rerun()
                 else:
                     st.error(T["bad_creds"])
         with col2:
@@ -582,6 +632,7 @@ with st.sidebar.expander(T["login_title"], expanded=("user" not in st.session_st
         if st.button(T["logout"], key="sb_logout_btn"):
             st.session_state.pop("user", None)
             st.success(T["logged_out"])
+            st.rerun()
 
 # Floating emergency button (visible even if sidebar collapsed)
 call_number = st.session_state.get("primary_phone") or st.session_state.get("secondary_phone")
@@ -589,7 +640,7 @@ if call_number:
     emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
     st.markdown(f'<a class="fab-call" href="tel:{call_number}">📞 {emergency_label}</a>', unsafe_allow_html=True)
 
-# Navigation (no Logout page; it lives in the sidebar now)
+# Navigation
 page = st.sidebar.radio(
     "Navigate",
     [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["settings"]]
@@ -622,6 +673,12 @@ def render_settings_page():
         st.success(T["saved"])
 
     st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+
+    st.markdown("---")
+    if "user" in st.session_state and st.button(T["logout"], type="secondary", key="settings_logout"):
+        st.session_state.pop("user", None)
+        st.success(T["logged_out"])
+        st.rerun()
 
 # ================== PAGES ==================
 # ABOUT
@@ -668,7 +725,7 @@ elif page == T["temp_monitor"]:
                 st.session_state["last_alert_ts"] = 0.0
                 st.session_state["_last_tick_ts"] = 0.0
                 st.rerun()
-            if st.session_state["live_running"] and st.button("⏸️ " + T["settings"], use_container_width=True, key="pause_btn"):
+            if st.session_state["live_running"] and st.button("⏸️ Pause", use_container_width=True, key="pause_btn"):
                 st.session_state["live_running"] = False
                 st.rerun()
             if st.button("🔁 Reset session", use_container_width=True):
@@ -798,7 +855,7 @@ elif page == T["temp_monitor"]:
                         submitted = st.form_submit_button(T["save_entry"])
 
                     if submitted:
-                        st.session_state["live_running"] = False  # pause to avoid racing
+                        st.session_state["live_running"] = False
                         entry = {
                             "type":"ALERT",
                             "at": utc_iso_now(),
@@ -849,6 +906,17 @@ elif page == T["temp_monitor"]:
                     st.info("No data yet. Start monitoring to build your trend.")
             except Exception as e:
                 st.error(f"Chart error: {e}")
+
+            # Optional quick export here too
+            if "user" in st.session_state:
+                xls_bytes = build_export_excel(st.session_state["user"])
+                st.download_button(
+                    label=T["export_excel"],
+                    data=xls_bytes,
+                    file_name=f"raha_ms_{st.session_state['user']}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
 
 # PLANNER
 elif page == T["planner"]:
@@ -921,7 +989,7 @@ elif page == T["planner"]:
             if client and st.button(T["ask_ai_tips"]):
                 q = f"My plan: {act}. Notes: {other_notes}. Current city feels-like {round(fl,1)}°C, humidity {int(hum)}%."
                 ans, err2 = ai_response(q, app_language)
-                st.info(ans if ans else (TEXTS[app_language]["ai_unavailable"] if "ai_unavailable" in TEXTS[app_language] else "AI unavailable."))
+                st.info(ans if ans else T["ai_unavailable"])
 
             st.markdown("---")
             st.subheader("📍 Plan by place")
@@ -948,11 +1016,21 @@ elif page == T["journal"]:
         st.warning(T["login_first"])
     else:
         st.title("📒 " + TEXTS[app_language]["journal"])
-        st.caption(TEXTS[app_language].get("journal_hint", "Write brief notes."))
+        st.caption(TEXTS[app_language]["journal_hint"])
+
+        # Export to Excel (Temps + Journal)
+        xls_bytes = build_export_excel(st.session_state["user"])
+        st.download_button(
+            label=T["export_excel"],
+            data=xls_bytes,
+            file_name=f"raha_ms_{st.session_state['user']}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True
+        )
 
         # Add a quick free-form entry
         entry_blocks = st.text_area("✍️", height=140)
-        if st.button(TEXTS[app_language].get("save", "Save")):
+        if st.button(TEXTS[app_language]["save"]):
             if entry_blocks.strip():
                 entry = {"type": "NOTE", "at": utc_iso_now(), "text": entry_blocks.strip()}
                 insert_journal(st.session_state["user"], utc_iso_now(), entry)
@@ -1015,15 +1093,15 @@ elif page == T["assistant"]:
                     prompt = f"Context:\n{json.dumps(context_blurb, ensure_ascii=False)}\n\nUser question:\n{user_q}\n"
                     ans, err = ai_response(prompt, app_language)
                     if err:
-                        ans = TEXTS[app_language].get("ai_unavailable", "AI unavailable.")
+                        ans = T["ai_unavailable"]
                     st.session_state["chat"].append({"role":"assistant","content":ans})
-                st.experimental_rerun()
+                st.rerun()
             else:
-                st.warning(TEXTS[app_language].get("ai_unavailable", "AI unavailable."))
+                st.warning(T["ai_unavailable"])
 
         if st.button("🗑️ Clear", type="secondary"):
             st.session_state["chat"] = []
-            st.experimental_rerun()
+            st.rerun()
 
 # SETTINGS
 elif page == T["settings"]:
