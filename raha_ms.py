@@ -5,6 +5,7 @@ import requests
 import matplotlib.pyplot as plt
 from datetime import datetime, timedelta
 from math import isnan
+import time, random  # NEW: for simulated live feed
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -24,6 +25,14 @@ GCC_CITIES = [
     "Riyadh,SA", "Jeddah,SA", "Dammam,SA",
     "Muscat,OM"
 ]
+
+# ===== Live/Alert config (for simulation or future sensor) =====
+SIM_INTERVAL_SEC = 5           # how often to create a new simulated sample
+DB_WRITE_EVERY_N = 3           # write to DB every Nth sample during live
+ALERT_DELTA_C = 0.5            # ≥ 0.5°C above baseline
+ALERT_CONFIRM = 2              # confirm with N consecutive samples
+ALERT_COOLDOWN_SEC = 300       # 5 minutes between alert popups
+SMOOTH_WINDOW = 3              # moving average window (samples)
 
 # ================== I18N ==================
 TEXTS = {
@@ -138,26 +147,21 @@ def init_db():
     )""")
     conn.commit()
 
-
 def migrate_db():
-    conn = get_conn() if 'get_conn' in globals() else sqlite3.connect("raha_ms.db", check_same_thread=False)
+    conn = get_conn()
     c = conn.cursor()
-    # What columns do we have now?
     c.execute("PRAGMA table_info(temps)")
     cols = [r[1] for r in c.fetchall()]
-
-    # Add new columns if they don't exist (SQLite appends them at the end)
+    # Add columns if missing
     if "feels_like" not in cols:
         c.execute("ALTER TABLE temps ADD COLUMN feels_like REAL")
     if "humidity" not in cols:
         c.execute("ALTER TABLE temps ADD COLUMN humidity REAL")
-
     conn.commit()
 
-# call on every run (safe if run repeatedly)
-migrate_db()
-
+# IMPORTANT: init first, then migrate (previously reversed)
 init_db()
+migrate_db()
 
 # ================== WEATHER ==================
 @st.cache_data(ttl=600)  # 10 minutes
@@ -165,7 +169,6 @@ def get_weather(city="Abu Dhabi,AE"):
     """Return current weather + 48h forecast windows using OWM 'weather' and 'forecast' endpoints."""
     if not OPENWEATHER_API_KEY:
         return None, "Missing OPENWEATHER_API_KEY"
-
     try:
         base = "https://api.openweathermap.org/data/2.5/"
         # current
@@ -173,13 +176,12 @@ def get_weather(city="Abu Dhabi,AE"):
         r_now = requests.get(base + "weather", params=params_now, timeout=6)
         r_now.raise_for_status()
         jn = r_now.json()
-
-        temp = float(jn["main"]["temp"])
+        temp  = float(jn["main"]["temp"])
         feels = float(jn["main"]["feels_like"])
-        hum = float(jn["main"]["humidity"])
-        desc = jn["weather"][0]["description"]
-        lat = jn.get("coord", {}).get("lat")
-        lon = jn.get("coord", {}).get("lon")
+        hum   = float(jn["main"]["humidity"])
+        desc  = jn["weather"][0]["description"]
+        lat   = jn.get("coord", {}).get("lat")
+        lon   = jn.get("coord", {}).get("lon")
 
         # 5-day / 3h forecast (pick next 48h)
         params_fc = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "en"}
@@ -216,7 +218,6 @@ SYMPTOM_WEIGHT = 0.5  # per symptom selected
 
 def risk_from_env(feels_like_c: float, humidity: float) -> int:
     """Return base environmental risk points from apparent temp + humidity."""
-    # coarse bands tailored for GCC humidity; keep simple & explainable
     score = 0
     if feels_like_c >= 39:          # very hot
         score += 3
@@ -224,7 +225,6 @@ def risk_from_env(feels_like_c: float, humidity: float) -> int:
         score += 2
     elif feels_like_c >= 32:
         score += 1
-    # humidity amplifies heat retention
     if humidity >= 60 and feels_like_c >= 32:
         score += 1
     return score
@@ -245,12 +245,30 @@ def compute_risk(feels_like, humidity, body_temp, baseline, triggers, symptoms):
     score += risk_from_person(body_temp, baseline or 37.0)
     score += sum(TRIGGER_WEIGHTS.get(t, 0) for t in triggers)
     score += SYMPTOM_WEIGHT * len(symptoms)
-
     if score >= 7:  status, color, icon, text = "Danger", "red", "🔴", "High risk: stay in cooled spaces, avoid exertion, use cooling packs, and rest. Seek clinical advice for severe symptoms."
     elif score >= 5: status, color, icon, text = "High", "orangered", "🟠", "Elevated risk: limit time outside (esp. midday), pre‑cool and pace activities."
     elif score >= 3: status, color, icon, text = "Caution", "orange", "🟡", "Mild risk: hydrate, take breaks, prefer shade/AC, and monitor symptoms."
     else:            status, color, icon, text = "Safe", "green", "🟢", "You look safe. Keep cool and hydrated."
     return {"score": score, "status": status, "color": color, "icon": icon, "advice": text}
+
+# ================== Live helpers (simulation) ==================
+def moving_avg(seq, n):
+    if not seq: return 0.0
+    if len(seq) < n: return round(sum(seq)/len(seq), 2)
+    return round(sum(seq[-n:]) / n, 2)
+
+def should_alert(temp_series, baseline, delta=ALERT_DELTA_C, confirm=ALERT_CONFIRM):
+    if len(temp_series) < confirm: 
+        return False
+    recent = temp_series[-confirm:]
+    return all((t - baseline) >= delta for t in recent)
+
+def simulate_next(prev, baseline):
+    """Random-walk with occasional upward push to mimic heat/effort."""
+    drift = random.uniform(-0.05, 0.08)         # small natural noise
+    surge = random.uniform(0.2, 0.5) if random.random() < 0.12 else 0.0  # sporadic uptick
+    next_t = prev + drift + surge
+    return max(35.5, min(41.0, round(next_t, 2)))
 
 # ================== AI ==================
 def ai_response(prompt, lang):
@@ -259,14 +277,9 @@ def ai_response(prompt, lang):
         "Use calm language and short bullet points. Consider fasting, prayer times, home AC use, cooling garments, and pacing. "
         "This is general education, not medical care."
     )
-    if lang == "Arabic":
-        sys_prompt += " Respond only in Arabic."
-    else:
-        sys_prompt += " Respond only in English."
-
+    sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     if not client:
         return None, "no_key"
-
     try:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -356,73 +369,185 @@ elif page == T["login_title"]:
                 st.error(T["user_exists"])
     st.caption("⚠️ Prototype note: passwords are stored in plain text. For a pilot, switch to a hashed scheme (bcrypt/PBKDF2).")
 
-# HEAT DASHBOARD WITH INTEGRATED AI ASSISTANT (FIXED)
+# HEAT DASHBOARD (Manual + Simulated Live)
 elif page == T["temp_monitor"]:
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
         st.title("☀️ " + T["risk_dashboard"])
-        st.write("**Your Heat Safety Check** - track temperatures and get instant AI advice.")
+        st.write("**Your Heat Safety Check** — manual entry or live feed simulation, with instant AI advice.")
 
-        # ========== HEAT CHECK FORM ==========
-        with st.form("risk_form", clear_on_submit=False):
-            colL, colR = st.columns([3,1])
-            
-            with colL:
-                body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
+        # ---------- Data Source Toggle ----------
+        source = st.radio("Data source", ["Manual entry", "Simulated feed"], horizontal=True)
+
+        # Session state for live mode
+        st.session_state.setdefault("live_running", False)
+        st.session_state.setdefault("live_buffer", [])      # smoothed temps
+        st.session_state.setdefault("live_raw", [])         # raw temps
+        st.session_state.setdefault("live_tick", 0)
+        st.session_state.setdefault("last_db_write_tick", -999)
+        st.session_state.setdefault("last_alert_ts", 0.0)
+
+        # ========== MANUAL MODE ==========
+        if source == "Manual entry":
+            with st.form("risk_form", clear_on_submit=False):
+                colL, colR = st.columns([3,1])
+                with colL:
+                    body_temp = st.number_input("🌡️ " + T["enter_temp"], 30.0, 45.0, 37.0, step=0.1)
+                    baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
+                    quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
+                    city = st.text_input("🏙️ " + T["city"], value=quick)
+                    triggers = st.multiselect(
+                        "✅ " + T["did_today"],
+                        ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
+                    )
+                    symptoms = st.multiselect(
+                        "⚕️ " + T["symptoms_today"],
+                        ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
+                    )
+                    fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
+                with colR:
+                    submitted = st.form_submit_button("🔍 " + T["check_risk"])
+
+            if submitted:
+                st.session_state["baseline"] = baseline
+                weather, err = get_weather(city)
+                if weather is None:
+                    st.error(f"{T['weather_fail']}: {err}")
+                else:
+                    risk = compute_risk(
+                        weather["feels_like"], weather["humidity"],
+                        float(body_temp), float(baseline), triggers, symptoms
+                    )
+                    checkpoint = {
+                        "city": city, "body_temp": float(body_temp), "baseline": float(baseline),
+                        "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
+                        "humidity": weather["humidity"], "weather_desc": weather["desc"],
+                        "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
+                        "advice": risk["advice"], "triggers": triggers, "symptoms": symptoms,
+                        "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
+                        "fasting": fasting, "time": datetime.utcnow().isoformat()
+                    }
+                    st.session_state["last_check"] = checkpoint
+
+                    # Save to database (named columns)
+                    try:
+                        c = get_conn().cursor()
+                        c.execute("""
+                            INSERT INTO temps (username, date, body_temp, weather_temp, feels_like, humidity, status)
+                            VALUES (?,?,?,?,?,?,?)
+                        """, (
+                            st.session_state["user"], str(datetime.now()),
+                            checkpoint["body_temp"], checkpoint["weather_temp"],
+                            checkpoint["feels_like"], checkpoint["humidity"], checkpoint["status"]
+                        ))
+                        get_conn().commit()
+                    except Exception as e:
+                        st.warning(f"Could not save to DB: {e}")
+
+            # Optional explainer
+            with st.expander("Why fasting matters in the heat (open)"):
+                st.markdown("""
+- In MS, heat can temporarily worsen symptoms (Uhthoff's phenomenon).
+- Fasting (no fluids between dawn and sunset) can increase **dehydration risk** in hot, humid climates.
+- Dehydration reduces the body's ability to cool itself → **higher heat strain**.
+""")
+
+        # ========== SIMULATED LIVE MODE ==========
+        if source == "Simulated feed":
+            colA, colB, colC = st.columns([1.2,1,1])
+            with colA:
                 baseline = st.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state.get("baseline", 37.0), step=0.1)
-                quick = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
-                city = st.text_input("🏙️ " + T["city"], value=quick)
-                triggers = st.multiselect(
-                    "✅ " + T["did_today"],
-                    ["Exercise", "Sauna", "Spicy food", "Hot drinks", "Stress", "Direct sun exposure", "Fever", "Hormonal cycle"]
-                )
-                symptoms = st.multiselect(
-                    "⚕️ " + T["symptoms_today"],
-                    ["Blurred vision","Fatigue","Muscle weakness","Numbness","Coordination issues","Mental fog"]
-                )
-                fasting = st.checkbox("🕋 " + T["fasting_today"], value=False)
-            
-            with colR:
-                submitted = st.form_submit_button("🔍 " + T["check_risk"])
+            with colB:
+                city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
+            with colC:
+                interval = st.slider("⏱️ Update every (sec)", 2, 20, SIM_INTERVAL_SEC, 1)
 
-        if submitted:
-            st.session_state["baseline"] = baseline
             weather, err = get_weather(city)
             if weather is None:
                 st.error(f"{T['weather_fail']}: {err}")
             else:
-                risk = compute_risk(
-                    weather["feels_like"], weather["humidity"],
-                    float(body_temp), float(baseline), triggers, symptoms
-                )
-                checkpoint = {
-                    "city": city, "body_temp": float(body_temp), "baseline": float(baseline),
-                    "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
-                    "humidity": weather["humidity"], "weather_desc": weather["desc"],
-                    "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
-                    "advice": risk["advice"], "triggers": triggers, "symptoms": symptoms,
-                    "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
-                    "fasting": fasting, "time": datetime.utcnow().isoformat()
-                }
-                st.session_state["last_check"] = checkpoint
-                
-                # Save to database
-                try:
-                    c = get_conn().cursor()
-                    c.execute("INSERT INTO temps VALUES (?,?,?,?,?,?,?)",
-                              (st.session_state["user"], str(datetime.now()),
-                               checkpoint["body_temp"], checkpoint["weather_temp"],
-                               checkpoint["feels_like"], checkpoint["humidity"], checkpoint["status"]))
-                    get_conn().commit()
-                except Exception as e:
-                    st.warning(f"Could not save to DB: {e}")
+                col1, col2, col3 = st.columns([1,1,2])
+                with col1:
+                    if not st.session_state["live_running"] and st.button("▶️ Start simulation", use_container_width=True):
+                        st.session_state["live_running"] = True
+                        st.session_state["baseline"] = baseline
+                        start = round(baseline + random.uniform(-0.2, 0.2), 2)
+                        st.session_state["live_buffer"] = [start]
+                        st.session_state["live_raw"] = [start]
+                        st.session_state["live_tick"] = 0
+                        st.session_state["last_db_write_tick"] = -999
+                        st.session_state["last_alert_ts"] = 0.0
+                        # st.experimental_rerun()  # use this if your Streamlit is old
+                        st.rerun()
+                with col2:
+                    if st.session_state["live_running"] and st.button("⏸️ Stop", use_container_width=True):
+                        st.session_state["live_running"] = False
+                        # st.experimental_rerun()
+                        st.rerun()
+                with col3:
+                    if st.button("🔁 Reset session", use_container_width=True):
+                        st.session_state["live_buffer"] = []
+                        st.session_state["live_raw"] = []
+                        st.session_state["live_tick"] = 0
+                        st.session_state["last_db_write_tick"] = -999
+                        st.session_state["last_alert_ts"] = 0.0
+
+                # Tick generator
+                now = time.time()
+                last_tick_ts = st.session_state.get("_last_tick_ts", 0.0)
+                if st.session_state["live_running"] and (now - last_tick_ts) >= interval:
+                    st.session_state["_last_tick_ts"] = now
+                    prev = st.session_state["live_raw"][-1] if st.session_state["live_raw"] else baseline
+                    raw = simulate_next(prev, baseline)
+                    st.session_state["live_raw"].append(raw)
+                    smoothed = moving_avg(st.session_state["live_raw"], SMOOTH_WINDOW)
+                    st.session_state["live_buffer"].append(smoothed)
+                    st.session_state["live_tick"] += 1
+
+                    # Compute risk & update last_check
+                    latest_body = smoothed
+                    risk = compute_risk(weather["feels_like"], weather["humidity"], latest_body, baseline, [], [])
+                    st.session_state["last_check"] = {
+                        "city": city, "body_temp": latest_body, "baseline": baseline,
+                        "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
+                        "humidity": weather["humidity"], "weather_desc": weather["desc"],
+                        "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
+                        "advice": risk["advice"], "triggers": [], "symptoms": [],
+                        "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
+                        "fasting": False, "time": datetime.utcnow().isoformat()
+                    }
+
+                    # Alert: baseline+0.5°C for 2 consecutive smoothed samples, cooldown 5 min
+                    if should_alert(st.session_state["live_buffer"], baseline, ALERT_DELTA_C, ALERT_CONFIRM):
+                        if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
+                            st.session_state["last_alert_ts"] = now
+                            st.warning("⚠️ Temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
+
+                    # DB write every Nth sample
+                    if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
+                        try:
+                            c = get_conn().cursor()
+                            c.execute("""
+                                INSERT INTO temps (username, date, body_temp, weather_temp, feels_like, humidity, status)
+                                VALUES (?,?,?,?,?,?,?)
+                            """, (
+                                st.session_state.get("user", "guest"), str(datetime.now()),
+                                latest_body, weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
+                            ))
+                            get_conn().commit()
+                            st.session_state["last_db_write_tick"] = st.session_state["live_tick"]
+                        except Exception as e:
+                            st.warning(f"Could not save to DB: {e}")
+
+                    # Force the UI to refresh so the graph/card update
+                    # time.sleep(0.2)  # optional tiny delay
+                    # st.experimental_rerun()
+                    st.rerun()
 
         # ========== RESULTS SECTION ==========
         if st.session_state.get("last_check"):
             last = st.session_state["last_check"]
-            
-            # Display risk card with ALL information including forecast
             triggers_text = ', '.join(last['triggers']) if last['triggers'] else 'None'
             symptoms_text = ', '.join(last['symptoms']) if last['symptoms'] else 'None'
             left_color = last['color']
@@ -443,25 +568,22 @@ elif page == T["temp_monitor"]:
 </div>
 """, unsafe_allow_html=True)
 
-            # ========== SIMPLE AI ASSISTANT (FIXED) ==========
+            # ---------- AI Assistant ----------
             st.markdown("---")
             st.subheader("🤖 Quick AI Advice")
-            
-            # Initialize messages if not exists
+
             if "heat_chat_messages" not in st.session_state:
                 st.session_state.heat_chat_messages = []
-            
-            # Display recent messages (limit to last 3)
+
             for message in st.session_state.heat_chat_messages[-3:]:
                 if message["role"] == "user":
                     st.markdown(f"**You:** {message['content']}")
                 else:
                     st.markdown(f"**Assistant:** {message['content']}")
-            
-            # Quick question buttons
+
             st.write("**Ask about:**")
             col1, col2 = st.columns(2)
-            
+            question = None
             with col1:
                 if st.button("❄️ Cooling strategies", use_container_width=True):
                     question = "What are the best cooling strategies for my current situation?"
@@ -469,7 +591,6 @@ elif page == T["temp_monitor"]:
                     question = "How should I hydrate effectively with these conditions?"
                 if st.button("📅 Daily planning", use_container_width=True):
                     question = "How should I plan my day based on this heat risk?"
-            
             with col2:
                 if st.button("⚠️ Symptom management", use_container_width=True):
                     question = "How should I manage these symptoms in the heat?"
@@ -477,22 +598,16 @@ elif page == T["temp_monitor"]:
                     question = "What activities are safe for me right now?"
                 if st.button("🚨 Warning signs", use_container_width=True):
                     question = "What emergency signs should I watch for?"
-            
-            # Custom question input
+
             custom_question = st.text_input(
                 "Or ask your own question:",
                 placeholder="Example: How can I cool down quickly?"
             )
-            
             if custom_question:
                 question = custom_question
-            
-            # Process question when any button is clicked or custom question entered
-            if 'question' in locals() and client:
-                # Add user question to history
+
+            if question and client:
                 st.session_state.heat_chat_messages.append({"role": "user", "content": question})
-                
-                # Generate AI response
                 with st.spinner("Getting AI advice..."):
                     context_prompt = f"""
                     Current Heat Safety Check:
@@ -501,61 +616,49 @@ elif page == T["temp_monitor"]:
                     - Risk Level: {last['status']}
                     - Triggers: {triggers_text}
                     - Symptoms: {symptoms_text}
-                    - Fasting: {'Yes' if last['fasting'] else 'No'}
-                    - Peak Heat Times: {', '.join(last['peak_hours'][:2])}
-                    
+                    - Fasting: {'Yes' if last.get('fasting', False) else 'No'}
+                    - Peak Heat Times: {', '.join(last.get('peak_hours', [])[:2])}
+
                     Question: {question}
-                    
+
                     Provide specific, practical advice for MS patients in GCC climate.
                     """
-                    
                     response, err = ai_response(context_prompt, app_language)
                     if err:
                         response = "⚠️ AI service is temporarily unavailable. Please try again later."
-                    
-                    # Add assistant response to history
                     st.session_state.heat_chat_messages.append({"role": "assistant", "content": response})
-                
-                # Show the response
                 st.info(f"**Assistant:** {response}")
-                
-                # Clear the question variable
-                del question
+                # st.experimental_rerun()
                 st.rerun()
-            
-            elif 'question' in locals() and not client:
+            elif question and not client:
                 st.warning(TEXTS[app_language]["ai_unavailable"])
 
-            # Clear chat button
             if st.button("🗑️ Clear Conversation", type="secondary"):
                 st.session_state.heat_chat_messages = []
+                # st.experimental_rerun()
                 st.rerun()
 
-            # ========== TEMPERATURE CHART ==========
+            # ---------- Temperature Chart ----------
             st.markdown("---")
             st.subheader("📈 Temperature Trends")
-            
             c = get_conn().cursor()
             try:
-                query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 20"
+                # Be robust if some old rows have NULL feels_like
+                query = "SELECT date, body_temp, weather_temp, feels_like, status FROM temps WHERE username=? ORDER BY date DESC LIMIT 50"
                 c.execute(query, (st.session_state["user"],))
                 rows = c.fetchall()
-                
                 if rows:
-                    rows = rows[::-1]  # Reverse to show chronological order
-                    dates = [r[0][5:16] for r in rows]  # Show MM-DD HH:MM
+                    rows = rows[::-1]
+                    dates = [r[0][5:16] for r in rows]
                     bt = [r[1] for r in rows]
-                    ft = [r[3] for r in rows]
+                    ft = [(r[3] if r[3] is not None else r[2]) for r in rows]  # fallback to weather if feels_like NULL
                     status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
 
                     fig, ax = plt.subplots(figsize=(10,4))
                     ax.plot(range(len(dates)), bt, marker='o', label="Body Temp", linewidth=2, color='red')
                     ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2, color='orange')
-                    
-                    # Add status indicators
                     for i, color in enumerate(status_colors):
                         ax.scatter(i, bt[i], s=120, edgecolor="black", zorder=5, color=color)
-                    
                     ax.set_xticks(range(len(dates)))
                     ax.set_xticklabels(dates, rotation=45, fontsize=9)
                     ax.set_ylabel("Temperature (°C)")
@@ -565,25 +668,12 @@ elif page == T["temp_monitor"]:
                     st.pyplot(fig)
                 else:
                     st.info("No temperature data yet. Complete a few heat safety checks to see your trends.")
-                    
             except Exception as e:
                 st.error(f"Chart error: {e}")
 
         else:
-            # Show when no check has been performed yet
-            st.info("👆 Complete a heat safety check above to see your results and get AI advice.")
-            
-            # Quick tips expander
-            with st.expander("💡 Quick Heat Safety Tips for MS Patients"):
-                st.markdown("""
-                **For GCC Climate:**
-                • **Time activities**: Avoid 10 AM - 4 PM peak heat
-                • **Cooling gear**: Vests, bandanas, wrist coolers
-                • **Hydration**: 2-3 liters daily, electrolyte balance
-                • **Recognize Uhthoff's**: Blurred vision, fatigue, weakness
-                • **Cooling strategies**: Cool showers, AC pre-cooling
-                • **Clothing**: Light colors, loose fabrics, moisture-wicking
-                """)
+            # Nothing to show yet
+            st.info("👆 Complete a heat safety check above—or start the simulated feed—to see results and get AI advice.")
 
 # JOURNAL PAGE 
 elif page == T["journal"]:
