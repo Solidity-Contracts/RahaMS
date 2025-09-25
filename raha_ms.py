@@ -690,7 +690,6 @@ with st.sidebar.expander("Edit emergency contacts", expanded=False):
         save_contacts(st.session_state["user"], pn, pp, sn, sp)
         st.success(T["contacts_saved"])
 
-st.sidebar.caption("If unwell: move to AC • drink cool water • cooling pack • call emergency")
 
 # Navigation
 page = st.sidebar.radio("Navigate", [
