@@ -471,21 +471,39 @@ def get_weather_cached(city: str):
     else:
         return rec["data"], None, rec["ts"]
 
-def render_temp_glossary(lang="English"):
-    if lang == "Arabic":
-        with st.expander("❓ ما معنى القيم على هذه الصفحة؟", expanded=False):
-            st.markdown(
-                "- **الحرارة الأساسية (Core):** قريبة من حرارة الجسم الداخلية. ترتفع قليلًا مع الجهد أو الحرارة.\n"
-                "- **الحرارة الطرفية (Peripheral):** من الجلد/الأطراف. قد تكون أقل من الأساسية وتتحرك مع حرارة الجو.\n"
-                "- **الإحساس الحراري (Feels-like):** كيف يشعر الجو فعلًا مع الرطوبة والرياح—not مجرد حرارة الهواء."
-            )
-    else:
-        with st.expander("❓ What do these values mean?", expanded=False):
-            st.markdown(
-                "- **Core temperature:** close to your internal body temp. It can rise a bit with exertion or heat.\n"
-                "- **Peripheral temperature:** from skin/limbs. Often lower than core and moves with outdoor heat.\n"
-                "- **Feels-like:** how the weather actually **feels** on your body (air temp plus humidity/wind)."
-            )
+# ---------- Inline badge tooltips for Heat Monitor ----------
+
+def _badge(label: str, value: str, tooltip: str) -> str:
+    """
+    Returns a compact badge with a native browser tooltip (title="...").
+    Works well on desktop (hover) and mobile (long-press).
+    """
+    # Keep label bold, value normal, and attach tooltip to the whole chip.
+    return (
+        f'<span class="badge" title="{tooltip}">'
+        f'<strong>{label}:</strong> {value}'
+        f'</span>'
+    )
+
+# Friendly one-liners for each metric (EN/AR)
+EXPLAIN = {
+    "EN": {
+        "city":       "Your selected city for weather.",
+        "feels_like": "How the weather actually feels on your body (air temp plus humidity/wind).",
+        "humidity":   "Moisture in the air; higher humidity makes heat feel heavier.",
+        "core":       "Close to your internal body temperature. Can rise with exertion or heat.",
+        "peripheral": "Skin/limb temperature. Often lower than core and moves with outdoor heat.",
+        "baseline":   "Your usual/normal body temperature used for alerts. You can change this in Settings."
+    },
+    "AR": {
+        "city":       "المدينة المختارة للطقس.",
+        "feels_like": "كيف نشعر بالطقس فعليًا (درجة الهواء مع الرطوبة/الرياح).",
+        "humidity":   "كمية الرطوبة في الجو؛ كلما زادت شعرنا بالحرارة أكثر.",
+        "core":       "قريبة من حرارة الجسم الداخلية. قد ترتفع مع الجهد أو الحرارة.",
+        "peripheral": "حرارة الجلد/الأطراف. غالبًا أقل من الأساسية وتتغير مع حرارة الجو.",
+        "baseline":   "حرارتك المعتادة المستخدمة للتنبيهات. يمكنك تعديلها من الإعدادات."
+    }
+}
 
 # ================== Live helpers ==================
 def moving_avg(seq, n):
@@ -1235,21 +1253,29 @@ elif page == T["temp_monitor"]:
 
             st.rerun()
 
-        # Status card
-        if st.session_state.get("last_check"):
-            last = st.session_state["last_check"]
-            st.markdown(f"""
+        # Status card (with inline tooltips)
+if st.session_state.get("last_check"):
+    last = st.session_state["last_check"]
+    lang_key = "AR" if app_language == "Arabic" else "EN"
+
+    chips = []
+    chips.append(_badge("City" if lang_key=="EN" else "المدينة", last['city'], EXPLAIN[lang_key]["city"]))
+    chips.append(_badge("Feels-like" if lang_key=="EN" else "الإحساس الحراري",
+                        f"{round(last['feels_like'],1)}°C", EXPLAIN[lang_key]["feels_like"]))
+    chips.append(_badge("Humidity" if lang_key=="EN" else "الرطوبة",
+                        f"{int(last['humidity'])}%", EXPLAIN[lang_key]["humidity"]))
+    chips.append(_badge("Core" if lang_key=="EN" else "الأساسية",
+                        f"{round(last['body_temp'],1)}°C", EXPLAIN[lang_key]["core"]))
+    chips.append(_badge("Peripheral" if lang_key=="EN" else "الطرفية",
+                        f"{round(last['peripheral_temp'],1)}°C", EXPLAIN[lang_key]["peripheral"]))
+    chips.append(_badge("Baseline" if lang_key=="EN" else "الأساس",
+                        f"{round(last['baseline'],1)}°C", EXPLAIN[lang_key]["baseline"]))
+
+    st.markdown(f"""
 <div class="big-card" style="--left:{last['color']}">
   <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
   <p style="margin:6px 0 0 0">{last['advice']}</p>
-  <div class="small" style="margin-top:8px">
-    <span class="badge">City: {last['city']}</span>
-    <span class="badge">Feels-like: {round(last['feels_like'],1)}°C</span>
-    <span class="badge">Humidity: {int(last['humidity'])}%</span>
-    <span class="badge">Core: {round(last['body_temp'],1)}°C</span>
-    <span class="badge">Peripheral: {round(last['peripheral_temp'],1)}°C</span>
-    <span class="badge">Baseline: {round(last['baseline'],1)}°C</span>
-  </div>
+  <div class="small" style="margin-top:8px">{''.join(chips)}</div>
   <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last.get('peak_hours', []))) if last.get('peak_hours') else "—"}</p>
 </div>
 """, unsafe_allow_html=True)
