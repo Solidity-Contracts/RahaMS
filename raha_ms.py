@@ -1283,54 +1283,59 @@ if st.session_state.get("last_check"):
 
 
         # If above threshold, show “log reason” form (unchanged logic)
-    if st.session_state["live_core_smoothed"]:
-        core_latest = st.session_state["live_core_smoothed"][-1]
-        delta = core_latest - st.session_state["baseline"]
-            if delta >= ALERT_DELTA_C:
-                st.markdown(f"### {T['log_now']}")
-                with st.form("log_reason_form", clear_on_submit=True):
-                    trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-                    chosen = st.multiselect("Triggers", trigger_options, max_selections=6)
-                    other_text = st.text_input(T["other"], "")
-                    symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-                    selected_symptoms = st.multiselect("Symptoms", symptoms_list)
-                    note_text = st.text_input(T["notes"], "")
+if st.session_state["live_core_smoothed"]:
+    latest = st.session_state["live_core_smoothed"][-1]
+    delta = latest - (st.session_state["temp_baseline"] if st.session_state["use_temp_baseline"] else st.session_state["baseline"])
+    
+    if delta >= ALERT_DELTA_C:
+        st.markdown(f"### {T['log_now']}")
 
-                    has_reason = (len(chosen) > 0) or (other_text.strip() != "")
-                    if has_reason and st.session_state.get("last_check"):
-                        do_now, plan_later, watch_for = tailored_tips(
-                            chosen + ([other_text] if other_text.strip() else []),
-                            st.session_state["last_check"]["feels_like"],
-                            st.session_state["last_check"]["humidity"],
-                            delta, app_language
-                        )
-                        with st.expander("🧊 Instant tips", expanded=False):
-                            st.write("**Do now**")
-                            st.write("- " + "\n- ".join(do_now) if do_now else "—")
-                            st.write("**Plan later**")
-                            st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
-                            st.write("**Watch for**")
-                            st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
+        # Use a form to avoid losing button clicks to reruns
+        with st.form("log_reason_form", clear_on_submit=True):
+            trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+            chosen = st.multiselect(T["triggers_today"], trigger_options, max_selections=6)
+            other_text = st.text_input(T["other"], "")
+            symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+            selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
+            note_text = st.text_input(T["notes"], "")
 
-                    submitted = st.form_submit_button(T["save_entry"])
+            # Tailored tips preview (optional)
+            has_reason = (len(chosen) > 0) or (other_text.strip() != "")
+            if has_reason and st.session_state.get("last_check"):
+                do_now, plan_later, watch_for = tailored_tips(
+                    chosen + ([other_text] if other_text.strip() else []),
+                    st.session_state["last_check"]["feels_like"],
+                    st.session_state["last_check"]["humidity"],
+                    delta, app_language
+                )
+                with st.expander(f"🧊 {T['instant_plan_title']}", expanded=False):
+                    st.write(f"**{T['do_now']}**")
+                    st.write("- " + "\n- ".join(do_now) if do_now else "—")
+                    st.write(f"**{T['plan_later']}**")
+                    st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
+                    st.write(f"**{T['watch_for']}**")
+                    st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
 
-                if submitted:
-                    st.session_state["live_running"] = False
-                    entry = {
-                        "type":"ALERT",
-                        "at": utc_iso_now(),
-                        "core_temp": round(core_latest,1),
-                        "peripheral_temp": round(st.session_state["live_periph_smoothed"][-1],1) if st.session_state["live_periph_smoothed"] else None,
-                        "baseline": round(st.session_state["baseline"],1),
-                        "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
-                        "symptoms": selected_symptoms,
-                        "note": note_text.strip()
-                    }
-                    try:
-                        insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                        st.success(T["saved"])
-                    except Exception as e:
-                        st.warning(f"Could not save note: {e}")
+            submitted = st.form_submit_button(T["save_entry"])
+
+        if submitted:
+            # pause live so we don't race with the rerun loop
+            st.session_state["live_running"] = False
+
+            entry = {
+                "type":"ALERT",
+                "at": utc_iso_now(),
+                "body_temp": round(latest,1),
+                "baseline": round((st.session_state['temp_baseline'] if st.session_state['use_temp_baseline'] else st.session_state['baseline']),1),
+                "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
+                "symptoms": selected_symptoms,
+                "note": note_text.strip()
+            }
+            try:
+                insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                st.success(T["saved"])
+            except Exception as e:
+                st.warning(f"Could not save note: {e}")
 
         # Trend chart (each dot = one sample)
         st.markdown("---")
