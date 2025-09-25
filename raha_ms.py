@@ -114,6 +114,18 @@ TEXTS = {
         "do_now": "Do now",
         "plan_later": "Plan later",
         "watch_for": "Watch for",
+        
+        # NEW ADDITIONS
+        "start_monitoring": "▶️ Start monitoring",
+        "pause": "⏸️ Pause",
+        "refresh_weather": "🔄 Refresh weather now",
+        "temperature_trend": "📈 Temperature Trend",
+        "filter_by_type": "Filter by type",
+        "newer": "⬅️ Newer",
+        "older": "Older ➡️",
+        "reset_chat": "🧹 Reset chat",
+        "thinking": "Thinking...",
+        "ask_me_anything": "Ask me anything...",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -173,13 +185,30 @@ TEXTS = {
 
         "daily_logger": "المُسجّل اليومي السريع",
         "mood": "المزاج",
-        "hydration": "ترطيب (أكواب)",
+        "hydration": "شرب الماء (أكواب)",
         "sleep": "النوم (ساعات)",
         "fatigue": "التعب",
         "free_note": "ملاحظة حرة (اختياري)",
         "emergency": "الطوارئ",
 
+        "triggers_today": "المحفزات اليوم",
+        "symptoms_today": "الأعراض اليوم",
+        "instant_plan_title": "خطة فورية",
+        "do_now": "افعل الآن",
+        "plan_later": "خطط لاحقًا",
+        "watch_for": "انتبه إلى",
         
+        # NEW ARABIC ADDITIONS
+        "start_monitoring": "▶️ بدء المراقبة",
+        "pause": "⏸️ إيقاف مؤقت",
+        "refresh_weather": "🔄 تحديث الطقس الآن",
+        "temperature_trend": "📈 اتجاه درجة الحرارة",
+        "filter_by_type": "تصفية حسب النوع",
+        "newer": "⬅️ الأحدث",
+        "older": "الأقدم ➡️",
+        "reset_chat": "🧹 إعادة تعيين المحادثة",
+        "thinking": "جاري التفكير...",
+        "ask_me_anything": "اسألني أي شيء...",
     }
 }
 
@@ -1170,7 +1199,7 @@ elif page == T["temp_monitor"]:
         with colB:
             interval = st.slider("⏱️ " + T["sensor_update"], 30, 300, st.session_state["interval_slider"], 15, key="interval_slider")
         with colC:
-            if not st.session_state["live_running"] and st.button("▶️ Start monitoring", use_container_width=True):
+            if not st.session_state["live_running"] and st.button(T["start_monitoring"], use_container_width=True):
                 st.session_state["live_running"] = True
                 core_start = round(st.session_state["baseline"] + random.uniform(-0.2, 0.2), 2)
                 periph_start = round(core_start - random.uniform(0.5, 0.9), 2)
@@ -1183,15 +1212,16 @@ elif page == T["temp_monitor"]:
                 st.session_state["last_alert_ts"] = 0.0
                 st.session_state["_last_tick_ts"] = 0.0
                 st.rerun()
-            if st.session_state["live_running"] and st.button("⏸️ Pause", use_container_width=True, key="pause_btn"):
+            if st.session_state["live_running"] and st.button(T["pause"], use_container_width=True, key="pause_btn"):
                 st.session_state["live_running"] = False
                 st.rerun()
         with colD:
             # Baseline & hint
-            st.markdown(
-                f"<div class='badge'>Baseline: <strong>{st.session_state['baseline']:.1f}°C</strong>"
-                f" <span class='small'>(change in Settings)</span></div>",
-                unsafe_allow_html=True
+            baseline_text = "الأساس" if app_language == "Arabic" else "Baseline"
+change_text = "(التغيير في الإعدادات)" if app_language == "Arabic" else "(change in Settings)"
+st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['baseline']:.1f}°C</strong>"
+            f" <span class='small'>{change_text}</span></div>", unsafe_allow_html=True)
+
             )
 
         # Weather (with visible last updated + refresh)
@@ -1202,10 +1232,10 @@ elif page == T["temp_monitor"]:
                 st.error(f"{T['weather_fail']}: {w_err or '—'}")
                 st.stop()
             else:
-                fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%Y-%m-%d %H:%M") if fetched_ts else "—"
-                st.caption(f"Weather last updated: {fetched_label}")
+                weather_text = "آخر تحديث للطقس" if app_language == "Arabic" else "Weather last updated"
+                st.caption(f"{weather_text}: {fetched_label}")
         with colW2:
-            if st.button("🔄 Refresh weather now", use_container_width=True):
+            if st.button(T["refresh_weather"], use_container_width=True):
                 # Bust the city cache and refetch
                 st.session_state.get("_weather_cache", {}).pop(city, None)
                 st.rerun()
@@ -1349,7 +1379,7 @@ elif page == T["temp_monitor"]:
 
         # Trend chart (each dot = one sample)
         st.markdown("---")
-        st.subheader("📈 Temperature Trend")
+        st.subheader(T["temperature_trend"])
         c = get_conn().cursor()
         try:
             query = """
@@ -1377,7 +1407,10 @@ elif page == T["temp_monitor"]:
                 ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
                 st.pyplot(fig)
 
-                st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
+            if app_language == "Arabic":
+    st.caption(f"فترة أخذ العينات: **{st.session_state['interval_slider']} ثانية** · تحديث الطقس: **كل 15 دقيقة** (أو استخدم زر التحديث).")
+else:
+    st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
             else:
                 st.info("No data yet. Start monitoring to build your trend.")
         except Exception as e:
@@ -1445,11 +1478,11 @@ elif page == T["journal"]:
             # Filter by type
             available_types = ["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"]
             type_filter = st.multiselect(
-                "Filter by type",
-                options=available_types,
-                default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
-                help="Show only selected entry types"
-            )
+            T["filter_by_type"],
+            options=available_types,
+            default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
+            help="Show only selected entry types"
+)
 
             # Pagination (show N at a time)
             st.session_state.setdefault("journal_offset", 0)
@@ -1496,12 +1529,12 @@ elif page == T["journal"]:
             colp1, colp2, colp3 = st.columns([1,1,4])
             with colp1:
                 if st.session_state["journal_offset"] > 0:
-                    if st.button("⬅️ Newer"):
+                    if st.button("newer"):
                         st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - page_size)
                         st.rerun()
             with colp2:
                 if (start + shown) < len(rows):
-                    if st.button("Older ➡️"):
+                    if st.button("older"):
                         st.session_state["journal_offset"] += page_size
                         st.rerun()
 
@@ -1537,9 +1570,7 @@ elif page == T["assistant"]:
                 st.markdown(m["content"])
 
         # Chat input (this prevents “infinite loop” because it only fires on submit)
-        user_msg = st.chat_input(
-            "Ask me anything..." if app_language=="English" else "اسألني أي شيء..."
-        )
+        user_msg = st.chat_input(T["ask_me_anything"])
 
         if user_msg:
             # 1) Show user's message immediately
@@ -1550,7 +1581,7 @@ elif page == T["assistant"]:
             # 2) Call the model ONCE with personal context prepended to the user content
             # (We send a one-off messages array: system + prior turns + current turn with context)
             with st.chat_message("assistant"):
-                with st.spinner("Thinking..."):
+                with st.spinner(T["thinking"]):
                     try:
                         # Build a one-off message list (don’t mutate old turns)
                         msgs = st.session_state["companion_messages"].copy()
@@ -1577,12 +1608,15 @@ elif page == T["assistant"]:
         with st.container():
             colA, colB = st.columns(2)
             with colA:
-                if st.button("🧹 Reset chat"):
+                if st.button(T["reset_chat"]):
                     # Keep the persona system prompt, clear the rest
                     base = st.session_state["companion_messages"][0]
                     st.session_state["companion_messages"] = [base]
                     st.experimental_rerun()  # safe here; no pending user_msg
             with colB:
+                if app_language == "Arabic":
+                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+                else:
                 st.caption("This chat gives general information and does not replace your medical provider.")
 
 # SETTINGS
