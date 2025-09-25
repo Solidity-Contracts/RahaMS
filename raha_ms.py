@@ -1228,8 +1228,6 @@ change_text = "(التغيير في الإعدادات)" if app_language == "Ara
 st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['baseline']:.1f}°C</strong>"
             f" <span class='small'>{change_text}</span></div>", unsafe_allow_html=True)
 
-            )
-
         # Weather (with visible last updated + refresh)
         weather, w_err, fetched_ts = get_weather_cached(city)
         colW1, colW2 = st.columns([1, 1])
