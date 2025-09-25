@@ -1280,9 +1280,6 @@ if st.session_state.get("last_check"):
 </div>
 """, unsafe_allow_html=True)
 
-        # Friendly glossary
-        render_temp_glossary(app_language)
-
         # If above threshold, show “log reason” form (unchanged logic)
         if st.session_state["live_core_smoothed"]:
             core_latest = st.session_state["live_core_smoothed"][-1]
