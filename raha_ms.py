@@ -538,6 +538,158 @@ Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, 
         st.caption("الخصوصية: بياناتك محفوظة محليًا (SQLite). هذا لأغراض النمذجة والتعليم — وليس جهازًا طبيًا.")
 
 # ================== PLANNER HELPERS ==================
+def render_planner():
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+        return
+
+    st.title("🗺️ " + T["planner"])
+
+    city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
+    weather, err = get_weather(city)
+    if weather is None:
+        st.error(f"{T['weather_fail']}: {err}")
+        return
+
+    tabs = st.tabs(["✅ Best windows", "🤔 What-if", "📍 Places"])
+
+    # -----------------------------
+    # TAB 1: Best windows (compact)
+    # -----------------------------
+    with tabs[0]:
+        st.caption("We scanned the next 48h for cooler 2-hour windows.")
+        windows = best_windows_from_forecast(
+            weather["forecast"], window_hours=2, top_k=12, max_feels_like=35.0, max_humidity=65
+        )
+
+        if not windows:
+            st.info("No optimal windows found; consider early morning or after sunset.")
+        else:
+            rows = [{
+                "idx": i,
+                "Date": w["start_dt"].strftime("%a %d %b"),
+                "Start": w["start_dt"].strftime("%H:%M"),
+                "End": w["end_dt"].strftime("%H:%M"),
+                "Feels-like (°C)": round(w["avg_feels"], 1),
+                "Humidity (%)": int(w["avg_hum"])
+            } for i, w in enumerate(sorted(windows, key=lambda x: x["start_dt"]))]
+
+            df = pd.DataFrame(rows)
+            st.dataframe(df.drop(columns=["idx"]), hide_index=True, use_container_width=True)
+
+            st.markdown("##### Add a plan")
+            colA, colB = st.columns([2,1])
+            with colA:
+                labeler = lambda r: f"{r['Date']} • {r['Start']}–{r['End']} (≈{r['Feels-like (°C)']}°C, {r['Humidity (%)']}%)"
+                options = [labeler(r) for r in rows]
+                pick_label = st.selectbox("Choose a slot", options, index=0, key="plan_pick")
+                pick_idx = rows[options.index(pick_label)]["idx"]
+                chosen = sorted(windows, key=lambda x: x["start_dt"])[pick_idx]
+            with colB:
+                act = st.selectbox("Plan", ["Walk","Groceries","Beach","Errand"], key="plan_act")
+            other_act = st.text_input(T["other_activity"], key="plan_act_other")
+            final_act = other_act.strip() if other_act.strip() else act
+
+            if st.button(T["add_to_journal"], key="btn_add_plan"):
+                entry = {
+                    "type":"PLAN", "at": utc_iso_now(),
+                    "city": city,
+                    "start": chosen["start_dt"].strftime("%Y-%m-%d %H:%M"),
+                    "end": chosen["end_dt"].strftime("%Y-%m-%d %H:%M"),
+                    "activity": final_act,
+                    "feels_like": round(chosen["avg_feels"], 1),
+                    "humidity": int(chosen["avg_hum"])
+                }
+                insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                st.success("Saved to Journal")
+
+    # -----------------------------
+    # TAB 2: What-if (mini wizard)
+    # -----------------------------
+    with tabs[1]:
+        st.caption("Try a plan now and get instant tips.")
+        col1, col2 = st.columns([2,1])
+
+        with col1:
+            what_act = st.selectbox(
+                "Activity",
+                ["Light walk (20–30 min)","Moderate exercise (45 min)","Outdoor errand (30–60 min)","Beach (60–90 min)"],
+                key="what_if_act"
+            )
+            dur = st.slider("Duration (minutes)", 10, 120, 45, 5, key="what_if_dur")
+            indoor = st.radio("Location", ["Outdoor","Indoor/AC"], horizontal=True, key="what_if_loc")
+            other_notes = st.text_area("Notes (optional)", height=80, key="what_if_notes")
+
+        with col2:
+            fl = weather["feels_like"]; hum = weather["humidity"]
+            go_badge = "🟢 Go" if (fl < 34 and hum < 60) else ("🟡 Caution" if (fl < 37 and hum < 70) else "🔴 Avoid now")
+            st.markdown(f"**Now:** {go_badge} — feels-like {round(fl,1)}°C, humidity {int(hum)}%")
+
+            tips_now = []
+            low = what_act.lower()
+            if "walk" in low: tips_now += ["Shaded route", "Carry cool water", "Light clothing"]
+            if "exercise" in low: tips_now += ["Pre-cool 15 min", "Prefer indoor/AC", "Electrolytes if >45 min"]
+            if "errand" in low: tips_now += ["Park in shade", "Shortest route", "Pre-cool car 5–10 min"]
+            if "beach" in low: tips_now += ["Umbrella & UV hat", "Cooling towel", "Rinse to cool"]
+            if fl >= 36: tips_now += ["Cooling scarf/bandana", "Use a cooler window"]
+            if hum >= 60: tips_now += ["Prefer AC over fan", "Extra hydration"]
+            tips_now = list(dict.fromkeys(tips_now))[:8]
+            st.markdown("**Tips:**")
+            st.markdown("- " + "\n- ".join(tips_now) if tips_now else "—")
+
+            if st.button("Add this as a plan", key="what_if_add_plan"):
+                now_dxb = datetime.now(TZ_DUBAI)
+                entry = {
+                    "type":"PLAN",
+                    "at": utc_iso_now(),
+                    "city": city,
+                    "start": now_dxb.strftime("%Y-%m-%d %H:%M"),
+                    "end": (now_dxb + timedelta(minutes=dur)).strftime("%Y-%m-%d %H:%M"),
+                    "activity": what_act + (f" — {other_notes.strip()}" if other_notes.strip() else ""),
+                    "feels_like": round(fl, 1),
+                    "humidity": int(hum),
+                    "indoor": (indoor == "Indoor/AC")
+                }
+                insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                st.success("Planned & saved")
+
+            if client and st.button(T["ask_ai_tips"], key="what_if_ai"):
+                q = f"My plan: {what_act} for {dur} minutes. Location: {indoor}. Notes: {other_notes}. Current feels-like {round(fl,1)}°C, humidity {int(hum)}%."
+                ans, _ = ai_response(q, app_language)
+                st.info(ans if ans else (T["ai_unavailable"]))
+
+    # -----------------------------
+    # TAB 3: Places (Saadiyat, etc.)
+    # -----------------------------
+    with tabs[2]:
+        st.caption("Check a specific place in your city, like a beach or a park.")
+        place_q = st.text_input("Place name (e.g., Saadiyat Beach)", key="place_q")
+        if place_q:
+            place, lat, lon = geocode_place(place_q)
+            pw = get_weather_by_coords(lat, lon) if lat and lon else None
+            if pw:
+                st.info(f"**{place}** — feels-like {round(pw['feels_like'],1)}°C • humidity {int(pw['humidity'])}% • {pw['desc']}")
+                better = "place" if pw["feels_like"] < weather["feels_like"] else "city"
+                st.caption(f"Cooler now: **{place if better=='place' else city}**")
+                if st.button("Plan here for the next hour", key="place_plan"):
+                    now_dxb = datetime.now(TZ_DUBAI)
+                    entry = {
+                        "type": "PLAN",
+                        "at": utc_iso_now(),
+                        "city": place,
+                        "start": now_dxb.strftime("%Y-%m-%d %H:%M"),
+                        "end": (now_dxb + timedelta(minutes=60)).strftime("%Y-%m-%d %H:%M"),
+                        "activity": "Visit",
+                        "feels_like": round(pw['feels_like'], 1),
+                        "humidity": int(pw['humidity'])
+                    }
+                    insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                    st.success("Planned & saved")
+            else:
+                st.warning("Couldn't fetch that place's weather.")
+
+    st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather.get('peak_hours', [])) if weather.get('peak_hours') else "—"))
+
 def best_windows_from_forecast(
     forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)
 ):
@@ -1134,99 +1286,7 @@ elif page == T["temp_monitor"]:
 
 # PLANNER
 elif page == T["planner"]:
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        st.title("🗺️ " + T["planner"])
-        city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
-        weather, err = get_weather(city)
-        if weather is None:
-            st.error(f"{T['weather_fail']}: {err}")
-        else:
-            st.subheader("✅ Recommended cooler windows")
-            windows = best_windows_from_forecast(
-                weather["forecast"], window_hours=2, top_k=12, max_feels_like=35.0, max_humidity=65
-            )
-
-            if not windows:
-                st.info("No optimal windows found; consider early morning or after sunset.")
-            else:
-                data = []
-                for i, w in enumerate(windows):
-                    data.append({
-                        "index": i,
-                        "Day": w["start_dt"].strftime("%a %d %b"),
-                        "Start": w["start_dt"].strftime("%H:%M"),
-                        "End": w["end_dt"].strftime("%H:%M"),
-                        "Feels-like (°C)": w["avg_feels"],
-                        "Humidity (%)": w["avg_hum"]
-                    })
-                dfw = pd.DataFrame(data)
-                st.dataframe(dfw, hide_index=True, use_container_width=True)
-
-                indices = st.multiselect("Select slots to plan", options=list(dfw["index"]), format_func=lambda i: f"{dfw.loc[dfw['index']==i,'Day'].values[0]} {dfw.loc[dfw['index']==i,'Start'].values[0]}–{dfw.loc[dfw['index']==i,'End'].values[0]}")
-                plan = st.selectbox("Plan", ["Walk","Groceries","Beach","Errand"])
-                other_act = st.text_input(T["other_activity"])
-                final_act = other_act.strip() if other_act.strip() else plan
-
-                if st.button(T["add_selected"], disabled=(len(indices)==0)):
-                    for i in indices:
-                        w = windows[i]
-                        entry = {
-                            "type":"PLAN", "at": utc_iso_now(),
-                            "city": city,
-                            "start": w["start_dt"].strftime("%Y-%m-%d %H:%M"),
-                            "end": w["end_dt"].strftime("%Y-%m-%d %H:%M"),
-                            "activity": final_act,
-                            "feels_like": w["avg_feels"], "humidity": w["avg_hum"]
-                        }
-                        insert_journal(st.session_state["user"], utc_iso_now(), entry)
-                    st.success("Saved to Journal")
-
-            st.markdown("---")
-            st.subheader("🤔 What-if planner")
-            act = st.selectbox("Activity type", [
-                "Light walk (20–30 min)","Moderate exercise (45 min)","Outdoor errand (30–60 min)","Beach (60–90 min)"
-            ], key="what_if")
-            fl = weather["feels_like"]; hum = weather["humidity"]
-            go_badge = "🟢 Go" if (fl<34 and hum<60) else ("🟡 Caution" if (fl<37 and hum<70) else "🔴 Avoid now")
-            st.markdown(f"**Now:** {go_badge} — feels-like {round(fl,1)}°C, humidity {int(hum)}%")
-
-            tips_now = []
-            if "walk" in act.lower(): tips_now += ["Shaded route", "Carry cool water", "Light clothing"]
-            if "exercise" in act.lower(): tips_now += ["Pre-cool 15 min", "Indoor/AC if possible", "Electrolytes if >45 min"]
-            if "errand" in act.lower(): tips_now += ["Park in shade", "Plan shortest path", "Pre-cool car 5–10 min"]
-            if "beach" in act.lower(): tips_now += ["Umbrella + UV hat", "Cool pack in bag", "Rinse to cool"]
-            if fl >= 36: tips_now += ["Cooling scarf/bandana", "Limit to cooler window"]
-            if hum >= 60: tips_now += ["Prefer AC over fan", "Extra hydration"]
-            tips_now = list(dict.fromkeys(tips_now))[:8]
-            st.write("**Tips:**")
-            st.write("- " + "\n- ".join(tips_now) if tips_now else "—")
-
-            other_notes = st.text_area(T["what_if_tips"], height=100)
-            if client and st.button(T["ask_ai_tips"]):
-                q = f"My plan: {act}. Notes: {other_notes}. Current city feels-like {round(fl,1)}°C, humidity {int(hum)}%."
-                ans, err2 = ai_response(q, app_language)
-                st.info(ans if ans else T["ai_unavailable"])
-
-            st.markdown("---")
-            st.subheader("📍 Plan by place")
-            place_q = st.text_input("Type a place (e.g., Saadiyat Beach)")
-            if place_q:
-                place, lat, lon = geocode_place(place_q)
-                pw = get_weather_by_coords(lat, lon) if lat and lon else None
-                if pw:
-                    st.info(f"{place}: feels-like {round(pw['feels_like'],1)}°C • humidity {int(pw['humidity'])}% • {pw['desc']}")
-                    better = "place" if pw["feels_like"] < weather["feels_like"] else "city"
-                    st.caption(f"Cooler now: **{place if better=='place' else city}**")
-                else:
-                    st.warning("Couldn't fetch that place's weather.")
-
-            st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather["peak_hours"]) if weather.get("peak_hours") else "—"))
-            with st.expander(T["quick_tips"], expanded=False):
-                st.markdown("""- Avoid 10–4 peak heat; use shaded parking.
-- Pre-cool before errands; carry cool water.
-- Prefer AC indoors; wear light, loose clothing.""")
+    render_planner()
 
 # JOURNAL
 elif page == T["journal"]:
