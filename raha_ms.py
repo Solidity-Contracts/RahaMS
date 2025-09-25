@@ -1,12 +1,10 @@
 import streamlit as st
-import sqlite3
+import sqlite3, json, time, random, io, csv
 from openai import OpenAI
 import requests
 import matplotlib.pyplot as plt
 from datetime import datetime
-import time, random
 from collections import defaultdict
-import json
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -40,7 +38,7 @@ TEXTS = {
         "monitor": "Heat Monitor",
         "planner": "Planner & Forecast",
         "journal_tab": "Journal & History",
-        "assistant_tab": "AI Assistant",
+        "assistant_tab": "AI Companion",
         "settings": "Settings & Export",
         "login_title": "Login / Register",
         "username": "Username",
@@ -72,8 +70,7 @@ TEXTS = {
         "saved": "Saved ✅",
         "weekly_forecast": "Weekly Forecast",
         "peak_heat": "Peak heat next 48h",
-        "ask_anything": "Ask anything:",
-        "get_tips": "Get AI tips",
+        "ask_anything": "Type your message…",
         "baseline_hint": "Baseline is used to detect a rise ≥ 0.5 °C (Uhthoff-aware).",
         "emergency_title": "Emergency Contact",
         "primary_name": "Primary name",
@@ -84,7 +81,6 @@ TEXTS = {
         "contacts_saved": "Contacts saved ✅",
         "export_csv": "Export my temps to CSV",
         "download_csv": "Download temps.csv",
-        "disclaimer": "Prototype: educational use only. Not medical advice. Data stored locally (SQLite).",
         "instant_plan_title": "Instant Cooling Plan",
         "do_now": "Do now",
         "plan_later": "Plan later today",
@@ -97,6 +93,7 @@ TEXTS = {
         "sleep": "Sleep quality",
         "hydration": "Hydration",
         "activity": "Activity",
+        "logout": "Logout",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -135,8 +132,7 @@ TEXTS = {
         "saved": "تم الحفظ ✅",
         "weekly_forecast": "توقعات الأسبوع",
         "peak_heat": "أشد ساعات الحرارة خلال ٤٨ ساعة",
-        "ask_anything": "اسأل أي شيء:",
-        "get_tips": "احصل على نصائح",
+        "ask_anything": "اكتب رسالتك…",
         "baseline_hint": "تُستخدم الحرارة الأساسية لاكتشاف زيادة ≥ 0.5°م (مراعاة ظاهرة أوتهوف).",
         "emergency_title": "جهة اتصال للطوارئ",
         "primary_name": "الاسم الأساسي",
@@ -147,7 +143,6 @@ TEXTS = {
         "contacts_saved": "تم الحفظ ✅",
         "export_csv": "تصدير درجات الحرارة (CSV)",
         "download_csv": "تحميل temps.csv",
-        "disclaimer": "هذا نموذج أولي للتثقيف فقط وليس نصيحة طبية. البيانات محليًا (SQLite).",
         "instant_plan_title": "خطة تبريد فورية",
         "do_now": "افعل الآن",
         "plan_later": "خطط لوقت لاحق اليوم",
@@ -160,6 +155,7 @@ TEXTS = {
         "sleep": "جودة النوم",
         "hydration": "الترطيب",
         "activity": "النشاط",
+        "logout": "تسجيل الخروج",
     }
 }
 
@@ -209,6 +205,10 @@ def init_db():
         secondary_name TEXT,
         secondary_phone TEXT
     )""")
+    c.execute("""CREATE TABLE IF NOT EXISTS settings(
+        username TEXT PRIMARY KEY,
+        baseline REAL
+    )""")
     conn.commit()
 
 def migrate_db():
@@ -222,10 +222,22 @@ def migrate_db():
         c.execute("ALTER TABLE temps ADD COLUMN humidity REAL")
     conn.commit()
 
-init_db()
-migrate_db()
+init_db(); migrate_db()
 
 # ================== HELPERS: DB OPS ==================
+def upsert_baseline(username, baseline):
+    c = get_conn().cursor()
+    c.execute("""INSERT INTO settings (username, baseline) VALUES (?,?)
+                 ON CONFLICT(username) DO UPDATE SET baseline=excluded.baseline
+              """, (username, baseline))
+    get_conn().commit()
+
+def load_baseline(username, default=37.0):
+    c = get_conn().cursor()
+    c.execute("SELECT baseline FROM settings WHERE username=?", (username,))
+    row = c.fetchone()
+    return float(row[0]) if row and row[0] is not None else default
+
 def insert_temp(username, dt, body, weather, feels_like, humidity, status):
     c = get_conn().cursor()
     c.execute("""
@@ -298,8 +310,7 @@ def get_weather(city="Abu Dhabi,AE"):
             "desc": it["weather"][0]["description"]
         } for it in items]
         top = sorted(forecast, key=lambda x: x["feels_like"], reverse=True)[:4]
-        peak_hours = [f'{t["time"][5:16]} (~{round(t["feels_like"])}°C, {int(t["humidity"])}%)' for t in top]
-
+        peak_hours = [f'{t["time"][5:16]} (~{round(t["feels_like"],1)}°C, {int(t["humidity"])}%)' for t in top]
         return {"temp": temp, "feels_like": feels, "humidity": hum, "desc": desc,
                 "forecast": forecast, "peak_hours": peak_hours}, None
     except Exception as e:
@@ -332,7 +343,6 @@ def aggregate_week(forecast):
 
 @st.cache_data(ttl=600)
 def geocode_place(q):
-    """Return (name, lat, lon) or (None,None,None)"""
     if not OPENWEATHER_API_KEY:
         return None, None, None
     try:
@@ -393,8 +403,7 @@ def moving_avg(seq, n):
     return round(sum(seq[-n:]) / n, 2)
 
 def should_alert(temp_series, baseline, delta=ALERT_DELTA_C, confirm=ALERT_CONFIRM):
-    if len(temp_series) < confirm:
-        return False
+    if len(temp_series) < confirm: return False
     recent = temp_series[-confirm:]
     return all((t - baseline) >= delta for t in recent)
 
@@ -404,7 +413,6 @@ def simulate_next(prev, baseline):
     next_t = prev + drift + surge
     return max(35.5, min(41.0, round(next_t, 2)))
 
-# Comprehensive lists (EN/AR)
 TRIGGERS_EN = [
     "Direct sun","Hot car","Sauna/Hot shower","Cooking steam","Crowded place",
     "Exercise (light)","Exercise (moderate)","Exercise (intense)","Housework","Long walk",
@@ -421,7 +429,6 @@ TRIGGERS_AR = [
     "رطوبة مرتفعة","تكييف/تهوية ضعيفة","ملابس ضيقة",
     "توتر/قلق","تحفيز زائد (ضوضاء/أضواء)"
 ]
-
 SYMPTOMS_EN = [
     "Blurred vision","Double vision","Eye pain",
     "Fatigue","Brain fog","Memory issues",
@@ -443,52 +450,137 @@ SYMPTOMS_AR = [
     "مزاج منخفض","قلق","نوم سيئ"
 ]
 
-def instant_tips(selected_triggers, feels_like, humidity, delta_from_baseline, lang="English"):
-    # Simple rule engine → 3 lists
-    def L(x): return x if lang=="English" else {
-        "Delay + shade":"أجّل واستخدم الظل",
-        "Pre-cool + short blocks":"تبريد مسبق + فترات قصيرة",
-        "Light/loose clothing":"ملابس خفيفة وفضفاضة",
-        "Cold fluids + electrolytes":"سوائل باردة + أملاح",
-        "Switch to early/late":"القيام بالنشاط صباحًا/مساءً",
-        "Intervals + breaks":"تمارين متقطعة + فواصل راحة",
-        "Cooling pack (neck/wrists)":"كمادات تبريد (الرقبة/المعصم)",
-        "Prefer AC over fan":"استخدم المكيف بدل المروحة",
-        "Reduce indoor exertion":"قلل الجهد داخل المنزل",
-        "Smaller meals / avoid hot":"وجبات أصغر / تجنب الحار",
-        "Rest; monitor symptoms":"استرح وراقب الأعراض",
-        "Red flags: confusion, chest pain, fainting → seek care":"أعراض خطرة: ارتباك، ألم صدري، إغماء → اطلب الرعاية"
-    }[x]
+TIP_RULES_EN = {
+    "Direct sun": ["Delay to early/late hours", "Shade + UV hat/umbrella", "Cooling scarf/bandana"],
+    "Hot car": ["Pre-cool car (AC) 5–10 min", "Use reflective sunshade", "Cold water ready before entering"],
+    "Sauna/Hot shower": ["Switch to lukewarm", "Shorter duration", "Cool rinse at end"],
+    "Cooking steam": ["Ventilation/hood on", "Prep in cooler hours", "Take short breaks to AC"],
+    "Crowded place": ["Choose off-peak hours", "Cool pack (neck/wrist)", "Hydrate before/after"],
+    "Exercise (light)": ["Intervals with rest", "Cool towel between sets", "Hydration plan (sips every 10–15 min)"],
+    "Exercise (moderate)": ["Move session to dawn/evening", "Pre-cool 15 min", "Electrolytes if >45 min"],
+    "Exercise (intense)": ["Consider indoor/AC gym", "Short blocks (5–8 min)", "Cooling vest if available"],
+    "Housework": ["Split tasks across day", "Fan + AC together", "Frequent cool breaks"],
+    "Long walk": ["Shaded route", "Light clothing", "Carry cold water"],
+    "Hot drinks": ["Switch to iced/room-temp", "Small sips slowly"],
+    "Hot/spicy food": ["Pick mild options", "Cool beverage with meal"],
+    "Alcohol": ["Extra water 1:1", "Avoid midday outdoors"],
+    "Large meal": ["Smaller portions", "Rest in cool room after"],
+    "Fever/illness": ["Rest; call clinician if worse", "Keep room cool", "Fluids + electrolytes"],
+    "Menstrual cycle": ["Plan lighter load", "Extra hydration", "Cooling pad for comfort"],
+    "Poor sleep": ["Lower intensity day", "Nap/quiet rest", "Keep bedroom cool tonight"],
+    "Dehydration": ["Oral rehydration salts", "Steady sips—not chugging"],
+    "High humidity": ["Prefer AC over fan", "Limit outdoor time", "Loose, wicking fabrics"],
+    "Poor AC/ventilation": ["Close doors to cool one room", "Use curtains/shades", "Service filter if dusty"],
+    "Tight clothing": ["Switch to looser layers", "Breathable fabric"],
+    "Stress/anxiety": ["Slow breathing (4-6/min)", "Short pause in AC", "Light movement, not vigorous"],
+    "Overstimulation (noise/lights)": ["Quieter space", "Sunglasses/earbuds", "Short reset breaks"]
+}
 
-    do_now, plan_later, watch_for = [], [], []
-    hot = feels_like >= 38
-    humid = humidity >= 60
+def L(text, lang):
+    if lang == "Arabic":
+        dict_ar = {
+            "Delay to early/late hours":"قم بالنشاط صباحًا أو مساءً",
+            "Shade + UV hat/umbrella":"استخدم الظل وقبعة/مظلّة",
+            "Cooling scarf/bandana":"وشاح/رباط تبريد",
+            "Pre-cool car (AC) 5–10 min":"تبريد السيارة بالمكيف ٥–١٠ دقائق",
+            "Use reflective sunshade":"استخدم عاكس شمس",
+            "Cold water ready before entering":"أحضر ماءً باردًا قبل الدخول",
+            "Switch to lukewarm":"استبدل بالماء الفاتر",
+            "Shorter duration":"مدة أقصر",
+            "Cool rinse at end":"شطف بارد في النهاية",
+            "Ventilation/hood on":"تشغيل الشفاط/التهوية",
+            "Prep in cooler hours":"التجهيز في ساعات أبرد",
+            "Take short breaks to AC":"استراحات قصيرة على المكيف",
+            "Choose off-peak hours":"اختيار أوقات أقل ازدحامًا",
+            "Cool pack (neck/wrist)":"كمادة تبريد (الرقبة/المعصم)",
+            "Hydrate before/after":"ترطيب قبل/بعد",
+            "Intervals with rest":"فترات متقطعة مع راحة",
+            "Cool towel between sets":"منشفة باردة بين التمارين",
+            "Hydration plan (sips every 10–15 min)":"ترطيب برشفات كل 10–15 دقيقة",
+            "Move session to dawn/evening":"انقل التمرين للفجر/المساء",
+            "Pre-cool 15 min":"تبريد مسبق ١٥ دقيقة",
+            "Electrolytes if >45 min":"محاليل أملاح إن تجاوزت ٤٥ دقيقة",
+            "Consider indoor/AC gym":"فضّل الصالة المكيّفة",
+            "Short blocks (5–8 min)":"فترات قصيرة (٥–٨ دقائق)",
+            "Cooling vest if available":"سترة تبريد إن توفرت",
+            "Split tasks across day":"قسّم الأعمال على اليوم",
+            "Fan + AC together":"مروحة + مكيف معًا",
+            "Frequent cool breaks":"استراحات باردة متكررة",
+            "Shaded route":"مسار مظلل",
+            "Light clothing":"ملابس خفيفة",
+            "Carry cold water":"احمل ماءً بارداً",
+            "Switch to iced/room-temp":"استبدل بمشروبات باردة/فاترة",
+            "Small sips slowly":"رشفة صغيرة ببطء",
+            "Pick mild options":"اختر طعامًا أقل حدة",
+            "Cool beverage with meal":"مشروب بارد مع الوجبة",
+            "Extra water 1:1":"ماء إضافي بنسبة ١:١",
+            "Avoid midday outdoors":"تجنب الظهيرة خارجًا",
+            "Smaller portions":"حصص أصغر",
+            "Rest in cool room after":"استرح في غرفة مكيّفة",
+            "Rest; call clinician if worse":"استرح واتصل بالطبيب عند التدهور",
+            "Keep room cool":"حافظ على برودة الغرفة",
+            "Fluids + electrolytes":"سوائل + أملاح",
+            "Plan lighter load":"خفف الجهد اليوم",
+            "Extra hydration":"ترطيب إضافي",
+            "Cooling pad for comfort":"وسادة تبريد للراحة",
+            "Lower intensity day":"خفّض شدة نشاطك اليوم",
+            "Nap/quiet rest":"غفوة/راحة هادئة",
+            "Keep bedroom cool tonight":"برّد غرفة النوم الليلة",
+            "Oral rehydration salts":"محاليل أملاح فموية",
+            "Steady sips—not chugging":"رشفة ثابتة وليس دفعة واحدة",
+            "Prefer AC over fan":"استخدم المكيف بدلاً من المروحة",
+            "Limit outdoor time":"قلّل الخروج",
+            "Loose, wicking fabrics":"أقمشة خفيفة ماصّة",
+            "Close doors to cool one room":"أغلق الأبواب لتبريد غرفة واحدة",
+            "Use curtains/shades":"استخدم ستائر/مظلّات",
+            "Service filter if dusty":"نظّف الفلتر إن كان مغبرًا",
+            "Switch to looser layers":"اختر ملابس أوسع",
+            "Breathable fabric":"قماش قابل للتنفس",
+            "Slow breathing (4-6/min)":"تنفس ببطء (٤–٦/د)",
+            "Short pause in AC":"استراحة قصيرة على المكيف",
+            "Light movement, not vigorous":"حركة خفيفة وليست شديدة",
+            "Quieter space":"مكان أهدأ",
+            "Sunglasses/earbuds":"نظارات شمس/سماعات",
+            "Short reset breaks":"استراحات قصيرة لإعادة التوازن",
+            "Hydration boost (electrolytes)":"ترطيب مع أملاح",
+            "Cooling pack (neck/wrists)":"كمادة تبريد (الرقبة/المعصم)",
+            "Rest; monitor symptoms":"استرح وراقب الأعراض",
+            "Red flags: confusion, chest pain, fainting → seek care":"أعراض خطرة: ارتباك، ألم صدري، إغماء → اطلب الرعاية"
+        }
+        return dict_ar.get(text, text)
+    return text
 
-    if any("Direct sun" in t or "شمس" in t for t in selected_triggers) or hot:
-        do_now += [L("Delay + shade"), L("Pre-cool + short blocks"), L("Light/loose clothing")]
-    if any("Exercise" in t or "تمارين" in t for t in selected_triggers):
-        do_now += [L("Switch to early/late"), L("Intervals + breaks"), L("Cold fluids + electrolytes")]
-    if humid:
-        do_now += [L("Prefer AC over fan")]
-        plan_later += [L("Reduce indoor exertion")]
-    if any(("Hot" in t or "حار" in t) for t in selected_triggers):
-        do_now += [L("Smaller meals / avoid hot")]
-    if delta_from_baseline >= 0.5:
-        do_now += [L("Cooling pack (neck/wrists)"), L("Rest; monitor symptoms")]
-    watch_for = [L("Red flags: confusion, chest pain, fainting → seek care")]
-    # De-duplicate keeping order
+def tailored_tips(selected_triggers, feels_like, humidity, delta, lang="English"):
+    tips_now, tips_later, tips_watch = [], [], []
+    for trig in selected_triggers:
+        key = trig if lang=="English" else None
+        if lang=="Arabic" and trig in TRIGGERS_AR:
+            idx = TRIGGERS_AR.index(trig)
+            key = TRIGGERS_EN[min(idx, len(TRIGGERS_EN)-1)]
+        if key and key in TIP_RULES_EN:
+            for t in TIP_RULES_EN[key]:
+                tips_now.append(L(t, lang))
+    if feels_like >= 38:
+        tips_now += [L("Cooling pack (neck/wrists)", lang)]
+        tips_later += [L("Prefer AC over fan", lang)]
+    if humidity >= 60:
+        tips_now += [L("Prefer AC over fan", lang), L("Hydration boost (electrolytes)", lang)]
+    if delta >= 0.5:
+        tips_now += [L("Rest; monitor symptoms", lang)]
+    tips_watch = [L("Red flags: confusion, chest pain, fainting → seek care", lang)]
     def dedup(seq):
         seen=set(); out=[]
-        for i in seq:
-            if i not in seen:
-                seen.add(i); out.append(i)
+        for s in seq:
+            if s not in seen:
+                seen.add(s); out.append(s)
         return out
-    return dedup(do_now)[:5], dedup(plan_later)[:4], dedup(watch_for)
+    return dedup(tips_now)[:5], dedup(tips_later)[:3], tips_watch[:1]
 
-# ================== AI ==================
+# ================== AI (Chat) ==================
 def ai_response(prompt, lang):
-    sys_prompt = ("You are Raha MS AI Companion. Short, practical, culturally aware tips for GCC climate. "
-                  "Consider humidity, cooling, hydration, pacing, prayer/errand timing. Not medical care.")
+    sys_prompt = ("You are Raha MS AI Companion. Warm, brief, practical, culturally aware tips for GCC climate. "
+                  "Use friendly, supportive tone. Consider humidity, cooling, hydration, pacing, prayer/errand timing. "
+                  "If the user mentions a place, incorporate that place weather if provided. Not medical care.")
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     if not client:
         return None, "no_key"
@@ -503,7 +595,7 @@ def ai_response(prompt, lang):
     except Exception as e:
         return None, str(e)
 
-def build_context(username):
+def build_context(username, last_check):
     rows = get_recent_journal(username, limit=7)
     lines = []
     for d, e in rows[::-1]:
@@ -513,13 +605,20 @@ def build_context(username):
             if t=="ALERT":
                 lines.append(f"{d[:16]} ALERT: reasons={obj.get('reasons', [])}, note={obj.get('note','')}")
             elif t=="DAILY":
-                lines.append(f"{d[:16]} DAILY: mood={obj.get('mood','')}, energy={obj.get('energy','')}, "
-                             f"triggers={obj.get('triggers', [])}, symptoms={obj.get('symptoms', [])}")
+                lines.append(f"{d[:16]} DAILY: triggers={obj.get('triggers', [])}, symptoms={obj.get('symptoms', [])}")
+            elif t=="PLAN":
+                lines.append(f"{d[:16]} PLAN: {obj.get('activity','')} {obj.get('start','')}→{obj.get('end','')}")
             else:
-                lines.append(f"{d[:16]} NOTE: {e[:120]}")
+                lines.append(f"{d[:16]} NOTE")
         except:
-            lines.append(f"{d[:16]} RAW: {e[:120]}")
-    return "\n".join(lines) if lines else "(no recent journal entries)"
+            lines.append(f"{d[:16]} RAW")
+    vitals = ""
+    if last_check:
+        vitals = (f"Latest: body {round(last_check['body_temp'],1)}°C vs baseline {round(last_check['baseline'],1)}°C; "
+                  f"Feels-like {round(last_check['feels_like'],1)}°C, humidity {int(last_check['humidity'])}%. "
+                  f"Status {last_check['status']}.")
+    return (("\n".join(lines) if lines else "(no recent journal entries)") +
+            ("\n"+vitals if vitals else ""))
 
 # ================== SIDEBAR ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
@@ -537,17 +636,19 @@ if app_language == "Arabic":
     </style>
     """, unsafe_allow_html=True)
 
-# Auth (simple prototype)
+# Auth
 with st.sidebar.expander(T["login_title"], expanded=False):
-    username = st.text_input(T["username"], key="user_in")
-    password = st.text_input(T["password"], type="password", key="pass_in")
+    username_in = st.text_input(T["username"], key="user_in")
+    password_in = st.text_input(T["password"], type="password", key="pass_in")
     c1, c2 = st.columns(2)
     with c1:
         if st.button(T["login"], key="login_btn"):
             cdb = get_conn().cursor()
-            cdb.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+            cdb.execute("SELECT * FROM users WHERE username=? AND password=?", (username_in, password_in))
             if cdb.fetchone():
-                st.session_state["user"] = username
+                st.session_state["user"] = username_in
+                # initialize baseline record if missing
+                upsert_baseline(username_in, load_baseline(username_in))
                 st.success(T["logged_in"])
             else:
                 st.error(T["bad_creds"])
@@ -555,50 +656,57 @@ with st.sidebar.expander(T["login_title"], expanded=False):
         if st.button(T["register"], key="register_btn"):
             try:
                 cdb = get_conn().cursor()
-                cdb.execute("INSERT INTO users VALUES (?,?)", (username, password))
+                cdb.execute("INSERT INTO users VALUES (?,?)", (username_in, password_in))
                 get_conn().commit()
+                # create default baseline
+                upsert_baseline(username_in, 37.0)
                 st.success(T["account_created"])
             except Exception:
                 st.error(T["user_exists"])
-    if st.button("Logout", key="logout_btn"):
+    if st.button(T["logout"], key="logout_btn"):
         st.session_state.pop("user", None)
         st.success(T["logged_out"])
 
-# Emergency contact (persistent)
+# Sidebar: Emergency pull-down
 st.sidebar.markdown(f"### 🚑 {T['emergency_title']}")
 if "user" in st.session_state:
-    pn, pp, sn, sp = get_contacts(st.session_state["user"])
+    saved_pn, saved_pp, saved_sn, saved_sp = get_contacts(st.session_state["user"])
 else:
-    pn, pp, sn, sp = ("","","","")
-pn = st.sidebar.text_input(T["primary_name"], pn, key="pn")
-pp = st.sidebar.text_input(T["primary_phone"], pp, key="pp")
-sn = st.sidebar.text_input(T["secondary_name"], sn, key="sn")
-sp = st.sidebar.text_input(T["secondary_phone"], sp, key="sp")
-if "user" in st.session_state and st.sidebar.button(T["save_contacts"]):
-    save_contacts(st.session_state["user"], pn, pp, sn, sp)
-    st.sidebar.success(T["contacts_saved"])
-st.sidebar.caption("• Move to AC • Sip cool water • Use cooling pack • Call local emergency if severe")
+    saved_pn, saved_pp, saved_sn, saved_sp = ("","","","")
+
+options = []
+if saved_pn and saved_pp: options.append(f"{saved_pn} — {saved_pp}")
+if saved_sn and saved_sp: options.append(f"{saved_sn} — {saved_sp}")
+if options:
+    st.sidebar.selectbox("Who to call quickly?", options, index=0)
+    st.sidebar.caption("Tip: long-press to copy number on mobile")
+
+with st.sidebar.expander("Edit emergency contacts", expanded=False):
+    pn = st.text_input(T["primary_name"], saved_pn, key="pn")
+    pp = st.text_input(T["primary_phone"], saved_pp, key="pp")
+    sn = st.text_input(T["secondary_name"], saved_sn, key="sn")
+    sp = st.text_input(T["secondary_phone"], saved_sp, key="sp")
+    if "user" in st.session_state and st.button(T["save_contacts"]):
+        save_contacts(st.session_state["user"], pn, pp, sn, sp)
+        st.success(T["contacts_saved"])
+
+st.sidebar.caption("If unwell: move to AC • drink cool water • cooling pack • call emergency")
 
 # Navigation
 page = st.sidebar.radio("Navigate", [
     T["about_title"], T["monitor"], T["planner"], T["journal_tab"], T["assistant_tab"], T["settings"]
 ])
 
-# ================== PAGES ==================
-
-# TAB 1 — ABOUT
+# ================== ABOUT ==================
 def render_about_page(lang: str = "English"):
     if lang == "English":
         st.title("🧠 Welcome to Raha MS")
-
         st.markdown("""
 Raha MS was designed **with and for people living with MS in the Gulf**.  
 Life here is hot and humid—we get it. This app is meant to be a calm, simple companion that helps you feel more in control each day.
 """)
-
         st.subheader("🌡️ Why heat matters in MS")
         st.info("Even a small rise in body temperature (about 0.5°C) can temporarily worsen MS symptoms — this is called **Uhthoff’s phenomenon**. Knowing your own patterns helps you plan smart and feel safer.")
-
         st.subheader("✨ What Raha MS can do for you")
         st.markdown("""
 - **See your heat risk at a glance** — track your body temperature against your personal baseline.  
@@ -606,26 +714,17 @@ Life here is hot and humid—we get it. This app is meant to be a calm, simple c
 - **Write your journey** — short, private notes about symptoms and what helped.  
 - **Get gentle, culturally aware tips** — hydration, cooling, timing around prayer and errands, fasting considerations.
 """)
-
         st.subheader("🤝 Our intention")
         st.success("To offer simple, practical support that fits the Gulf climate and your daily life — so you can pace yourself, reduce uncertainty, and keep doing what matters to you.")
-
         st.caption("**Prototype notice:** This is a prototype for education only, not medical advice. Your data stays on your device (SQLite).")
-
-        # Small CTA to help new users
-        st.link_button("➡️ Start Heat Monitor", "")
-
-    else:  # Arabic
+    else:
         st.title("🧠 مرحبًا بك في راحة إم إس")
-
         st.markdown("""
 تم تصميم راحة إم إس **مع وبالتعاون مع أشخاص يعيشون مع التصلب المتعدد في الخليج**.  
 نعرف حرارة ورطوبة منطقتنا، وهذا التطبيق رفيق بسيط وهادئ ليساعدك على الشعور بسيطرة أكبر كل يوم.
 """)
-
         st.subheader("🌡️ لماذا تؤثر الحرارة في أعراض التصلب المتعدد؟")
         st.info("حتى الارتفاع البسيط (حوالي 0.5°م) قد يزيد الأعراض مؤقتًا — وتُسمّى **ظاهرة أوتهوف**. فهم نمطك الشخصي يساعدك على التخطيط براحة وأمان.")
-
         st.subheader("✨ ماذا يقدّم لك راحة إم إس؟")
         st.markdown("""
 - **رؤية سريعة لمستوى الخطر الحراري** — نتابع حرارة جسمك مقارنة بقاعدتك الشخصية.  
@@ -633,24 +732,46 @@ Life here is hot and humid—we get it. This app is meant to be a calm, simple c
 - **تدوين رحلتك** — ملاحظات قصيرة وخاصة عن الأعراض وما ساعدك.  
 - **نصائح لطيفة ومناسبة ثقافيًا** — الترطيب، التبريد، تنظيم الوقت مع الصلاة والمشاوير، ومراعاة الصيام.
 """)
-
         st.subheader("🤝 نيتنا")
         st.success("أن نقدّم دعمًا بسيطًا وعمليًا يناسب مناخ الخليج وحياتك اليومية — لتُنظّم مجهودك وتخفّف القلق وتستمر في ما يهمك.")
-
         st.caption("**ملاحظة النموذج الأولي:** هذا للتثقيف فقط وليس نصيحة طبية. تبقى بياناتك على جهازك (SQLite).")
 
-        st.link_button("➡️ ابدأ مراقبة الحرارة", "")
-
-# TAB 2 — HEAT MONITOR (live only)
+# ================== MONITOR ==================
 def render_monitor():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
 
+    # ensure baseline in state from DB
+    if "baseline" not in st.session_state:
+        st.session_state["baseline"] = load_baseline(st.session_state["user"], 37.0)
+
     st.title("☀️ " + T["risk_dashboard"])
 
-    # Session defaults
-    st.session_state.setdefault("baseline", 37.0)
+    # controls (baseline read-only + optional temporary override)
+    st.session_state.setdefault("use_temp_baseline", False)
+    st.session_state.setdefault("temp_baseline", st.session_state["baseline"])
     st.session_state.setdefault("city", "Abu Dhabi,AE")
+
+    colA, colB, colC = st.columns([1.4,1,1])
+
+    with colA:
+        st.markdown(f"**{T['personal_baseline']}:** {round(st.session_state['baseline'],1)}°C  · "
+                    f"<span style='opacity:.75'>(Edit in Settings)</span>", unsafe_allow_html=True)
+        st.caption(T["baseline_hint"])
+    with colB:
+        st.session_state["city"] = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="monitor_city")
+    with colC:
+        interval = st.slider("⏱️ " + T["update_every"], 2, 20, SIM_INTERVAL_SEC, 1)
+
+    with st.expander("Use a temporary baseline today?"):
+        st.session_state["use_temp_baseline"] = st.checkbox("Enable temporary baseline", value=st.session_state["use_temp_baseline"])
+        if st.session_state["use_temp_baseline"]:
+            st.session_state["temp_baseline"] = st.number_input("Temp baseline (°C)", 35.5, 38.5,
+                                                                st.session_state.get("temp_baseline", st.session_state["baseline"]), 0.1)
+
+    active_baseline = st.session_state["temp_baseline"] if st.session_state["use_temp_baseline"] else st.session_state["baseline"]
+
+    # session vars
     st.session_state.setdefault("live_running", False)
     st.session_state.setdefault("live_raw", [])
     st.session_state.setdefault("live_smoothed", [])
@@ -659,12 +780,6 @@ def render_monitor():
     st.session_state.setdefault("last_alert_ts", 0.0)
     st.session_state.setdefault("_last_tick_ts", 0.0)
     st.session_state.setdefault("last_check", None)
-
-    colA, colB, colC = st.columns([1.2,1,1])
-    st.session_state["baseline"] = colA.number_input("🧭 " + T["personal_baseline"], 35.5, 38.5, st.session_state["baseline"], 0.1)
-    st.session_state["city"] = colB.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0)
-    interval = colC.slider("⏱️ " + T["update_every"], 2, 20, SIM_INTERVAL_SEC, 1)
-    st.caption(T["baseline_hint"])
 
     weather, err = get_weather(st.session_state["city"])
     if weather is None:
@@ -675,7 +790,7 @@ def render_monitor():
     with b1:
         if not st.session_state["live_running"] and st.button(T["start"], use_container_width=True):
             st.session_state["live_running"] = True
-            start = round(st.session_state["baseline"] + random.uniform(-0.2, 0.2), 2)
+            start = round(active_baseline + random.uniform(-0.2, 0.2), 2)
             st.session_state["live_raw"] = [start]
             st.session_state["live_smoothed"] = [start]
             st.session_state["live_tick"] = 0
@@ -695,33 +810,30 @@ def render_monitor():
             st.session_state["last_db_write_tick"] = -999
             st.session_state["last_alert_ts"] = 0.0
 
-    # Tick loop
     now = time.time()
     if st.session_state["live_running"] and (now - st.session_state["_last_tick_ts"]) >= interval:
         st.session_state["_last_tick_ts"] = now
-        prev = st.session_state["live_raw"][-1] if st.session_state["live_raw"] else st.session_state["baseline"]
-        raw = simulate_next(prev, st.session_state["baseline"])
+        prev = st.session_state["live_raw"][-1] if st.session_state["live_raw"] else active_baseline
+        raw = simulate_next(prev, active_baseline)
         st.session_state["live_raw"].append(raw)
         smoothed = moving_avg(st.session_state["live_raw"], SMOOTH_WINDOW)
         st.session_state["live_smoothed"].append(smoothed)
         st.session_state["live_tick"] += 1
 
-        risk = compute_risk(weather["feels_like"], weather["humidity"], smoothed, st.session_state["baseline"])
+        risk = compute_risk(weather["feels_like"], weather["humidity"], smoothed, active_baseline)
         st.session_state["last_check"] = {
-            "city": st.session_state["city"], "body_temp": smoothed, "baseline": st.session_state["baseline"],
+            "city": st.session_state["city"], "body_temp": smoothed, "baseline": active_baseline,
             "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
             "humidity": weather["humidity"], "weather_desc": weather["desc"],
             "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
             "advice": risk["advice"], "time": datetime.utcnow().isoformat()
         }
 
-        # Alert logic
-        if should_alert(st.session_state["live_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
+        if should_alert(st.session_state["live_smoothed"], active_baseline, ALERT_DELTA_C, ALERT_CONFIRM):
             if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
                 st.session_state["last_alert_ts"] = now
-                st.warning("⚠️ Rise ≥ 0.5 °C above baseline detected. Consider cooling and rest. See tips below.")
+                st.warning("⚠️ Rise ≥ 0.5 °C above baseline detected. Consider cooling and rest. Log a reason to get tailored tips.")
 
-        # DB write every Nth
         if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
             try:
                 insert_temp(st.session_state.get("user","guest"), str(datetime.now()),
@@ -732,12 +844,11 @@ def render_monitor():
 
         st.rerun()
 
-    # Risk card
+    # status card
     if st.session_state["last_check"]:
         last = st.session_state["last_check"]
-        left_color = last["color"]
         st.markdown(f"""
-<div class="big-card" style="--left:{left_color}">
+<div class="big-card" style="--left:{last['color']}">
   <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
   <p style="margin:6px 0 0 0">{last['advice']}</p>
   <div class="small" style="margin-top:8px">
@@ -750,42 +861,44 @@ def render_monitor():
 </div>
 """, unsafe_allow_html=True)
 
-    # If over-threshold, show instant logging + tips
+    # reason picker + tailored tips when above threshold
     if st.session_state["live_smoothed"]:
         latest = st.session_state["live_smoothed"][-1]
-        delta = latest - st.session_state["baseline"]
+        delta = latest - active_baseline
         if delta >= ALERT_DELTA_C:
             st.markdown(f"### {T['log_now']}")
             trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
             chosen = st.multiselect(T["triggers_today"], trigger_options, max_selections=6)
             other_text = st.text_input(T["other"], "")
-            # symptom severity (optional quick)
             symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
             selected_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
-            sev_map = {}
-            for s in selected_symptoms:
-                sev_map[s] = st.select_slider(s, ["Mild","Moderate","Severe"], value="Moderate", key=f"sev_{s}")
 
-            # Instant tips card
-            do_now, plan_later, watch_for = instant_tips(chosen + ([other_text] if other_text.strip() else []),
-                                                         weather["feels_like"], weather["humidity"], delta, app_language)
-            st.markdown(f"#### 🧊 {T['instant_plan_title']}")
-            st.write(f"**{T['do_now']}**")
-            st.write("- " + "\n- ".join(do_now))
-            st.write(f"**{T['plan_later']}**")
-            st.write("- " + "\n- ".join(plan_later))
-            st.write(f"**{T['watch_for']}**")
-            st.write("- " + "\n- ".join(watch_for))
+            has_reason = (len(chosen) > 0) or (other_text.strip() != "")
+            if has_reason:
+                do_now, plan_later, watch_for = tailored_tips(
+                    chosen + ([other_text] if other_text.strip() else []),
+                    st.session_state["last_check"]["feels_like"],
+                    st.session_state["last_check"]["humidity"],
+                    delta, app_language
+                )
+                with st.expander(f"🧊 {T['instant_plan_title']}", expanded=True):
+                    st.write(f"**{T['do_now']}**")
+                    st.write("- " + "\n- ".join(do_now) if do_now else "—")
+                    st.write(f"**{T['plan_later']}**")
+                    st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
+                    st.write(f"**{T['watch_for']}**")
+                    st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
 
             note_text = st.text_input(T["notes"], "")
             if st.button(T["save_entry"]):
+                sev_map = {s:"Unrated" for s in selected_symptoms}
                 entry = {
                     "type":"ALERT",
                     "at": datetime.now().isoformat(),
                     "body_temp": round(latest,1),
-                    "baseline": round(st.session_state["baseline"],1),
+                    "baseline": round(active_baseline,1),
                     "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
-                    "symptom_severity": sev_map,
+                    "symptoms": list(sev_map.keys()),
                     "note": note_text.strip()
                 }
                 try:
@@ -794,7 +907,7 @@ def render_monitor():
                 except Exception as e:
                     st.warning(f"Could not save note: {e}")
 
-    # Live chart
+    # chart
     st.markdown("---")
     st.subheader(T["temp_trend"])
     rows = get_recent_temps(st.session_state.get("user","guest"), limit=50)
@@ -806,91 +919,124 @@ def render_monitor():
         fig, ax = plt.subplots(figsize=(10,4))
         ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2, color='red')
         ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
-        ax.set_xticks(range(len(dates)))
-        ax.set_xticklabels(dates, rotation=45, fontsize=9)
+        ax.set_xticks(range(len(dates))); ax.set_xticklabels(dates, rotation=45, fontsize=9)
         ax.set_ylabel("°C"); ax.legend(); ax.grid(True, alpha=0.3)
         st.pyplot(fig)
     else:
         st.info("No temperature data yet.")
 
-# TAB 3 — PLANNER & FORECAST
+# ================== PLANNER ==================
+def best_windows_from_forecast(forecast, window_hours=2, top_k=3,
+                               max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
+    slots = []
+    for it in forecast[:16]:
+        t = it["time"]
+        hour = int(t[11:13])
+        if avoid_hours[0] <= hour < avoid_hours[1]:
+            continue
+        if it["feels_like"] <= max_feels_like and it["humidity"] <= max_humidity:
+            slots.append(it)
+    cand = []
+    for i in range(len(slots)):
+        group = [slots[i]]
+        if i+1 < len(slots):
+            t1, t2 = slots[i]["time"], slots[i+1]["time"]
+            if t1[:10]==t2[:10] and (int(t2[11:13]) - int(t1[11:13]) == 3):
+                group.append(slots[i+1])
+        avg_feels = sum(g["feels_like"] for g in group)/len(group)
+        avg_hum = sum(g["humidity"] for g in group)/len(group)
+        start = group[0]["time"][:16]
+        end_h = int(group[-1]["time"][11:13]) + 3
+        end = group[-1]["time"][:11] + f"{end_h:02d}" + group[-1]["time"][13:16]
+        cand.append({"start":start,"end":end,"avg_feels":round(avg_feels,1),"avg_hum":int(avg_hum)})
+    cand.sort(key=lambda x: (x["avg_feels"], x["avg_hum"]))
+    return cand[:top_k]
+
 def render_planner():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
-
     st.title("🗺️ " + T["planner"])
-    col1, col2 = st.columns([1.5,1])
-    city = col1.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
-    col2.caption("Plan errands for cooler hours.")
 
+    city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
     weather, err = get_weather(city)
     if weather is None:
-        st.error(f"{T['weather_fail']}: {err}")
-        return
+        st.error(f"{T['weather_fail']}: {err}"); return
 
-    st.subheader(T["weekly_forecast"])
-    week = aggregate_week(weather["forecast"])
-    cols = st.columns(len(week) if week else 1)
-    import datetime as _dt
-    for i, d in enumerate(week):
-        with cols[i]:
-            y,m,dd = map(int, d["day"].split("-"))
-            wkday = _dt.date(y,m,dd).strftime("%a") if app_language=="English" else ["الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"][_dt.date(y,m,dd).weekday()]
-            st.markdown(f"**{wkday}**")
-            st.write(d["desc"].capitalize() if d["desc"] else "")
-            st.write(f"↑ {d['max']}°C  ↓ {d['min']}°C")
-            st.caption(f"Hum: {d['humidity']}%")
-
-    st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather["peak_hours"]) if weather.get("peak_hours") else "—"))
-
-    st.subheader(T["quick_tips"])
-    st.markdown("""- Avoid 10–4 peak heat; use shaded parking.\n- Pre-cool before errands; carry cool water.\n- Prefer AC indoors; wear light, loose clothing.""")
+    st.subheader("✅ Recommended cooler windows")
+    windows = best_windows_from_forecast(weather["forecast"], window_hours=2, top_k=4, max_feels_like=35.0, max_humidity=65)
+    if not windows:
+        st.info("No optimal windows found; consider early morning or after sunset.")
+    else:
+        cols = st.columns(len(windows))
+        for i, w in enumerate(windows):
+            with cols[i]:
+                st.markdown(f"**{w['start'][5:16]} → {w['end'][11:16]}**")
+                st.caption(f"Feels-like ~{w['avg_feels']}°C • Humidity {w['avg_hum']}%")
+                act = st.selectbox("Plan:", ["Walk","Groceries","Beach","Errand"], key=f"plan_{i}")
+                if st.button("Add to Journal", key=f"add_{i}"):
+                    entry = {"type":"PLAN", "at": datetime.now().isoformat(),
+                             "city": city, "start": w["start"], "end": w["end"], "activity": act,
+                             "feels_like": w["avg_feels"], "humidity": w["avg_hum"]}
+                    insert_journal(st.session_state["user"], str(datetime.now()), entry)
+                    st.success("Saved to Journal")
 
     st.markdown("---")
-    st.subheader("📝 " + T["journal_tab"])
-    # Daily quick log
-    trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-    day_triggers = st.multiselect(T["triggers_today"], trigger_options)
-    other_tr = st.text_input(T["other"], "")
-    symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-    day_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
-    sev_map = {}
-    for s in day_symptoms:
-        sev_map[s] = st.select_slider(s, ["Mild","Moderate","Severe"], value="Moderate", key=f"day_sev_{s}")
-    notes = st.text_area(T["notes"], height=100)
-    if st.button(T["save_entry"]):
-        entry = {
-            "type":"DAILY",
-            "at": datetime.now().isoformat(),
-            "triggers": day_triggers + ([f"Other: {other_tr.strip()}"] if other_tr.strip() else []),
-            "symptoms": [{"name":k,"severity":v} for k,v in sev_map.items()],
-            "notes": notes.strip()
-        }
-        try:
-            insert_journal(st.session_state["user"], str(datetime.now()), entry)
-            st.success(T["saved"])
-        except Exception as e:
-            st.warning(f"Save failed: {e}")
+    st.subheader("🤔 What-if planner")
+    act = st.selectbox("Activity type", ["Light walk (20–30 min)","Moderate exercise (45 min)","Outdoor errand (30–60 min)","Beach (60–90 min)"], key="what_if")
+    fl = weather["feels_like"]; hum = weather["humidity"]
+    go_badge = "🟢 Go" if (fl<34 and hum<60) else ("🟡 Caution" if (fl<37 and hum<70) else "🔴 Avoid now")
+    st.markdown(f"**Now:** {go_badge} — feels-like {round(fl,1)}°C, humidity {int(hum)}%")
 
-# TAB 4 — JOURNAL & HISTORY
+    tips_now = []
+    if "walk" in act.lower(): tips_now += ["Shaded route", "Carry cool water", "Light clothing"]
+    if "exercise" in act.lower(): tips_now += ["Pre-cool 15 min", "Indoor/AC if possible", "Electrolytes if >45 min"]
+    if "errand" in act.lower(): tips_now += ["Park in shade", "Plan shortest path", "Pre-cool car 5–10 min"]
+    if "beach" in act.lower(): tips_now += ["Umbrella + UV hat", "Cool pack in bag", "Rinse to cool"]
+    if fl >= 36: tips_now += ["Cooling scarf/bandana", "Limit to cooler window"]
+    if hum >= 60: tips_now += ["Prefer AC over fan", "Extra hydration"]
+    tips_now = list(dict.fromkeys(tips_now))[:6]
+    st.write("**Tips:**")
+    st.write("- " + "\n- ".join(tips_now) if tips_now else "—")
+
+    st.markdown("---")
+    st.subheader("📍 Plan by place")
+    place_q = st.text_input("Type a place (e.g., Saadiyat Beach)")
+    if place_q:
+        place, lat, lon = geocode_place(place_q)
+        pw = get_weather_by_coords(lat, lon) if lat and lon else None
+        if pw:
+            st.info(f"{place}: feels-like {round(pw['feels_like'],1)}°C • humidity {int(pw['humidity'])}% • {pw['desc']}")
+            better = "place" if pw["feels_like"] < weather["feels_like"] else "city"
+            st.caption(f"Cooler now: **{place if better=='place' else city}**")
+        else:
+            st.warning("Couldn’t fetch that place’s weather.")
+
+    st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather["peak_hours"]) if weather.get("peak_hours") else "—"))
+    with st.expander(T["quick_tips"], expanded=False):
+        st.markdown("""- Avoid 10–4 peak heat; use shaded parking.
+- Pre-cool before errands; carry cool water.
+- Prefer AC indoors; wear light, loose clothing.""")
+
+# ================== JOURNAL ==================
 def render_journal():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
-
     st.title("📒 " + T["journal_tab"])
 
-    # Structured composer
     mood = st.select_slider(T["mood"], ["😔","😐","🙂","😄"], value="🙂")
     energy = st.select_slider(T["energy"], ["Low","Medium","High"], value="Medium")
     sleep = st.select_slider(T["sleep"], ["Poor","Okay","Good"], value="Good")
     hydration = st.select_slider(T["hydration"], ["Low","Medium","High"], value="Medium")
     activity = st.text_input(T["activity"], placeholder="e.g., short walk, groceries" if app_language=="English" else "مثلًا: مشي قصير، تسوق")
+
     symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
     sel_symptoms = st.multiselect(T["symptoms_today"], symptoms_list)
     sym_map = {}
     for s in sel_symptoms:
         sym_map[s] = st.select_slider(s, ["Mild","Moderate","Severe"], value="Moderate", key=f"jh_{s}")
-    triggers = st.multiselect(T["triggers_today"], TRIGGERS_EN if app_language=="English" else TRIGGERS_AR)
+
+    triggers_list = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+    sel_triggers = st.multiselect(T["triggers_today"], triggers_list)
     other_tr = st.text_input(T["other"], "")
     notes = st.text_area(T["notes"], height=100)
 
@@ -901,7 +1047,7 @@ def render_journal():
             "mood": mood, "energy": energy, "sleep": sleep, "hydration": hydration,
             "activity": activity.strip(),
             "symptoms": [{"name":k,"severity":v} for k,v in sym_map.items()],
-            "triggers": triggers + ([f"Other: {other_tr.strip()}"] if other_tr.strip() else []),
+            "triggers": sel_triggers + ([f"Other: {other_tr.strip()}"] if other_tr.strip() else []),
             "notes": notes.strip()
         }
         try:
@@ -923,7 +1069,9 @@ def render_journal():
                     t = obj.get('triggers', [])
                     s = obj.get('symptoms', [])
                     s_short = ", ".join(f"{x['name']}({x['severity'][0]})" if isinstance(x, dict) else str(x) for x in s)
-                    st.write(f"📅 {d[:16]} — DAILY: mood {obj.get('mood','')} • energy {obj.get('energy','')} • triggers: {', '.join(t)} • symptoms: {s_short}")
+                    st.write(f"📅 {d[:16]} — DAILY: triggers: {', '.join(t)} • symptoms: {s_short}")
+                elif label=="PLAN":
+                    st.write(f"📅 {d[:16]} — PLAN: {obj.get('activity','')} {obj.get('start','')}→{obj.get('end','')} @ {obj.get('city','')}")
                 else:
                     st.write(f"📅 {d[:16]} → {e}")
             except:
@@ -931,7 +1079,6 @@ def render_journal():
     else:
         st.info("No entries yet.")
 
-    # Temperature history (same as monitor)
     st.markdown("---")
     st.subheader(T["temp_trend"])
     rows = get_recent_temps(st.session_state["user"], limit=50)
@@ -943,60 +1090,69 @@ def render_journal():
         fig, ax = plt.subplots(figsize=(10,4))
         ax.plot(range(len(dates)), bt, marker='o', label="Body", linewidth=2, color='red')
         ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
-        ax.set_xticks(range(len(dates)))
-        ax.set_xticklabels(dates, rotation=45, fontsize=9)
+        ax.set_xticks(range(len(dates))); ax.set_xticklabels(dates, rotation=45, fontsize=9)
         ax.set_ylabel("°C"); ax.legend(); ax.grid(True, alpha=0.3)
         st.pyplot(fig)
     else:
         st.info("No temperature history recorded yet.")
 
-    # Weekly recap (AI)
-    if client and st.button("🧠 Summarize my week"):
-        ctx = build_context(st.session_state["user"])
-        ans, err = ai_response("Summarize key patterns and give 3 suggestions:\n"+ctx, app_language)
-        st.info(ans if ans else "AI error.")
-
-# TAB 5 — AI ASSISTANT
+# ================== ASSISTANT ==================
 def render_assistant():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
 
     st.title("🤖 " + T["assistant_tab"])
-    st.caption("I’ll use your recent entries and can check a specific place’s weather.")
+    st.caption("I remember your recent notes and can check a place’s weather if you mention it (e.g., Saadiyat Beach).")
 
-    question = st.text_area(T["ask_anything"], "I want to go to Saadiyat Beach this afternoon—what should I consider?")
-    if st.button(T["get_tips"]):
-        if not client:
-            st.warning(T["ai_unavailable"]); return
+    if "chat_msgs" not in st.session_state:
+        st.session_state.chat_msgs = []
 
-        # Try to detect a place by geocoding the whole question
-        place, lat, lon = geocode_place(question)
+    for m in st.session_state.chat_msgs:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    user_msg = st.chat_input(T["ask_anything"])
+    if user_msg:
+        st.session_state.chat_msgs.append({"role":"user","content":user_msg})
+        with st.chat_message("user"):
+            st.markdown(user_msg)
+
+        ctx = build_context(st.session_state["user"], st.session_state.get("last_check"))
+
+        place, lat, lon = geocode_place(user_msg)
         place_weather = get_weather_by_coords(lat, lon) if lat and lon else None
-
-        ctx = build_context(st.session_state["user"])
         extra = ""
         if place_weather:
             extra = f"\nPlace weather ({place}): feels-like {round(place_weather['feels_like'],1)}°C, humidity {int(place_weather['humidity'])}% ({place_weather['desc']})."
-        prompt = f"Recent journal:\n{ctx}\n\nQuestion: {question}{extra}\nProvide short, practical recommendations."
-        ans, err = ai_response(prompt, app_language)
-        if err:
-            st.error("AI error.")
-        else:
-            st.info(ans)
 
-# TAB 6 — SETTINGS & EXPORT
+        prompt = (f"User said: {user_msg}\n\nRecent journal + latest vitals:\n{ctx}{extra}\n\n"
+                  f"Please answer in short, warm paragraphs with a few bullet points when helpful. "
+                  f"If planning an outing, propose a specific time window around cooler hours for GCC climate.")
+
+        ans, err = ai_response(prompt, app_language)
+        reply = ans if ans else ("⚠️ " + (err or "AI error"))
+        st.session_state.chat_msgs.append({"role":"assistant","content":reply})
+        with st.chat_message("assistant"):
+            st.markdown(reply)
+
+# ================== SETTINGS ==================
 def render_settings():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
-
     st.title("⚙️ " + T["settings"])
-    st.session_state.setdefault("baseline", 37.0)
-    st.session_state["baseline"] = st.number_input(T["personal_baseline"], 35.5, 38.5, st.session_state["baseline"], 0.1)
+
+    # load current baseline
+    current = load_baseline(st.session_state["user"], 37.0)
+    new_base = st.number_input(T["personal_baseline"], 35.5, 38.5, current, 0.1)
     st.caption(T["baseline_hint"])
+    if new_base != current:
+        if st.button("Save baseline"):
+            upsert_baseline(st.session_state["user"], float(new_base))
+            st.session_state["baseline"] = float(new_base)
+            st.success("Baseline saved")
 
     st.subheader(T["export_csv"])
     if st.button(T["export_csv"]):
-        import csv, io
         c = get_conn().cursor()
         c.execute("""SELECT date, body_temp, weather_temp, feels_like, humidity, status
                      FROM temps WHERE username=? ORDER BY date ASC""",
