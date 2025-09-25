@@ -1253,7 +1253,7 @@ elif page == T["temp_monitor"]:
 
             st.rerun()
 
-# Status card (with inline tooltips)
+        # Status card (with inline tooltips)
 if st.session_state.get("last_check"):
     last = st.session_state["last_check"]
     lang_key = "AR" if app_language == "Arabic" else "EN"
@@ -1279,6 +1279,8 @@ if st.session_state.get("last_check"):
   <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last.get('peak_hours', []))) if last.get('peak_hours') else "—"}</p>
 </div>
 """, unsafe_allow_html=True)
+
+
 
         # If above threshold, show “log reason” form (unchanged logic)
         if st.session_state["live_core_smoothed"]:
