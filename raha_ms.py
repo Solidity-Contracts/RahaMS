@@ -1383,42 +1383,6 @@ elif page == T["temp_monitor"]:
         except Exception as e:
             st.error(f"Chart error: {e}")
 
-        # Trend chart (each dot = one sample)
-        st.markdown("---")
-        st.subheader("📈 Temperature Trend")
-        c = get_conn().cursor()
-        try:
-            query = """
-                SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
-                FROM temps WHERE username=? ORDER BY date DESC LIMIT 120
-            """
-            c.execute(query, (st.session_state.get("user","guest"),))
-            rows = c.fetchall()
-            if rows:
-                rows = rows[::-1]
-                dates = [r[0] for r in rows]
-                core = [r[1] for r in rows]
-                periph = [r[2] for r in rows]
-                feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
-
-                fig, ax = plt.subplots(figsize=(10,4))
-                ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
-                ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
-                ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
-                ax.set_xticks(range(len(dates)))
-                # Show HH:MM pulled from saved Dubai time strings
-                ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
-                ax.set_ylabel("°C")
-                ax.legend()
-                ax.grid(True, alpha=0.3)
-                ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
-                st.pyplot(fig)
-
-                st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
-            else:
-                st.info("No data yet. Start monitoring to build your trend.")
-        except Exception as e:
-            st.error(f"Chart error: {e}")
 # PLANNER
 elif page == T["planner"]:
     render_planner()
