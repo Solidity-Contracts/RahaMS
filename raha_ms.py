@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 from collections import defaultdict
-from math import isnan
+from datetime import datetime as _dt
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -33,7 +33,7 @@ GCC_CITIES = [
     "Muscat,OM"
 ]
 
-# ===== Live/Alert config (simulation or future sensor) =====
+# ===== Live/Alert config =====
 SIM_INTERVAL_SEC = 60            # default realistic sampling every 60s
 DB_WRITE_EVERY_N = 3             # write to DB every Nth sample during live
 ALERT_DELTA_C = 0.5              # ≥ 0.5°C above baseline
@@ -45,22 +45,29 @@ SMOOTH_WINDOW = 3                # moving average window (samples)
 TEXTS = {
     "English": {
         "about_title": "About Raha MS",
+        "temp_monitor": "Heat Safety Monitor",
+        "planner": "Planner & Tips",
+        "journal": "Journal",
+        "assistant": "AI Companion",
+        "settings": "Settings",
+        "logout": "Logout",
+
         "login_title": "Login / Register",
         "username": "Username",
         "password": "Password",
         "login": "Login",
         "register": "Register",
-        "temp_monitor": "Heat Safety Monitor",
-        "planner": "Planner & Tips",
-        "journal": "Journal",
-        "assistant": "AI Companion",
-        "logout": "Logout",
+        "logged_in": "✅ Logged in!",
+        "bad_creds": "❌ Invalid credentials",
+        "account_created": "✅ Account created! Please login.",
+        "user_exists": "❌ Username already exists",
+        "login_first": "Please login first.",
+        "logged_out": "✅ Logged out!",
 
         "risk_dashboard": "Heat Safety Monitor",
         "enter_temp": "Enter your body temperature (°C):",
         "city": "City (City,CC)",
         "quick_pick": "Quick pick (GCC):",
-
         "did_today": "Today I did / experienced:",
         "symptoms_today": "Symptoms today:",
         "check_risk": "Check My Heat Risk",
@@ -70,24 +77,17 @@ TEXTS = {
         "journal_title": "Journal",
         "journal_hint": "Write brief notes. Separate blocks with line breaks.",
         "save": "Save",
-        "login_first": "Please login first.",
-        "logged_in": "✅ Logged in!",
-        "bad_creds": "❌ Invalid credentials",
-        "account_created": "✅ Account created! Please login.",
-        "user_exists": "❌ Username already exists",
-        "logged_out": "✅ Logged out!",
         "weather_fail": "Weather lookup failed",
         "ai_unavailable": "AI is unavailable. Set OPENAI_API_KEY in secrets.",
 
-        # New strings
-        "settings": "Settings",
         "baseline_setting": "Baseline body temperature (°C)",
-        "use_temp_baseline": "Use this baseline for monitoring",
+        "use_temp_baseline": "Use this baseline for monitoring alerts",
         "contacts": "Emergency Contacts",
         "primary_phone": "Primary phone",
         "secondary_phone": "Secondary phone",
         "save_settings": "Save settings",
         "saved": "Saved",
+
         "monitor_now": "Start monitoring",
         "stop": "Stop",
         "reset": "Reset session",
@@ -109,22 +109,29 @@ TEXTS = {
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
+        "temp_monitor": "مراقبة السلامة الحرارية",
+        "planner": "المخطط والنصائح",
+        "journal": "اليوميات",
+        "assistant": "المساعد الذكي",
+        "settings": "الإعدادات",
+        "logout": "تسجيل الخروج",
+
         "login_title": "تسجيل الدخول / إنشاء حساب",
         "username": "اسم المستخدم",
         "password": "كلمة المرور",
         "login": "تسجيل الدخول",
         "register": "إنشاء حساب",
-        "temp_monitor": "مراقبة السلامة الحرارية",
-        "planner": "المخطط والنصائح",
-        "journal": "اليوميات",
-        "assistant": "المساعد الذكي",
-        "logout": "تسجيل الخروج",
+        "logged_in": "✅ تم تسجيل الدخول",
+        "bad_creds": "❌ بيانات غير صحيحة",
+        "account_created": "✅ تم إنشاء الحساب! الرجاء تسجيل الدخول.",
+        "user_exists": "❌ اسم المستخدم موجود",
+        "login_first": "يرجى تسجيل الدخول أولاً.",
+        "logged_out": "✅ تم تسجيل الخروج!",
 
         "risk_dashboard": "مراقبة السلامة الحرارية",
         "enter_temp": "أدخل حرارة جسمك (°م):",
         "city": "المدينة (City,CC)",
         "quick_pick": "اختيار سريع (الخليج):",
-
         "did_today": "اليوم قمتُ بـ / تعرضتُ لـ:",
         "symptoms_today": "الأعراض اليوم:",
         "check_risk": "تحقق من خطري الحراري",
@@ -134,23 +141,17 @@ TEXTS = {
         "journal_title": "اليوميات",
         "journal_hint": "اكتب ملاحظات قصيرة. افصل بين المقاطع بسطر جديد.",
         "save": "حفظ",
-        "login_first": "يرجى تسجيل الدخول أولاً.",
-        "logged_in": "✅ تم تسجيل الدخول",
-        "bad_creds": "❌ بيانات غير صحيحة",
-        "account_created": "✅ تم إنشاء الحساب! الرجاء تسجيل الدخول.",
-        "user_exists": "❌ اسم المستخدم موجود",
-        "logged_out": "✅ تم تسجيل الخروج!",
         "weather_fail": "فشل جلب الطقس",
         "ai_unavailable": "الخدمة الذكية غير متاحة. أضف مفتاح OPENAI_API_KEY.",
 
-        "settings": "الإعدادات",
         "baseline_setting": "درجة حرارة الجسم الأساسية (°م)",
-        "use_temp_baseline": "استخدام هذه القيمة للمراقبة",
+        "use_temp_baseline": "استخدام هذه القيمة لتنبيهات المراقبة",
         "contacts": "جهات اتصال الطوارئ",
         "primary_phone": "الهاتف الأساسي",
         "secondary_phone": "هاتف إضافي",
         "save_settings": "حفظ الإعدادات",
         "saved": "تم الحفظ",
+
         "monitor_now": "ابدأ المراقبة",
         "stop": "إيقاف",
         "reset": "إعادة تعيين",
@@ -172,7 +173,7 @@ TEXTS = {
     }
 }
 
-# Comprehensive lists (editable later)
+# Comprehensive lists
 TRIGGERS_EN = [
     "Exercise", "Direct sun exposure", "Sauna/Hot bath", "Spicy food",
     "Hot drinks", "Stress/Anxiety", "Fever/Illness", "Hormonal cycle",
@@ -197,7 +198,7 @@ SYMPTOMS_AR = [
     "تشوش إدراكي", "دوخة", "صداع", "ألم", "وخز"
 ]
 
-# ================== STYLES (accessibility) ==================
+# ================== STYLES ==================
 ACCESSIBLE_CSS = """
 <style>
 html, body, [class*="css"]  { font-size: 18px; }
@@ -351,7 +352,7 @@ def get_weather_by_coords(lat, lon):
 
 # ================== RISK MODEL ==================
 TRIGGER_WEIGHTS = {
-    "Exercise": 2, "Sauna": 3, "Spicy food": 1, "Hot drinks": 1,
+    "Exercise": 2, "Sauna/Hot bath": 3, "Spicy food": 1, "Hot drinks": 1,
     "Stress/Anxiety": 1, "Direct sun exposure": 2, "Fever/Illness": 3, "Hormonal cycle": 1,
     "Tight clothing": 1, "Poor sleep": 1, "Dehydration": 2, "Crowded place": 1,
     "Cooking heat": 1, "Car without AC": 2, "Outdoor work": 2, "Long prayer standing": 1
@@ -425,51 +426,59 @@ def ai_response(prompt, lang):
             temperature=0.6,
         )
         return response.choices[0].message.content, None
-    except Exception as e:
-        return None, str(e)
+    except Exception:
+        return None, "err"
 
-# ================== ABOUT PAGE ==================
+# ================== ABOUT PAGE (your friendly version) ==================
 def render_about_page(lang: str = "English"):
     if lang == "English":
         st.title("🧠 Welcome to Raha MS")
         st.markdown("""
-Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging due to heat and humidity.  
-Raha MS was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
-
-**🌡️ Why heat matters**  
-Even a small rise in body temperature can temporarily worsen MS symptoms (**Uhthoff’s phenomenon**). Cooling and pacing help.
-
-**✨ What you can do here**  
-- **Track** your body temperature and local weather  
-- **Spot triggers** (exercise, sun, sauna…)  
-- **Journal** symptoms & patterns  
-- **Get tips** from the AI Companion  
-
-**🔒 Privacy**  
-Your data stays on this device (SQLite). This is a prototype for co-design with the GCC MS community.
+Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
+**Raha MS** was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
 """)
+
+        st.subheader("🌡️ Why Heat Matters in MS")
+        st.info("Even a small rise in body temperature (as little as **0.5°C**) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**. Cooling and pacing help.")
+
+        st.subheader("✨ What This App Offers You")
+        st.markdown("""
+- **Track** your body temperature and local weather.  
+- **Discover** personal heat triggers (exercise, hot food, stress, etc.).  
+- **Record** symptoms and your health journey in a private journal.  
+- **Get support** from the AI Companion with culturally tailored advice for life in the Gulf.  
+""")
+
+        st.subheader("🤝 Our Goal")
+        st.success("To give you simple tools that fit your life, reduce uncertainty, and help you feel more in control.")
+
+        st.caption("Raha MS is a co-created prototype with the MS community in the Gulf. Your feedback shapes what comes next.")
+        st.caption("Privacy: Your data is stored locally (SQLite). This is for prototyping and education — not a medical device.")
     else:
         st.title("🧠 مرحبًا بك في راحة إم إس")
         st.markdown("""
-إن العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة والرطوبة.  
-تم تصميم راحة إم إس **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
-
-**🌡️ لماذا تؤثر الحرارة؟**  
-حتى الارتفاع البسيط في حرارة الجسم قد يزيد الأعراض مؤقتًا (**ظاهرة أوتهوف**). التبريد والتنظيم يساعدان.
-
-**✨ ما الذي يقدمه التطبيق؟**  
-- **متابعة** حرارة الجسم والطقس  
-- **تحديد المحفزات** (رياضة، شمس، ساونا…)  
-- **كتابة اليوميات** والأعراض  
-- **الحصول على نصائح** من المساعد الذكي  
-
-**🔒 الخصوصية**  
-تبقى بياناتك على هذا الجهاز (SQLite). هذا نموذج أولي للتصميم المشترك مع مجتمع مرضى التصلب في الخليج.
+العيش مع **التصلب المتعدد (MS)** في الخليج قد يكون صعبًا بسبب الحرارة والرطوبة.  
+تم تصميم **راحة إم إس** **بالتعاون مع مرضى التصلب المتعدد** ليمنحك راحة ووعيًا ودعمًا في حياتك اليومية.
 """)
 
-# ================== PLANNER HELPERS ==================
-from datetime import datetime as _dt
+        st.subheader("🌡️ لماذا تؤثر الحرارة؟")
+        st.info("حتى الارتفاع البسيط في حرارة الجسم (**0.5°م**) قد يزيد الأعراض مؤقتًا — ويعرف ذلك بـ **ظاهرة أوتهوف**. التبريد والتنظيم يساعدان.")
 
+        st.subheader("✨ ما الذي يقدمه التطبيق؟")
+        st.markdown("""
+- **مراقبة** حرارة جسمك والطقس من حولك.  
+- **اكتشاف** المحفزات الشخصية للحرارة (رياضة، طعام حار، توتر...).  
+- **تسجيل** الأعراض ورحلتك الصحية في يوميات خاصة.  
+- **الحصول** على دعم من المساعد الذكي بنصائح متناسبة مع بيئة الخليج.  
+""")
+
+        st.subheader("🤝 هدفنا")
+        st.success("أن نمنحك أدوات بسيطة تناسب حياتك اليومية وتخفف القلق وتمنحك شعورًا أكبر بالتحكم.")
+
+        st.caption("راحة إم إس نموذج أولي تم تطويره بالتعاون مع مجتمع مرضى التصلب المتعدد في الخليج. رأيك يهمنا.")
+        st.caption("الخصوصية: بياناتك محفوظة محليًا (SQLite). هذا لأغراض النمذجة والتعليم — وليس جهازًا طبيًا.")
+
+# ================== PLANNER HELPERS ==================
 def best_windows_from_forecast(
     forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)
 ):
@@ -517,14 +526,14 @@ def best_windows_from_forecast(
 def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
     """Simple tailored tips block."""
     do_now, plan_later, watch_for = [], [], []
-    # general
     if delta >= 0.5:
         do_now += ["Cool down (AC/cool shower)", "Sip cool water", "Rest 15–20 min"]
     if feels_like >= 36:
         do_now += ["Use cooling scarf/pack", "Stay in shade/indoors"]
-        plan_later += ["Shift activity to cooler window"]
+        plan_later += ["Shift activity to a cooler window"]
     if humidity >= 60:
         plan_later += ["Prefer AC over fan", "Add electrolytes if sweating"]
+
     for r in reasons:
         rl = r.lower()
         if "exercise" in rl:
@@ -539,14 +548,14 @@ def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
         if "kitchen" in rl or "cooking" in rl:
             plan_later += ["Ventilate kitchen, cook earlier"]
         if "fever" in rl or "illness" in rl:
-            watch_for += ["Persistent high temp", "New neuro symptoms"]
-    # de-dup + limits
+            watch_for += ["Persistent high temp", "New neurological symptoms"]
+
     do_now = list(dict.fromkeys(do_now))[:6]
     plan_later = list(dict.fromkeys(plan_later))[:6]
     watch_for = list(dict.fromkeys(watch_for))[:6]
     return do_now, plan_later, watch_for
 
-# ================== SIDEBAR ==================
+# ================== SIDEBAR (logo, language, login) ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
@@ -562,53 +571,14 @@ if app_language == "Arabic":
     </style>
     """, unsafe_allow_html=True)
 
-# Sidebar: Settings & Contacts
-with st.sidebar.expander(T["settings"], expanded=True):
-    st.session_state.setdefault("baseline", 37.0)
-    st.session_state.setdefault("use_temp_baseline", True)
-
-    base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="baseline_setting_input")
-    useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"])
-    if st.button(T["save_settings"], key="save_settings_btn"):
-        st.session_state["baseline"] = float(base)
-        st.session_state["use_temp_baseline"] = bool(useb)
-        st.success(T["saved"])
-
-with st.sidebar.expander(T["contacts"], expanded=False):
-    st.session_state.setdefault("primary_phone", "")
-    st.session_state.setdefault("secondary_phone", "")
-    p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"])
-    p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"])
-    if st.button(T["save_settings"], key="save_contacts_btn"):
-        st.session_state["primary_phone"] = p1.strip()
-        st.session_state["secondary_phone"] = p2.strip()
-        st.success(T["saved"])
-
-# Floating emergency button (optional)
-call_number = st.session_state.get("primary_phone") or st.session_state.get("secondary_phone")
-if call_number:
-    emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
-    st.markdown(f'<a class="fab-call" href="tel:{call_number}">📞 {emergency_label}</a>', unsafe_allow_html=True)
-
-# Navigation
-page = st.sidebar.radio("Navigate", [
-    T["about_title"], T["login_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["logout"]
-])
-
-# ================== PAGES ==================
-# ABOUT
-if page == T["about_title"]:
-    render_about_page(app_language)
-
-# LOGIN
-elif page == T["login_title"]:
-    st.title(T["login_title"])
-    username = st.text_input(T["username"])
-    password = st.text_input(T["password"], type="password")
+# Sidebar Login/Register (moved here)
+with st.sidebar.expander(T["login_title"], expanded=("user" not in st.session_state)):
+    username = st.text_input(T["username"], key="sb_user")
+    password = st.text_input(T["password"], type="password", key="sb_pass")
 
     col1, col2 = st.columns(2)
     with col1:
-        if st.button(T["login"]):
+        if st.button(T["login"], key="sb_login_btn"):
             c = get_conn().cursor()
             c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
             if c.fetchone():
@@ -617,7 +587,7 @@ elif page == T["login_title"]:
             else:
                 st.error(T["bad_creds"])
     with col2:
-        if st.button(T["register"]):
+        if st.button(T["register"], key="sb_reg_btn"):
             try:
                 c = get_conn().cursor()
                 c.execute("INSERT INTO users VALUES (?,?)", (username, password))
@@ -625,7 +595,51 @@ elif page == T["login_title"]:
                 st.success(T["account_created"])
             except Exception:
                 st.error(T["user_exists"])
-    st.caption("⚠️ Prototype note: passwords are stored in plain text. For a pilot, switch to a hashed scheme (bcrypt/PBKDF2).")
+
+# Floating emergency button (visible even if sidebar collapsed)
+call_number = st.session_state.get("primary_phone") or st.session_state.get("secondary_phone")
+if call_number:
+    emergency_label = "اتصال طوارئ" if app_language == "Arabic" else "Emergency Call"
+    st.markdown(f'<a class="fab-call" href="tel:{call_number}">📞 {emergency_label}</a>', unsafe_allow_html=True)
+
+# Navigation (Login page removed; Settings page added)
+page = st.sidebar.radio(
+    "Navigate",
+    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["settings"], T["logout"]]
+)
+
+# ================== SETTINGS PAGE ==================
+def render_settings_page():
+    st.title("⚙️ " + T["settings"])
+
+    # Baseline
+    st.subheader(T["baseline_setting"])
+    st.session_state.setdefault("baseline", 37.0)
+    st.session_state.setdefault("use_temp_baseline", True)
+
+    base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="settings_baseline")
+    useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb")
+
+    # Contacts
+    st.subheader(T["contacts"])
+    st.session_state.setdefault("primary_phone", "")
+    st.session_state.setdefault("secondary_phone", "")
+    p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1")
+    p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2")
+
+    if st.button(T["save_settings"], key="settings_save_btn"):
+        st.session_state["baseline"] = float(base)
+        st.session_state["use_temp_baseline"] = bool(useb)
+        st.session_state["primary_phone"] = p1.strip()
+        st.session_state["secondary_phone"] = p2.strip()
+        st.success(T["saved"])
+
+    st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+
+# ================== PAGES ==================
+# ABOUT
+if page == T["about_title"]:
+    render_about_page(app_language)
 
 # HEAT MONITOR (continuous)
 elif page == T["temp_monitor"]:
@@ -738,7 +752,7 @@ elif page == T["temp_monitor"]:
 </div>
 """, unsafe_allow_html=True)
 
-            # Log reason form when above threshold (robust save)
+            # Log reason form when above threshold
             if st.session_state["live_smoothed"]:
                 latest = st.session_state["live_smoothed"][-1]
                 delta = latest - st.session_state["baseline"]
@@ -771,8 +785,7 @@ elif page == T["temp_monitor"]:
                         submitted = st.form_submit_button(T["save_entry"])
 
                     if submitted:
-                        # pause live so we don't race with reruns
-                        st.session_state["live_running"] = False
+                        st.session_state["live_running"] = False  # pause to avoid racing
                         entry = {
                             "type":"ALERT",
                             "at": utc_iso_now(),
@@ -801,16 +814,12 @@ elif page == T["temp_monitor"]:
                     dates = [r[0] for r in rows]
                     bt = [r[1] for r in rows]
                     ft = [(r[3] if r[3] is not None else r[2]) for r in rows]
-                    status_colors = ["green" if r[4]=="Safe" else "orange" if r[4] in ("Caution","High") else "red" for r in rows]
 
                     fig, ax = plt.subplots(figsize=(10,4))
                     ax.plot(range(len(dates)), bt, marker='o', label="Body Temp", linewidth=2)
                     ax.plot(range(len(dates)), ft, marker='s', label="Feels-like", linewidth=2)
-                    for i, color in enumerate(status_colors):
-                        ax.scatter(i, bt[i], s=100, edgecolor="black", zorder=5)
                     ax.set_xticks(range(len(dates)))
-                    # Display Dubai local minute precision
-                    ax.set_xticklabels([d[5:16] for d in dates], rotation=45, fontsize=9)
+                    ax.set_xticklabels([d[5:16] for d in dates], rotation=45, fontsize=9)  # Dubai-local formatted when saved
                     ax.set_ylabel("°C")
                     ax.legend()
                     ax.grid(True, alpha=0.3)
@@ -944,8 +953,13 @@ elif page == T["journal"]:
                 obj = json.loads(r[1])
             except Exception:
                 obj = {"type":"NOTE", "text": r[1]}
-            when_local = datetime.fromisoformat(r[0].replace("Z","")).astimezone(TZ_DUBAI) if "Z" in r[0] else datetime.now(TZ_DUBAI)
-            st.markdown(f"**{when_local.strftime('%Y-%m-%d %H:%M')}** — {obj.get('type','NOTE')}")
+            # Show Dubai time if possible
+            try:
+                when_dt = datetime.fromisoformat(r[0])
+            except Exception:
+                when_dt = datetime.now(timezone.utc)
+            when_local = when_dt.astimezone(TZ_DUBAI).strftime('%Y-%m-%d %H:%M')
+            st.markdown(f"**{when_local}** — {obj.get('type','NOTE')}")
             st.write(obj)
 
 # AI COMPANION
@@ -973,9 +987,8 @@ elif page == T["assistant"]:
             "last_check": last_check
         }
 
-        # Conversation
+        # Conversation state
         st.session_state.setdefault("chat", [])
-        # Show conversation
         for m in st.session_state["chat"][-8:]:
             if m["role"] == "user":
                 st.markdown(f"**You:** {m['content']}")
@@ -987,13 +1000,7 @@ elif page == T["assistant"]:
             st.session_state["chat"].append({"role":"user","content":user_q})
             if client:
                 with st.spinner("Thinking…"):
-                    prompt = f"""
-Context:
-{json.dumps(context_blurb, ensure_ascii=False)}
-
-User question:
-{user_q}
-"""
+                    prompt = f"Context:\n{json.dumps(context_blurb, ensure_ascii=False)}\n\nUser question:\n{user_q}\n"
                     ans, err = ai_response(prompt, app_language)
                     if err:
                         ans = TEXTS[app_language]["ai_unavailable"]
@@ -1005,6 +1012,13 @@ User question:
         if st.button("🗑️ Clear", type="secondary"):
             st.session_state["chat"] = []
             st.experimental_rerun()
+
+# SETTINGS
+elif page == T["settings"]:
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        render_settings_page()
 
 # LOGOUT
 elif page == T["logout"]:
