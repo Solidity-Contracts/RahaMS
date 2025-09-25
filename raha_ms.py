@@ -603,6 +603,214 @@ def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
     watch_for = list(dict.fromkeys(watch_for))[:6]
     return do_now, plan_later, watch_for
 
+# ---------- Journal formatting helpers ----------
+
+TYPE_ICONS_EN = {
+    "PLAN": "🗓️", "ALERT": "🚨", "ALERT_AUTO": "🚨", "DAILY": "🧩", "NOTE": "📝"
+}
+TYPE_ICONS_AR = TYPE_ICONS_EN  # same icons
+
+def _to_dubai_label(iso_str: str) -> str:
+    """Safely convert ISO/any stored date to 'YYYY-MM-DD HH:MM' Dubai."""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
+    except Exception:
+        try:
+            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M")
+            dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            dt = datetime.now(timezone.utc)
+    return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+def pretty_plan(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    city = entry.get("city", "—")
+    act  = entry.get("activity", "—")
+    start = entry.get("start", "—")
+    end   = entry.get("end", "—")
+    fl    = entry.get("feels_like", None)
+    hum   = entry.get("humidity", None)
+    meta  = f"Feels-like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
+    if lang == "Arabic":
+        header = f"**{when}** — **خطة** ({city})"
+        body   = f"**النشاط:** {act}\n\n**الوقت:** {start} → {end}\n\n{meta}"
+    else:
+        header = f"**{when}** — **Plan** ({city})"
+        body   = f"**Activity:** {act}\n\n**Time:** {start} → {end}\n\n{meta}"
+    return header, body
+
+def pretty_alert(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    core = entry.get("core_temp") or entry.get("body_temp")
+    periph = entry.get("peripheral_temp")
+    base = entry.get("baseline")
+    delta = (core - base) if (core is not None and base is not None) else None
+    reasons = entry.get("reasons", [])
+    symptoms = entry.get("symptoms", [])
+    note = entry.get("note", "")
+    if lang == "Arabic":
+        header = f"**{when}** — **تنبيه حراري**"
+        lines = []
+        if core is not None:   lines.append(f"**الأساسية:** {core}°م")
+        if periph is not None: lines.append(f"**الطرفية:** {periph}°م")
+        if base is not None:   lines.append(f"**الأساس:** {base}°م")
+        if delta is not None:  lines.append(f"**الفرق عن الأساس:** +{round(delta,1)}°م")
+        if reasons:            lines.append(f"**الأسباب:** " + ", ".join(reasons))
+        if symptoms:           lines.append(f"**الأعراض:** " + ", ".join(symptoms))
+        if note:               lines.append(f"**ملاحظة:** {note}")
+        body = "\n\n".join(lines)
+    else:
+        header = f"**{when}** — **Heat alert**"
+        lines = []
+        if core is not None:   lines.append(f"**Core:** {core}°C")
+        if periph is not None: lines.append(f"**Peripheral:** {periph}°C")
+        if base is not None:   lines.append(f"**Baseline:** {base}°C")
+        if delta is not None:  lines.append(f"**Δ from baseline:** +{round(delta,1)}°C")
+        if reasons:            lines.append(f"**Reasons:** " + ", ".join(reasons))
+        if symptoms:           lines.append(f"**Symptoms:** " + ", ".join(symptoms))
+        if note:               lines.append(f"**Note:** {note}")
+        body = "\n\n".join(lines)
+    return header, body
+
+# ---------- Journal formatting helpers ----------
+
+TYPE_ICONS_EN = {
+    "PLAN": "🗓️", "ALERT": "🚨", "ALERT_AUTO": "🚨", "DAILY": "🧩", "NOTE": "📝"
+}
+TYPE_ICONS_AR = TYPE_ICONS_EN  # same icons
+
+def _to_dubai_label(iso_str: str) -> str:
+    """Safely convert ISO/any stored date to 'YYYY-MM-DD HH:MM' Dubai."""
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
+    except Exception:
+        try:
+            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M")
+            dt = dt.replace(tzinfo=timezone.utc)
+        except Exception:
+            dt = datetime.now(timezone.utc)
+    return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+def pretty_plan(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    city = entry.get("city", "—")
+    act  = entry.get("activity", "—")
+    start = entry.get("start", "—")
+    end   = entry.get("end", "—")
+    fl    = entry.get("feels_like", None)
+    hum   = entry.get("humidity", None)
+    meta  = f"Feels-like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
+    if lang == "Arabic":
+        header = f"**{when}** — **خطة** ({city})"
+        body   = f"**النشاط:** {act}\n\n**الوقت:** {start} → {end}\n\n{meta}"
+    else:
+        header = f"**{when}** — **Plan** ({city})"
+        body   = f"**Activity:** {act}\n\n**Time:** {start} → {end}\n\n{meta}"
+    return header, body
+
+def pretty_alert(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    core = entry.get("core_temp") or entry.get("body_temp")
+    periph = entry.get("peripheral_temp")
+    base = entry.get("baseline")
+    delta = (core - base) if (core is not None and base is not None) else None
+    reasons = entry.get("reasons", [])
+    symptoms = entry.get("symptoms", [])
+    note = entry.get("note", "")
+    if lang == "Arabic":
+        header = f"**{when}** — **تنبيه حراري**"
+        lines = []
+        if core is not None:   lines.append(f"**الأساسية:** {core}°م")
+        if periph is not None: lines.append(f"**الطرفية:** {periph}°م")
+        if base is not None:   lines.append(f"**الأساس:** {base}°م")
+        if delta is not None:  lines.append(f"**الفرق عن الأساس:** +{round(delta,1)}°م")
+        if reasons:            lines.append(f"**الأسباب:** " + ", ".join(reasons))
+        if symptoms:           lines.append(f"**الأعراض:** " + ", ".join(symptoms))
+        if note:               lines.append(f"**ملاحظة:** {note}")
+        body = "\n\n".join(lines)
+    else:
+        header = f"**{when}** — **Heat alert**"
+        lines = []
+        if core is not None:   lines.append(f"**Core:** {core}°C")
+        if periph is not None: lines.append(f"**Peripheral:** {periph}°C")
+        if base is not None:   lines.append(f"**Baseline:** {base}°C")
+        if delta is not None:  lines.append(f"**Δ from baseline:** +{round(delta,1)}°C")
+        if reasons:            lines.append(f"**Reasons:** " + ", ".join(reasons))
+        if symptoms:           lines.append(f"**Symptoms:** " + ", ".join(symptoms))
+        if note:               lines.append(f"**Note:** {note}")
+        body = "\n\n".join(lines)
+    return header, body
+
+def pretty_daily(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    mood = entry.get("mood", "—")
+    hyd  = entry.get("hydration_glasses", "—")
+    sleep = entry.get("sleep_hours", "—")
+    fatigue = entry.get("fatigue", "—")
+    triggers = entry.get("triggers", [])
+    symptoms = entry.get("symptoms", [])
+    note = entry.get("note", "")
+    if lang == "Arabic":
+        header = f"**{when}** — **مُسجّل يومي**"
+        lines = [
+            f"**المزاج:** {mood}",
+            f"**الترطيب (أكواب):** {hyd}",
+            f"**النوم (ساعات):** {sleep}",
+            f"**التعب:** {fatigue}",
+        ]
+        if triggers: lines.append(f"**المحفزات:** " + ", ".join(triggers))
+        if symptoms: lines.append(f"**الأعراض:** " + ", ".join(symptoms))
+        if note:     lines.append(f"**ملاحظة:** {note}")
+        body = "\n\n".join(lines)
+    else:
+        header = f"**{when}** — **Daily log**"
+        lines = [
+            f"**Mood:** {mood}",
+            f"**Hydration (glasses):** {hyd}",
+            f"**Sleep (hrs):** {sleep}",
+            f"**Fatigue:** {fatigue}",
+        ]
+        if triggers: lines.append(f"**Triggers:** " + ", ".join(triggers))
+        if symptoms: lines.append(f"**Symptoms:** " + ", ".join(symptoms))
+        if note:     lines.append(f"**Note:** {note}")
+        body = "\n\n".join(lines)
+    return header, body
+
+def pretty_note(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    text = entry.get("text") or entry.get("note") or "—"
+    if lang == "Arabic":
+        header = f"**{when}** — **ملاحظة**"
+        body   = text
+    else:
+        header = f"**{when}** — **Note**"
+        body   = text
+    return header, body
+
+def render_entry_card(raw_entry_json, lang="English"):
+    """Return (title_line, body_md, icon, type_label, raw_obj)."""
+    try:
+        obj = json.loads(raw_entry_json)
+    except Exception:
+        # Plain text fallback
+        obj = {"type":"NOTE", "at": utc_iso_now(), "text": raw_entry_json}
+
+    t = obj.get("type", "NOTE")
+    icon = (TYPE_ICONS_AR if lang=="Arabic" else TYPE_ICONS_EN).get(t, "📝")
+
+    # route to pretty maker
+    if t == "PLAN":
+        header, body = pretty_plan(obj, lang)
+    elif t in ("ALERT","ALERT_AUTO"):
+        header, body = pretty_alert(obj, lang)
+    elif t == "DAILY":
+        header, body = pretty_daily(obj, lang)
+    else:
+        header, body = pretty_note(obj, lang)
+
+    return header, body, icon, t, obj
+
+
 # ================== SIDEBAR ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
@@ -1027,6 +1235,7 @@ elif page == T["journal"]:
         st.title("📒 " + TEXTS[app_language]["journal"])
         st.caption(TEXTS[app_language]["journal_hint"])
 
+        # --- quick logger (unchanged, keep your existing if you want) ---
         st.markdown("### " + T["daily_logger"])
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -1063,25 +1272,80 @@ elif page == T["journal"]:
             st.success("✅ Saved")
 
         st.markdown("---")
-        # List entries (compact)
+
+        # --- filters & listing ---
+        # Fetch journal rows
         c = get_conn().cursor()
         c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
         rows = c.fetchall()
+
         if not rows:
             st.info("No journal entries yet.")
         else:
-            for r in rows[:50]:
+            # Filter by type
+            available_types = ["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"]
+            type_filter = st.multiselect(
+                "Filter by type",
+                options=available_types,
+                default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
+                help="Show only selected entry types"
+            )
+
+            # Pagination (show N at a time)
+            st.session_state.setdefault("journal_offset", 0)
+            page_size = 12
+            start = st.session_state["journal_offset"]
+            end = start + 200  # read a chunk first to group by day
+            chunk = rows[start:end]
+
+            # Parse & filter
+            parsed = []
+            for r in chunk:
+                dt_raw, raw_json = r
+                title, body, icon, t, obj = render_entry_card(raw_json, app_language)
+                # Only include selected types
+                if t not in type_filter: 
+                    continue
+                # day header key
                 try:
-                    obj = json.loads(r[1])
+                    dt = datetime.fromisoformat(dt_raw.replace("Z","+00:00"))
                 except Exception:
-                    obj = {"type":"NOTE", "text": r[1]}
-                try:
-                    when_dt = datetime.fromisoformat(r[0])
-                except Exception:
-                    when_dt = datetime.now(timezone.utc)
-                when_local = when_dt.astimezone(TZ_DUBAI).strftime('%Y-%m-%d %H:%M')
-                st.markdown(f"**{when_local}** — {obj.get('type','NOTE')}")
-                st.write(obj)
+                    dt = datetime.now(timezone.utc)
+                day_key = dt.astimezone(TZ_DUBAI).strftime("%A, %d %B %Y")
+                parsed.append((day_key, title, body, icon, obj, raw_json))
+
+            # Group by day and render pretty cards
+            current_day = None
+            shown = 0
+            for day, title, body, icon, obj, raw_json in parsed:
+                if shown >= page_size:
+                    break
+                if day != current_day:
+                    st.markdown(f"## {day}")
+                    current_day = day
+                # Card
+                st.markdown(f"""
+<div class="big-card" style="--left:#94a3b8;margin-bottom:12px;">
+  <h3 style="margin:0">{icon} {title}</h3>
+  <div style="margin-top:6px">{body}</div>
+</div>
+""", unsafe_allow_html=True)
+                with st.expander("Details"):
+                    st.json(obj)
+                shown += 1
+
+            # Pager controls
+            colp1, colp2, colp3 = st.columns([1,1,4])
+            with colp1:
+                if st.session_state["journal_offset"] > 0:
+                    if st.button("⬅️ Newer"):
+                        st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - page_size)
+                        st.rerun()
+            with colp2:
+                if (start + shown) < len(rows):
+                    if st.button("Older ➡️"):
+                        st.session_state["journal_offset"] += page_size
+                        st.rerun()
 
 # AI COMPANION
 elif page == T["assistant"]:
