@@ -1253,7 +1253,7 @@ elif page == T["temp_monitor"]:
 
             st.rerun()
 
-        # Status card (with inline tooltips)
+# Status card (with inline tooltips)
 if st.session_state.get("last_check"):
     last = st.session_state["last_check"]
     lang_key = "AR" if app_language == "Arabic" else "EN"
