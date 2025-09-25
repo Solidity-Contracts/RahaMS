@@ -604,74 +604,59 @@ def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
     watch_for = list(dict.fromkeys(watch_for))[:6]
     return do_now, plan_later, watch_for
 
-# ---------- Journal formatting helpers ----------
-
-TYPE_ICONS_EN = {
-    "PLAN": "🗓️", "ALERT": "🚨", "ALERT_AUTO": "🚨", "DAILY": "🧩", "NOTE": "📝"
-}
-TYPE_ICONS_AR = TYPE_ICONS_EN  # same icons
-
-def _to_dubai_label(iso_str: str) -> str:
-    """Safely convert ISO/any stored date to 'YYYY-MM-DD HH:MM' Dubai."""
+def get_recent_journal_context(username: str, max_items: int = 3) -> list[dict]:
+    """Fetch most recent journal entries as short bullet context."""
     try:
-        dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
+        c = get_conn().cursor()
+        c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC LIMIT ?", (username, max_items))
+        rows = c.fetchall()
     except Exception:
+        rows = []
+    bullets = []
+    for dt_raw, raw_json in rows:
         try:
-            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M")
-            dt = dt.replace(tzinfo=timezone.utc)
+            obj = json.loads(raw_json)
         except Exception:
-            dt = datetime.now(timezone.utc)
-    return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+            obj = {"type":"NOTE","text":str(raw_json)}
+        t = obj.get("type","NOTE")
+        if t == "PLAN":
+            bullets.append(f"PLAN {obj.get('activity','')} {obj.get('start','')}→{obj.get('end','')} @ {obj.get('city','')}")
+        elif t in ("ALERT","ALERT_AUTO"):
+            core = obj.get("core_temp") or obj.get("body_temp")
+            base = obj.get("baseline")
+            d = f"+{round(core-base,1)}°C" if (core is not None and base is not None) else ""
+            bullets.append(f"ALERT core {core}°C {d}")
+        elif t == "DAILY":
+            bullets.append(f"DAILY mood {obj.get('mood','-')} hydration {obj.get('hydration_glasses','-')} sleep {obj.get('sleep_hours','-')}h")
+        else:
+            bullets.append(f"NOTE {obj.get('text','').strip()[:60]}")
+    return bullets
 
-def pretty_plan(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    city = entry.get("city", "—")
-    act  = entry.get("activity", "—")
-    start = entry.get("start", "—")
-    end   = entry.get("end", "—")
-    fl    = entry.get("feels_like", None)
-    hum   = entry.get("humidity", None)
-    meta  = f"Feels-like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
-    if lang == "Arabic":
-        header = f"**{when}** — **خطة** ({city})"
-        body   = f"**النشاط:** {act}\n\n**الوقت:** {start} → {end}\n\n{meta}"
-    else:
-        header = f"**{when}** — **Plan** ({city})"
-        body   = f"**Activity:** {act}\n\n**Time:** {start} → {end}\n\n{meta}"
-    return header, body
+def build_personal_context(app_language: str) -> str:
+    """Assemble a short context string from last heat check + recent journal."""
+    # Heat check (if available)
+    hc = st.session_state.get("last_check", {})
+    hc_line = ""
+    if hc:
+        hc_line = (
+            f"HeatCheck: body {hc.get('body_temp','?')}°C (baseline {hc.get('baseline','?')}°C), "
+            f"feels-like {hc.get('feels_like','?')}°C, humidity {hc.get('humidity','?')}%, "
+            f"status {hc.get('status','?')} in {hc.get('city','?')}."
+        )
 
-def pretty_alert(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    core = entry.get("core_temp") or entry.get("body_temp")
-    periph = entry.get("peripheral_temp")
-    base = entry.get("baseline")
-    delta = (core - base) if (core is not None and base is not None) else None
-    reasons = entry.get("reasons", [])
-    symptoms = entry.get("symptoms", [])
-    note = entry.get("note", "")
-    if lang == "Arabic":
-        header = f"**{when}** — **تنبيه حراري**"
-        lines = []
-        if core is not None:   lines.append(f"**الأساسية:** {core}°م")
-        if periph is not None: lines.append(f"**الطرفية:** {periph}°م")
-        if base is not None:   lines.append(f"**الأساس:** {base}°م")
-        if delta is not None:  lines.append(f"**الفرق عن الأساس:** +{round(delta,1)}°م")
-        if reasons:            lines.append(f"**الأسباب:** " + ", ".join(reasons))
-        if symptoms:           lines.append(f"**الأعراض:** " + ", ".join(symptoms))
-        if note:               lines.append(f"**ملاحظة:** {note}")
-        body = "\n\n".join(lines)
+    # Recent journal bullets
+    bullets = []
+    if "user" in st.session_state:
+        bullets = get_recent_journal_context(st.session_state["user"], max_items=3)
+
+    if app_language == "Arabic":
+        header = "استخدم هذه الخلفية لتخصيص النصيحة (لا تكررها للمستخدم):"
+        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
+        return f"{header}\n{hc_line}\nالسجل:\n{items}"
     else:
-        header = f"**{when}** — **Heat alert**"
-        lines = []
-        if core is not None:   lines.append(f"**Core:** {core}°C")
-        if periph is not None: lines.append(f"**Peripheral:** {periph}°C")
-        if base is not None:   lines.append(f"**Baseline:** {base}°C")
-        if delta is not None:  lines.append(f"**Δ from baseline:** +{round(delta,1)}°C")
-        if reasons:            lines.append(f"**Reasons:** " + ", ".join(reasons))
-        if symptoms:           lines.append(f"**Symptoms:** " + ", ".join(symptoms))
-        if note:               lines.append(f"**Note:** {note}")
-        body = "\n\n".join(lines)
-    return header, body
+        header = "Use this background to personalize advice (do not repeat verbatim):"
+        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
+        return f"{header}\n{hc_line}\nJournal:\n{items}"
 
 # ---------- Journal formatting helpers (robust) ----------
 
@@ -1369,53 +1354,83 @@ elif page == T["journal"]:
 
 # AI COMPANION
 elif page == T["assistant"]:
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
+    st.title("🤝 " + T["assistant"])
+
+    if not client:
+        st.warning(T["ai_unavailable"])
     else:
-        st.title("🤖 " + T["assistant_title"])
-        st.caption(T["assistant_hint"])
+        # Initialize chat history once
+        if "companion_messages" not in st.session_state:
+            st.session_state["companion_messages"] = [
+                {"role":"system", "content": (
+                    "You are Raha MS Companion: warm, concise, and practical. "
+                    "Audience: people living with MS in the Gulf (GCC). "
+                    "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
+                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
+                    "Avoid medical diagnosis; remind this is general info. "
+                    + ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
+                )}
+            ]
 
-        # Build light context
-        c = get_conn().cursor()
-        c.execute("SELECT entry FROM journal WHERE username=? ORDER BY date DESC LIMIT 5", (st.session_state["user"],))
-        jr = c.fetchall()
-        recent_journal = []
-        for (e,) in jr:
-            try:
-                recent_journal.append(json.loads(e))
-            except Exception:
-                recent_journal.append({"type":"NOTE","text":e})
-        last_check = st.session_state.get("last_check")
-        context_blurb = {"recent_journal": recent_journal, "last_check": last_check}
+        # Optional: inject fresh personal context before each user question
+        # (We do not keep it permanently in history; we prepend it to the user message.)
+        personal_context = build_personal_context(app_language)
 
-        st.session_state.setdefault("chat", [])
-        for m in st.session_state["chat"][-8:]:
-            if m["role"] == "user":
-                st.markdown(f"**You:** {m['content']}")
-            else:
-                st.markdown(f"**Assistant:** {m['content']}")
+        # Render past messages (skip the system message)
+        for m in st.session_state["companion_messages"]:
+            if m["role"] == "system":
+                continue
+            with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
+                st.markdown(m["content"])
 
-        user_q = st.text_input(T["ai_prompt_hint"], key="assistant_input")
-        if user_q:
-            st.session_state["chat"].append({"role":"user","content":user_q})
-            if client:
-                with st.spinner("Thinking…"):
-                    prompt = (
-                        "Please respond warmly and practically.\n\n"
-                        f"Context JSON:\n{json.dumps(context_blurb, ensure_ascii=False)}\n\n"
-                        f"User question:\n{user_q}\n"
-                    )
-                    ans, err = ai_response(prompt, app_language)
-                    if err:
-                        ans = T["ai_unavailable"]
-                    st.session_state["chat"].append({"role":"assistant","content":ans})
-                st.rerun()
-            else:
-                st.warning(T["ai_unavailable"])
+        # Chat input (this prevents “infinite loop” because it only fires on submit)
+        user_msg = st.chat_input(
+            "Ask me anything..." if app_language=="English" else "اسألني أي شيء..."
+        )
 
-        if st.button("🗑️ Clear", type="secondary"):
-            st.session_state["chat"] = []
-            st.rerun()
+        if user_msg:
+            # 1) Show user's message immediately
+            st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
+            with st.chat_message("user"):
+                st.markdown(user_msg)
+
+            # 2) Call the model ONCE with personal context prepended to the user content
+            # (We send a one-off messages array: system + prior turns + current turn with context)
+            with st.chat_message("assistant"):
+                with st.spinner("Thinking..."):
+                    try:
+                        # Build a one-off message list (don’t mutate old turns)
+                        msgs = st.session_state["companion_messages"].copy()
+                        # Replace last user message with context + question
+                        msgs = msgs[:-1] + [{
+                            "role":"user",
+                            "content": personal_context + "\n\nUser question:\n" + user_msg
+                        }]
+
+                        resp = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=msgs,
+                            temperature=0.6,
+                        )
+                        answer = resp.choices[0].message.content
+                    except Exception as e:
+                        answer = "Sorry, I had trouble answering right now. Please try again."
+
+                    st.markdown(answer)
+                    # 3) Save the assistant answer to history (no rerun)
+                    st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+
+        # Small toolbar below the chat
+        with st.container():
+            colA, colB = st.columns(2)
+            with colA:
+                if st.button("🧹 Reset chat"):
+                    # Keep the persona system prompt, clear the rest
+                    base = st.session_state["companion_messages"][0]
+                    st.session_state["companion_messages"] = [base]
+                    st.experimental_rerun()  # safe here; no pending user_msg
+            with colB:
+                st.caption("This chat gives general information and does not replace your medical provider.")
 
 # SETTINGS
 elif page == T["settings"]:
