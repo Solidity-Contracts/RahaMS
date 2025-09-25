@@ -449,6 +449,44 @@ def compute_risk(feels_like, humidity, body_temp, baseline, triggers, symptoms):
     else:            status, color, icon, text = "Safe", "green", "🟢", "You look safe. Keep cool and hydrated."
     return {"score": score, "status": status, "color": color, "icon": icon, "advice": text}
 
+# ---------- Heat Monitor helpers (clarity) ----------
+
+WEATHER_TTL_SEC = 15 * 60  # 15 minutes between weather refreshes unless user clicks Refresh
+
+def get_weather_cached(city: str):
+    """Session-scoped cache with visible 'last updated' time for the monitor."""
+    st.session_state.setdefault("_weather_cache", {})
+    rec = st.session_state["_weather_cache"].get(city)
+    now = time.time()
+    needs_refresh = (rec is None) or (now - rec["ts"] > WEATHER_TTL_SEC)
+    if needs_refresh:
+        data, err = get_weather(city)
+        if data is None:
+            # fall back to old if we have it
+            if rec:
+                return rec["data"], None, rec["ts"]
+            return None, err, None
+        st.session_state["_weather_cache"][city] = {"data": data, "ts": now}
+        return data, None, now
+    else:
+        return rec["data"], None, rec["ts"]
+
+def render_temp_glossary(lang="English"):
+    if lang == "Arabic":
+        with st.expander("❓ ما معنى القيم على هذه الصفحة؟", expanded=False):
+            st.markdown(
+                "- **الحرارة الأساسية (Core):** قريبة من حرارة الجسم الداخلية. ترتفع قليلًا مع الجهد أو الحرارة.\n"
+                "- **الحرارة الطرفية (Peripheral):** من الجلد/الأطراف. قد تكون أقل من الأساسية وتتحرك مع حرارة الجو.\n"
+                "- **الإحساس الحراري (Feels-like):** كيف يشعر الجو فعلًا مع الرطوبة والرياح—not مجرد حرارة الهواء."
+            )
+    else:
+        with st.expander("❓ What do these values mean?", expanded=False):
+            st.markdown(
+                "- **Core temperature:** close to your internal body temp. It can rise a bit with exertion or heat.\n"
+                "- **Peripheral temperature:** from skin/limbs. Often lower than core and moves with outdoor heat.\n"
+                "- **Feels-like:** how the weather actually **feels** on your body (air temp plus humidity/wind)."
+            )
+
 # ================== Live helpers ==================
 def moving_avg(seq, n):
     if not seq: return 0.0
@@ -1077,7 +1115,6 @@ elif page == T["temp_monitor"]:
         st.warning(T["login_first"])
     else:
         st.title("☀️ " + T["risk_dashboard"])
-        st.write(f"**{T['status']}** — {dubai_now_str()} (Dubai time)")
 
         # Session defaults
         st.session_state.setdefault("live_running", False)
@@ -1090,12 +1127,14 @@ elif page == T["temp_monitor"]:
         st.session_state.setdefault("last_alert_ts", 0.0)
         st.session_state.setdefault("_last_tick_ts", 0.0)
         st.session_state.setdefault("baseline", 37.0)
+        st.session_state.setdefault("interval_slider", SIM_INTERVAL_SEC)
 
-        colA, colB, colC = st.columns([1.2, 1, 1])
+        # Top: city + sampling + baseline badges
+        colA, colB, colC, colD = st.columns([1.2, 1, 1, 1.2])
         with colA:
             city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="monitor_city")
         with colB:
-            interval = st.slider("⏱️ " + T["sensor_update"], 10, 120, SIM_INTERVAL_SEC, 5, key="interval_slider")
+            interval = st.slider("⏱️ " + T["sensor_update"], 30, 300, st.session_state["interval_slider"], 15, key="interval_slider")
         with colC:
             if not st.session_state["live_running"] and st.button("▶️ Start monitoring", use_container_width=True):
                 st.session_state["live_running"] = True
@@ -1113,79 +1152,94 @@ elif page == T["temp_monitor"]:
             if st.session_state["live_running"] and st.button("⏸️ Pause", use_container_width=True, key="pause_btn"):
                 st.session_state["live_running"] = False
                 st.rerun()
-            if st.button("🔁 Reset session", use_container_width=True):
-                st.session_state["live_core_smoothed"] = []
-                st.session_state["live_core_raw"] = []
-                st.session_state["live_periph_smoothed"] = []
-                st.session_state["live_periph_raw"] = []
-                st.session_state["live_tick"] = 0
-                st.session_state["last_db_write_tick"] = -999
-                st.session_state["last_alert_ts"] = 0.0
+        with colD:
+            # Baseline & hint
+            st.markdown(
+                f"<div class='badge'>Baseline: <strong>{st.session_state['baseline']:.1f}°C</strong>"
+                f" <span class='small'>(change in Settings)</span></div>",
+                unsafe_allow_html=True
+            )
 
-        weather, err = get_weather(city)
-        if weather is None:
-            st.error(f"{T['weather_fail']}: {err}")
-        else:
-            now = time.time()
-            last_tick_ts = st.session_state.get("_last_tick_ts", 0.0)
-            if st.session_state["live_running"] and (now - last_tick_ts) >= st.session_state["interval_slider"]:
-                st.session_state["_last_tick_ts"] = now
-
-                prev_core = st.session_state["live_core_raw"][-1] if st.session_state["live_core_raw"] else st.session_state["baseline"]
-                core_raw = simulate_core_next(prev_core)
-                st.session_state["live_core_raw"].append(core_raw)
-                core_smoothed = moving_avg(st.session_state["live_core_raw"], SMOOTH_WINDOW)
-                st.session_state["live_core_smoothed"].append(core_smoothed)
-
-                prev_periph = st.session_state["live_periph_raw"][-1] if st.session_state["live_periph_raw"] else (core_smoothed - 0.7)
-                periph_raw = simulate_peripheral_next(core_smoothed, prev_periph, weather["feels_like"])
-                st.session_state["live_periph_raw"].append(periph_raw)
-                periph_smoothed = moving_avg(st.session_state["live_periph_raw"], SMOOTH_WINDOW)
-                st.session_state["live_periph_smoothed"].append(periph_smoothed)
-
-                st.session_state["live_tick"] += 1
-
-                latest_body = core_smoothed
-                risk = compute_risk(weather["feels_like"], weather["humidity"],
-                                    latest_body, st.session_state["baseline"], [], [])
-                st.session_state["last_check"] = {
-                    "city": city,
-                    "body_temp": latest_body,
-                    "peripheral_temp": periph_smoothed,
-                    "baseline": st.session_state["baseline"],
-                    "weather_temp": weather["temp"],
-                    "feels_like": weather["feels_like"],
-                    "humidity": weather["humidity"],
-                    "weather_desc": weather["desc"],
-                    "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
-                    "advice": risk["advice"], "triggers": [], "symptoms": [],
-                    "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
-                    "time": utc_iso_now()
-                }
-
-                if should_alert(st.session_state["live_core_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
-                    if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
-                        st.session_state["last_alert_ts"] = now
-                        st.warning("⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
-
-                if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
-                    try:
-                        insert_temp_row(
-                            st.session_state.get("user", "guest"), dubai_now_str(),
-                            latest_body, periph_smoothed,
-                            weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
-                        )
-                        st.session_state["last_db_write_tick"] = st.session_state["live_tick"]
-                    except Exception as e:
-                        st.warning(f"Could not save to DB: {e}")
-
+        # Weather (with visible last updated + refresh)
+        weather, w_err, fetched_ts = get_weather_cached(city)
+        colW1, colW2 = st.columns([1, 1])
+        with colW1:
+            if weather is None:
+                st.error(f"{T['weather_fail']}: {w_err or '—'}")
+                st.stop()
+            else:
+                fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%Y-%m-%d %H:%M") if fetched_ts else "—"
+                st.caption(f"Weather last updated: {fetched_label} (Dubai)")
+        with colW2:
+            if st.button("🔄 Refresh weather now", use_container_width=True):
+                # Bust the city cache and refetch
+                st.session_state.get("_weather_cache", {}).pop(city, None)
                 st.rerun()
 
-            if st.session_state.get("last_check"):
-                last = st.session_state["last_check"]
-                left_color = last["color"]
-                st.markdown(f"""
-<div class="big-card" style="--left:{left_color}">
+        # Ticking the simulation according to the chosen interval
+        now = time.time()
+        last_tick_ts = st.session_state.get("_last_tick_ts", 0.0)
+        if st.session_state["live_running"] and (now - last_tick_ts) >= st.session_state["interval_slider"]:
+            st.session_state["_last_tick_ts"] = now
+
+            prev_core = st.session_state["live_core_raw"][-1] if st.session_state["live_core_raw"] else st.session_state["baseline"]
+            core_raw = simulate_core_next(prev_core)
+            st.session_state["live_core_raw"].append(core_raw)
+            core_smoothed = moving_avg(st.session_state["live_core_raw"], SMOOTH_WINDOW)
+            st.session_state["live_core_smoothed"].append(core_smoothed)
+
+            prev_periph = st.session_state["live_periph_raw"][-1] if st.session_state["live_periph_raw"] else (core_smoothed - 0.7)
+            periph_raw = simulate_peripheral_next(core_smoothed, prev_periph, weather["feels_like"])
+            st.session_state["live_periph_raw"].append(periph_raw)
+            periph_smoothed = moving_avg(st.session_state["live_periph_raw"], SMOOTH_WINDOW)
+            st.session_state["live_periph_smoothed"].append(periph_smoothed)
+
+            st.session_state["live_tick"] += 1
+
+            # Update last_check snapshot
+            latest_body = core_smoothed
+            risk = compute_risk(weather["feels_like"], weather["humidity"],
+                                latest_body, st.session_state["baseline"], [], [])
+            st.session_state["last_check"] = {
+                "city": city,
+                "body_temp": latest_body,
+                "peripheral_temp": periph_smoothed,
+                "baseline": st.session_state["baseline"],
+                "weather_temp": weather["temp"],
+                "feels_like": weather["feels_like"],
+                "humidity": weather["humidity"],
+                "weather_desc": weather["desc"],
+                "status": risk["status"], "color": risk["color"], "icon": risk["icon"],
+                "advice": risk["advice"], "triggers": [], "symptoms": [],
+                "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
+                "time": utc_iso_now()
+            }
+
+            # Alert rule (≥0.5°C above baseline for 2 consecutive samples)
+            if should_alert(st.session_state["live_core_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
+                if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
+                    st.session_state["last_alert_ts"] = now
+                    st.warning("⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
+
+            # Save to DB every Nth sample
+            if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
+                try:
+                    insert_temp_row(
+                        st.session_state.get("user", "guest"), dubai_now_str(),
+                        latest_body, periph_smoothed,
+                        weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
+                    )
+                    st.session_state["last_db_write_tick"] = st.session_state["live_tick"]
+                except Exception as e:
+                    st.warning(f"Could not save to DB: {e}")
+
+            st.rerun()
+
+        # Status card
+        if st.session_state.get("last_check"):
+            last = st.session_state["last_check"]
+            st.markdown(f"""
+<div class="big-card" style="--left:{last['color']}">
   <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
   <p style="margin:6px 0 0 0">{last['advice']}</p>
   <div class="small" style="margin-top:8px">
@@ -1196,94 +1250,99 @@ elif page == T["temp_monitor"]:
     <span class="badge">Peripheral: {round(last['peripheral_temp'],1)}°C</span>
     <span class="badge">Baseline: {round(last['baseline'],1)}°C</span>
   </div>
-  <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last['peak_hours'])) if last.get('peak_hours') else "—"}</p>
+  <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last.get('peak_hours', []))) if last.get('peak_hours') else "—"}</p>
 </div>
 """, unsafe_allow_html=True)
 
-            # Log reason only when above threshold
-            if st.session_state["live_core_smoothed"]:
-                core_latest = st.session_state["live_core_smoothed"][-1]
-                delta = core_latest - st.session_state["baseline"]
-                if delta >= ALERT_DELTA_C:
-                    st.markdown(f"### {T['log_now']}")
-                    with st.form("log_reason_form", clear_on_submit=True):
-                        trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-                        chosen = st.multiselect("Triggers", trigger_options, max_selections=6)
-                        other_text = st.text_input(T["other"], "")
-                        symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-                        selected_symptoms = st.multiselect("Symptoms", symptoms_list)
-                        note_text = st.text_input(T["notes"], "")
+        # Friendly glossary
+        render_temp_glossary(app_language)
 
-                        # Tailored tips preview
-                        has_reason = (len(chosen) > 0) or (other_text.strip() != "")
-                        if has_reason and st.session_state.get("last_check"):
-                            do_now, plan_later, watch_for = tailored_tips(
-                                chosen + ([other_text] if other_text.strip() else []),
-                                st.session_state["last_check"]["feels_like"],
-                                st.session_state["last_check"]["humidity"],
-                                delta, app_language
-                            )
-                            with st.expander("🧊 Instant tips", expanded=False):
-                                st.write("**Do now**")
-                                st.write("- " + "\n- ".join(do_now) if do_now else "—")
-                                st.write("**Plan later**")
-                                st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
-                                st.write("**Watch for**")
-                                st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
+        # If above threshold, show “log reason” form (unchanged logic)
+        if st.session_state["live_core_smoothed"]:
+            core_latest = st.session_state["live_core_smoothed"][-1]
+            delta = core_latest - st.session_state["baseline"]
+            if delta >= ALERT_DELTA_C:
+                st.markdown(f"### {T['log_now']}")
+                with st.form("log_reason_form", clear_on_submit=True):
+                    trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+                    chosen = st.multiselect("Triggers", trigger_options, max_selections=6)
+                    other_text = st.text_input(T["other"], "")
+                    symptoms_list = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+                    selected_symptoms = st.multiselect("Symptoms", symptoms_list)
+                    note_text = st.text_input(T["notes"], "")
 
-                        submitted = st.form_submit_button(T["save_entry"])
+                    has_reason = (len(chosen) > 0) or (other_text.strip() != "")
+                    if has_reason and st.session_state.get("last_check"):
+                        do_now, plan_later, watch_for = tailored_tips(
+                            chosen + ([other_text] if other_text.strip() else []),
+                            st.session_state["last_check"]["feels_like"],
+                            st.session_state["last_check"]["humidity"],
+                            delta, app_language
+                        )
+                        with st.expander("🧊 Instant tips", expanded=False):
+                            st.write("**Do now**")
+                            st.write("- " + "\n- ".join(do_now) if do_now else "—")
+                            st.write("**Plan later**")
+                            st.write("- " + "\n- ".join(plan_later) if plan_later else "—")
+                            st.write("**Watch for**")
+                            st.write("- " + "\n- ".join(watch_for) if watch_for else "—")
 
-                    if submitted:
-                        st.session_state["live_running"] = False
-                        entry = {
-                            "type":"ALERT",
-                            "at": utc_iso_now(),
-                            "core_temp": round(core_latest,1),
-                            "peripheral_temp": round(st.session_state["live_periph_smoothed"][-1],1) if st.session_state["live_periph_smoothed"] else None,
-                            "baseline": round(st.session_state["baseline"],1),
-                            "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
-                            "symptoms": selected_symptoms,
-                            "note": note_text.strip()
-                        }
-                        try:
-                            insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                            st.success(T["saved"])
-                        except Exception as e:
-                            st.warning(f"Could not save note: {e}")
+                    submitted = st.form_submit_button(T["save_entry"])
 
-            # Trend chart
-            st.markdown("---")
-            st.subheader("📈 Temperature Trend")
-            c = get_conn().cursor()
-            try:
-                query = """
-                    SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
-                    FROM temps WHERE username=? ORDER BY date DESC LIMIT 60
-                """
-                c.execute(query, (st.session_state.get("user","guest"),))
-                rows = c.fetchall()
-                if rows:
-                    rows = rows[::-1]
-                    dates = [r[0] for r in rows]
-                    core = [r[1] for r in rows]
-                    periph = [r[2] for r in rows]
-                    feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
-                    fig, ax = plt.subplots(figsize=(10,4))
-                    ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
-                    ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
-                    ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
-                    ax.set_xticks(range(len(dates)))
-                    ax.set_xticklabels([d[5:16] for d in dates], rotation=45, fontsize=9)
-                    ax.set_ylabel("°C")
-                    ax.legend()
-                    ax.grid(True, alpha=0.3)
-                    ax.set_title("Core vs Peripheral vs Feels-like (Dubai time)")
-                    st.pyplot(fig)
-                else:
-                    st.info("No data yet. Start monitoring to build your trend.")
-            except Exception as e:
-                st.error(f"Chart error: {e}")
+                if submitted:
+                    st.session_state["live_running"] = False
+                    entry = {
+                        "type":"ALERT",
+                        "at": utc_iso_now(),
+                        "core_temp": round(core_latest,1),
+                        "peripheral_temp": round(st.session_state["live_periph_smoothed"][-1],1) if st.session_state["live_periph_smoothed"] else None,
+                        "baseline": round(st.session_state["baseline"],1),
+                        "reasons": chosen + ([f"Other: {other_text.strip()}"] if other_text.strip() else []),
+                        "symptoms": selected_symptoms,
+                        "note": note_text.strip()
+                    }
+                    try:
+                        insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                        st.success(T["saved"])
+                    except Exception as e:
+                        st.warning(f"Could not save note: {e}")
 
+        # Trend chart (each dot = one sample)
+        st.markdown("---")
+        st.subheader("📈 Temperature Trend")
+        c = get_conn().cursor()
+        try:
+            query = """
+                SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
+                FROM temps WHERE username=? ORDER BY date DESC LIMIT 120
+            """
+            c.execute(query, (st.session_state.get("user","guest"),))
+            rows = c.fetchall()
+            if rows:
+                rows = rows[::-1]
+                dates = [r[0] for r in rows]
+                core = [r[1] for r in rows]
+                periph = [r[2] for r in rows]
+                feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
+
+                fig, ax = plt.subplots(figsize=(10,4))
+                ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
+                ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
+                ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
+                ax.set_xticks(range(len(dates)))
+                # Show HH:MM pulled from saved Dubai time strings
+                ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
+                ax.set_ylabel("°C")
+                ax.legend()
+                ax.grid(True, alpha=0.3)
+                ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
+                st.pyplot(fig)
+
+                st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
+            else:
+                st.info("No data yet. Start monitoring to build your trend.")
+        except Exception as e:
+            st.error(f"Chart error: {e}")
 # PLANNER
 elif page == T["planner"]:
     render_planner()
