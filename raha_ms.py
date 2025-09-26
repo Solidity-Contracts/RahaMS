@@ -1484,10 +1484,10 @@ elif page == T["journal"]:
             location_options = ["خارجي", "داخلي/مكيف"]
 
         chosen_tr = st.multiselect("Triggers (optional)" if app_language == "English" else "المحفزات (اختياري)", trigger_options)
-        tr_other = st.text_input(T["other"] +  T"(trigger)", "")
+        tr_other = st.text_input(T["other"] +  T["trigger"], "")
         
         chosen_sy = st.multiselect("Symptoms (optional)" if app_language == "English" else "الأعراض (اختياري)", symptom_options)
-        sy_other = st.text_input(T["other"] + T"(symptom)", "")
+        sy_other = st.text_input(T["other"] + T["symptom"], "")
 
         free_note = st.text_area(T["free_note"], height=100)
 
