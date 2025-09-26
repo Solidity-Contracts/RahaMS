@@ -1202,7 +1202,7 @@ current_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English"
 
 
 # Map page names between languages to maintain navigation
-if app_language == "Arabic":
+if current_language == "Arabic":
     page_options = page_options_ar
     # Map current English page to Arabic equivalent
     if st.session_state.current_page < len(page_options_en):
@@ -1252,7 +1252,7 @@ with st.sidebar.expander(exp_title, expanded=True):
 # Update page selection with bilingual label
 # Render sidebar radio with stable IDs but translated labels
 page_id = st.sidebar.radio(
-    "📑 " + ("التنقل" if app_language == "Arabic" else "Navigate"),
+    "📑 " + ("التنقل" if current_language == "Arabic" else "Navigate"),
     options=PAGE_IDS,
     format_func=lambda pid: PAGE_LABELS[pid],
     index=PAGE_IDS.index(st.session_state["current_page"]),
