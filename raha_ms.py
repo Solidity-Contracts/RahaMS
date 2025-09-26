@@ -262,7 +262,8 @@ def get_conn():
     return sqlite3.connect("raha_ms.db", check_same_thread=False)
 
 def init_db():
-    conn = get_conn(); c = conn.cursor()
+    conn = get_conn()
+    c = conn.cursor()
     c.execute("""CREATE TABLE IF NOT EXISTS users(
         username TEXT PRIMARY KEY,
         password TEXT
@@ -285,7 +286,8 @@ def init_db():
     conn.commit()
 
 def migrate_db():
-    conn = get_conn(); c = conn.cursor()
+    conn = get_conn()
+    c = conn.cursor()
     c.execute("PRAGMA table_info(temps)")
     cols = [r[1] for r in c.fetchall()]
     if "peripheral_temp" not in cols:
@@ -296,7 +298,8 @@ def migrate_db():
         c.execute("ALTER TABLE temps ADD COLUMN humidity REAL")
     conn.commit()
 
-init_db(); migrate_db()
+init_db()
+migrate_db()
 
 def insert_temp_row(u, dt, body, peripheral, wtemp, feels, hum, status):
     c = get_conn().cursor()
@@ -385,7 +388,8 @@ def get_weather(city="Abu Dhabi,AE"):
         base = "https://api.openweathermap.org/data/2.5/"
 
         params_now = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "en"}
-        r_now = requests.get(base + "weather", params=params_now, timeout=6); r_now.raise_for_status()
+        r_now = requests.get(base + "weather", params=params_now, timeout=6)
+        r_now.raise_for_status()
         jn = r_now.json()
         temp  = float(jn["main"]["temp"])
         feels = float(jn["main"]["feels_like"])
@@ -393,7 +397,8 @@ def get_weather(city="Abu Dhabi,AE"):
         desc  = jn["weather"][0]["description"]
 
         params_fc = {"q": city, "appid": OPENWEATHER_API_KEY, "units": "metric", "lang": "en"}
-        r_fc = requests.get(base + "forecast", params=params_fc, timeout=8); r_fc.raise_for_status()
+        r_fc = requests.get(base + "forecast", params=params_fc, timeout=8)
+        r_fc.raise_for_status()
         jf = r_fc.json()
         items = jf.get("list", [])[:16]
         forecast = [{
@@ -595,11 +600,11 @@ def render_about_page(lang: str = "English"):
     if lang == "English":
         st.title("🧠 Welcome to Raha MS")
         st.markdown("""
-Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region’s intense heat.  
+Living with **Multiple Sclerosis (MS)** in the GCC can be uniquely challenging, especially with the region's intense heat.  
 **Raha MS** was designed **with and for people living with MS** — to bring comfort, awareness, and support to your daily life.
 """)
         st.subheader("🌡️ Why Heat Matters in MS")
-        st.info("Even a small rise in **core body temperature** (as little as **0.5°C**) can temporarily worsen MS symptoms — this is known as **Uhthoff’s phenomenon**.")
+        st.info("Even a small rise in **core body temperature** (as little as **0.5°C**) can temporarily worsen MS symptoms — this is known as **Uhthoff's phenomenon**.")
         st.subheader("✨ What This App Offers You")
         st.markdown("""
 - **Track** your body temperature and local weather.  
@@ -1080,7 +1085,7 @@ T = TEXTS[app_language]
 # ---- Global session defaults  ----
 st.session_state.setdefault("baseline", 37.0)
 st.session_state.setdefault("use_temp_baseline", True)  # harmless if you still show it in Settings
-# BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don’t crash
+# BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don't crash
 if "temp_baseline" not in st.session_state:
     st.session_state["temp_baseline"] = st.session_state["baseline"]
 
@@ -1224,9 +1229,9 @@ elif page == T["temp_monitor"]:
         with colD:
             # Baseline & hint
             baseline_text = "الأساس" if app_language == "Arabic" else "Baseline"
-change_text = "(التغيير في الإعدادات)" if app_language == "Arabic" else "(change in Settings)"
-st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['baseline']:.1f}°C</strong>"
-            f" <span class='small'>{change_text}</span></div>", unsafe_allow_html=True)
+            change_text = "(التغيير في الإعدادات)" if app_language == "Arabic" else "(change in Settings)"
+            st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['baseline']:.1f}°C</strong>"
+                        f" <span class='small'>{change_text}</span></div>", unsafe_allow_html=True)
 
         # Weather (with visible last updated + refresh)
         weather, w_err, fetched_ts = get_weather_cached(city)
@@ -1236,6 +1241,7 @@ st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['bas
                 st.error(f"{T['weather_fail']}: {w_err or '—'}")
                 st.stop()
             else:
+                fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%H:%M") if fetched_ts else "—"
                 weather_text = "آخر تحديث للطقس" if app_language == "Arabic" else "Weather last updated"
                 st.caption(f"{weather_text}: {fetched_label}")
         with colW2:
@@ -1330,7 +1336,7 @@ st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['bas
 </div>
 """, unsafe_allow_html=True)
 
-        # If above threshold, show “log reason” form
+        # If above threshold, show "log reason" form
         if st.session_state["live_core_smoothed"]:
             latest = st.session_state["live_core_smoothed"][-1]
             delta = latest - st.session_state["baseline"]
@@ -1412,11 +1418,9 @@ st.markdown(f"<div class='badge'>{baseline_text}: <strong>{st.session_state['bas
                 st.pyplot(fig)
 
             if app_language == "Arabic":
-    st.caption(f"فترة أخذ العينات: **{st.session_state['interval_slider']} ثانية** · تحديث الطقس: **كل 15 دقيقة** (أو استخدم زر التحديث).")
-else:
-    st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
+                st.caption(f"فترة أخذ العينات: **{st.session_state['interval_slider']} ثانية** · تحديث الطقس: **كل 15 دقيقة** (أو استخدم زر التحديث).")
             else:
-                st.info("No data yet. Start monitoring to build your trend.")
+                st.caption(f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or use the Refresh button).")
         except Exception as e:
             st.error(f"Chart error: {e}")
 
@@ -1482,11 +1486,11 @@ elif page == T["journal"]:
             # Filter by type
             available_types = ["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"]
             type_filter = st.multiselect(
-            T["filter_by_type"],
-            options=available_types,
-            default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
-            help="Show only selected entry types"
-)
+                T["filter_by_type"],
+                options=available_types,
+                default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
+                help="Show only selected entry types"
+            )
 
             # Pagination (show N at a time)
             st.session_state.setdefault("journal_offset", 0)
@@ -1533,12 +1537,12 @@ elif page == T["journal"]:
             colp1, colp2, colp3 = st.columns([1,1,4])
             with colp1:
                 if st.session_state["journal_offset"] > 0:
-                    if st.button("newer"):
+                    if st.button(T["newer"]):
                         st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - page_size)
                         st.rerun()
             with colp2:
                 if (start + shown) < len(rows):
-                    if st.button("older"):
+                    if st.button(T["older"]):
                         st.session_state["journal_offset"] += page_size
                         st.rerun()
 
@@ -1573,7 +1577,7 @@ elif page == T["assistant"]:
             with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
                 st.markdown(m["content"])
 
-        # Chat input (this prevents “infinite loop” because it only fires on submit)
+        # Chat input (this prevents "infinite loop" because it only fires on submit)
         user_msg = st.chat_input(T["ask_me_anything"])
 
         if user_msg:
@@ -1587,7 +1591,7 @@ elif page == T["assistant"]:
             with st.chat_message("assistant"):
                 with st.spinner(T["thinking"]):
                     try:
-                        # Build a one-off message list (don’t mutate old turns)
+                        # Build a one-off message list (don't mutate old turns)
                         msgs = st.session_state["companion_messages"].copy()
                         # Replace last user message with context + question
                         msgs = msgs[:-1] + [{
@@ -1616,12 +1620,12 @@ elif page == T["assistant"]:
                     # Keep the persona system prompt, clear the rest
                     base = st.session_state["companion_messages"][0]
                     st.session_state["companion_messages"] = [base]
-                    st.experimental_rerun()  # safe here; no pending user_msg
+                    st.rerun()
             with colB:
                 if app_language == "Arabic":
-                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+                    st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
                 else:
-                st.caption("This chat gives general information and does not replace your medical provider.")
+                    st.caption("This chat gives general information and does not replace your medical provider.")
 
 # SETTINGS
 elif page == T["settings"]:
