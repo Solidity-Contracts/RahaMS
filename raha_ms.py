@@ -1213,6 +1213,9 @@ if current_language == "Arabic":
 else:
     page_options = page_options_en
 
+# Update T dictionary based on selected language
+T = TEXTS[current_language]
+
 # Login/Register + Logout (expander)
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
 with st.sidebar.expander(exp_title, expanded=True):
@@ -1246,8 +1249,6 @@ with st.sidebar.expander(exp_title, expanded=True):
             st.success(T["logged_out"])
             st.rerun()
 
-# Update T dictionary based on selected language
-T = TEXTS[current_language]
 
 # Update page selection with bilingual label
 nav_label = "التنقل" if app_language == "Arabic" else "Navigate"
