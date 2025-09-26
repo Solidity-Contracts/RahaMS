@@ -1374,7 +1374,7 @@ else:
     """, unsafe_allow_html=True)
 
 # Set app_language for the rest of the code
-app_language = current_language
+# app_language = current_language
 
 
 # Emergency in sidebar (click-to-call)
