@@ -1216,10 +1216,42 @@ else:
 # Update T dictionary based on selected language
 T = TEXTS[current_language]
 
+# Login/Register + Logout (expander)
+exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
+with st.sidebar.expander(exp_title, expanded=True):
+    if "user" not in st.session_state:
+        username = st.text_input(T["username"], key="sb_user")
+        password = st.text_input(T["password"], type="password", key="sb_pass")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button(T["login"], key="sb_login_btn"):
+                c = get_conn().cursor()
+                c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
+                if c.fetchone():
+                    st.session_state["user"] = username
+                    st.success(T["logged_in"])
+                    st.rerun()
+                else:
+                    st.error(T["bad_creds"])
+        with col2:
+            if st.button(T["register"], key="sb_reg_btn"):
+                try:
+                    c = get_conn().cursor()
+                    c.execute("INSERT INTO users VALUES (?,?)", (username, password))
+                    get_conn().commit()
+                    st.success(T["account_created"])
+                except Exception:
+                    st.error(T["user_exists"])
+    else:
+        st.write(f"**{st.session_state['user']}**")
+        if st.button(T["logout"], key="sb_logout_btn"):
+            st.session_state.pop("user", None)
+            st.success(T["logged_out"])
+            st.rerun()
 
 # Update page selection with bilingual label
-nav_label = "التنقل" if app_language == "Arabic" else "Navigate"
-page_index = st.sidebar.radio(nav_label, 
+# nav_label = "التنقل" if app_language == "Arabic" else "Navigate"
+page_index = st.sidebar.radio("Navigation", 
                              range(len(page_options)), 
                              format_func=lambda x: page_options[x],
                              index=st.session_state.current_page,
@@ -1307,38 +1339,6 @@ else:
 # Set app_language for the rest of the code
 app_language = current_language
 
-# Login/Register + Logout (expander)
-exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
-with st.sidebar.expander(exp_title, expanded=True):
-    if "user" not in st.session_state:
-        username = st.text_input(T["username"], key="sb_user")
-        password = st.text_input(T["password"], type="password", key="sb_pass")
-        col1, col2 = st.columns(2)
-        with col1:
-            if st.button(T["login"], key="sb_login_btn"):
-                c = get_conn().cursor()
-                c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
-                if c.fetchone():
-                    st.session_state["user"] = username
-                    st.success(T["logged_in"])
-                    st.rerun()
-                else:
-                    st.error(T["bad_creds"])
-        with col2:
-            if st.button(T["register"], key="sb_reg_btn"):
-                try:
-                    c = get_conn().cursor()
-                    c.execute("INSERT INTO users VALUES (?,?)", (username, password))
-                    get_conn().commit()
-                    st.success(T["account_created"])
-                except Exception:
-                    st.error(T["user_exists"])
-    else:
-        st.write(f"**{st.session_state['user']}**")
-        if st.button(T["logout"], key="sb_logout_btn"):
-            st.session_state.pop("user", None)
-            st.success(T["logged_out"])
-            st.rerun()
 
 # Emergency in sidebar (click-to-call)
 with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
