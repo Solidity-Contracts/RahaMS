@@ -1269,21 +1269,47 @@ page_id = st.sidebar.radio(
 )
 
 # Use stable page_id stored in session_state
-page_id = st.session_state["current_page"]
+st.session_state["current_page"] = page_id
 
-# Route to the right page
+# ================== ROUTING ==================
+# Use the stable page_id everywhere else in your file:
 if page_id == "about":
     render_about_page(app_language)
-    elif page_id == "monitor":
-        # render monitor page
-    elif page_id == "planner":
-        render_planner()
-    elif page_id == "journal":
-    elif page_id == "assistant":
-    elif page_id == "exports":
-    elif page_id == "settings":
-        render_settings_page()
 
+elif page_id == "monitor":
+    # your existing monitor page code (uses T / app_language)
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        # ... monitor content ...
+        pass
+
+elif page_id == "planner":
+    render_planner()
+
+elif page_id == "journal":
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        # ... journal content ...
+        pass
+
+elif page_id == "assistant":
+    # ... assistant content ...
+    pass
+
+elif page_id == "exports":
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        # ... exports content ...
+        pass
+
+elif page_id == "settings":
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        render_settings_page()
 
 # ---- Global session defaults  ----
 st.session_state.setdefault("baseline", 37.0)
