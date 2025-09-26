@@ -1277,154 +1277,6 @@ if page_id == "about":
     render_about_page(app_language)
 
 elif page_id == "monitor":
-    # your existing monitor page code (uses T / app_language)
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        # ... monitor content ...
-        pass
-
-elif page_id == "planner":
-    render_planner()
-
-elif page_id == "journal":
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        # ... journal content ...
-        pass
-
-elif page_id == "assistant":
-    # ... assistant content ...
-    pass
-
-elif page_id == "exports":
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        # ... exports content ...
-        pass
-
-elif page_id == "settings":
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        render_settings_page()
-
-# ---- Global session defaults  ----
-st.session_state.setdefault("baseline", 37.0)
-st.session_state.setdefault("use_temp_baseline", True)
-
-# BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don't crash
-if "temp_baseline" not in st.session_state:
-    st.session_state["temp_baseline"] = st.session_state["baseline"]
-
-# RTL for Arabic - Enhanced CSS for better slider alignment
-if app_language == "Arabic":
-    st.markdown("""
-    <style>
-    body, .block-container { 
-        direction: rtl; 
-        text-align: right; 
-    }
-    [data-testid="stSidebar"] { 
-        direction: rtl; 
-        text-align: right; 
-    }
-    .stSlider > div:first-child {
-        direction: ltr;
-    }
-    .stSlider label {
-        text-align: right;
-        direction: rtl;
-        display: block;
-    }
-    .stSelectbox label,
-    .stTextInput label,
-    .stTextArea label {
-        text-align: right;
-        direction: rtl;
-    }
-    .stRadio > label {
-        direction: rtl;
-        text-align: right;
-    }
-    .stMultiSelect label {
-        text-align: right;
-        direction: rtl;
-    }
-    /* Ensure slider values display correctly in RTL */
-    .stSlider > div > div > div {
-        direction: ltr;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <style>
-    body, .block-container { 
-        direction: ltr; 
-        text-align: left; 
-    }
-    [data-testid="stSidebar"] { 
-        direction: ltr; 
-        text-align: left; 
-    }
-    </style>
-    """, unsafe_allow_html=True)
-
-# Set app_language for the rest of the code
-app_language = current_language
-
-
-# Emergency in sidebar (click-to-call)
-with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
-    st.session_state.setdefault("primary_phone", "")
-    st.session_state.setdefault("secondary_phone", "")
-    if st.session_state["primary_phone"]:
-        st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
-    if st.session_state["secondary_phone"]:
-        st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
-    if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
-        st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
-
-# ================== SETTINGS ==================
-def render_settings_page():
-    st.title("⚙️ " + T["settings"])
-    st.subheader(T["baseline_setting"])
-    st.session_state.setdefault("baseline", 37.0)
-    st.session_state.setdefault("use_temp_baseline", True)
-
-    base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="settings_baseline")
-    useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb")
-
-    st.subheader(T["contacts"])
-    st.session_state.setdefault("primary_phone", "")
-    st.session_state.setdefault("secondary_phone", "")
-    p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1")
-    p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2")
-
-    if st.button(T["save_settings"], key="settings_save_btn"):
-        st.session_state["baseline"] = float(base)
-        st.session_state["use_temp_baseline"] = bool(useb)
-        st.session_state["primary_phone"] = p1.strip()
-        st.session_state["secondary_phone"] = p2.strip()
-        st.success(T["saved"])
-
-    st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
-    st.markdown("---")
-    if "user" in st.session_state and st.button(T["logout"], type="secondary", key="settings_logout"):
-        st.session_state.pop("user", None)
-        st.success(T["logged_out"])
-        st.rerun()
-
-# ================== PAGES ==================
-# ABOUT
-if page_id == "about_title":
-    render_about_page(app_language)
-
-# HEAT MONITOR
-elif page_key == "temp_monitor":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
@@ -1518,7 +1370,7 @@ elif page_key == "temp_monitor":
                 "city": city,
                 "body_temp": latest_body,
                 "peripheral_temp": periph_smoothed,
-                "baseline": st.session_state["baseline"],
+                "baseline": st.session_state['baseline'],
                 "weather_temp": weather["temp"],
                 "feels_like": weather["feels_like"],
                 "humidity": weather["humidity"],
@@ -1670,12 +1522,10 @@ elif page_key == "temp_monitor":
         except Exception as e:
             st.error(f"Chart error: {e}")
 
-# PLANNER
-elif page_key == "planner":
+elif page_id == "planner":
     render_planner()
 
-# JOURNAL
-elif page_key == "journal":
+elif page_id == "journal":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
@@ -1826,8 +1676,7 @@ elif page_key == "journal":
                         st.session_state["journal_offset"] += page_size
                         st.rerun()
 
-# AI COMPANION
-elif page_key == "assistant":
+elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
 
     if not client:
@@ -1905,15 +1754,7 @@ elif page_key == "assistant":
                 else:
                     st.caption("This chat gives general information and does not replace your medical provider.")
 
-# SETTINGS
-elif page_key == "settings":
-    if "user" not in st.session_state:
-        st.warning(T["login_first"])
-    else:
-        render_settings_page()
-
-# EXPORTS
-elif page_key == "exports":
+elif page_id == "exports":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
@@ -1956,3 +1797,108 @@ elif page_key == "exports":
             file_name="Journal.csv", mime="text/csv",
             use_container_width=True
         )
+
+elif page_id == "settings":
+    if "user" not in st.session_state:
+        st.warning(T["login_first"])
+    else:
+        st.title("⚙️ " + T["settings"])
+        st.subheader(T["baseline_setting"])
+        st.session_state.setdefault("baseline", 37.0)
+        st.session_state.setdefault("use_temp_baseline", True)
+
+        base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="settings_baseline")
+        useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb")
+
+        st.subheader(T["contacts"])
+        st.session_state.setdefault("primary_phone", "")
+        st.session_state.setdefault("secondary_phone", "")
+        p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1")
+        p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2")
+
+        if st.button(T["save_settings"], key="settings_save_btn"):
+            st.session_state["baseline"] = float(base)
+            st.session_state["use_temp_baseline"] = bool(useb)
+            st.session_state["primary_phone"] = p1.strip()
+            st.session_state["secondary_phone"] = p2.strip()
+            st.success(T["saved"])
+
+        st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+        st.markdown("---")
+        if "user" in st.session_state and st.button(T["logout"], type="secondary", key="settings_logout"):
+            st.session_state.pop("user", None)
+            st.success(T["logged_out"])
+            st.rerun()
+
+# ---- Global session defaults  ----
+st.session_state.setdefault("baseline", 37.0)
+st.session_state.setdefault("use_temp_baseline", True)
+
+# BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don't crash
+if "temp_baseline" not in st.session_state:
+    st.session_state["temp_baseline"] = st.session_state["baseline"]
+
+# RTL for Arabic - Enhanced CSS for better slider alignment
+if app_language == "Arabic":
+    st.markdown("""
+    <style>
+    body, .block-container { 
+        direction: rtl; 
+        text-align: right; 
+    }
+    [data-testid="stSidebar"] { 
+        direction: rtl; 
+        text-align: right; 
+    }
+    .stSlider > div:first-child {
+        direction: ltr;
+    }
+    .stSlider label {
+        text-align: right;
+        direction: rtl;
+        display: block;
+    }
+    .stSelectbox label,
+    .stTextInput label,
+    .stTextArea label {
+        text-align: right;
+        direction: rtl;
+    }
+    .stRadio > label {
+        direction: rtl;
+        text-align: right;
+    }
+    .stMultiSelect label {
+        text-align: right;
+        direction: rtl;
+    }
+    /* Ensure slider values display correctly in RTL */
+    .stSlider > div > div > div {
+        direction: ltr;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+    body, .block-container { 
+        direction: ltr; 
+        text-align: left; 
+    }
+    [data-testid="stSidebar"] { 
+        direction: ltr; 
+        text-align: left; 
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Emergency in sidebar (click-to-call)
+with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
+    st.session_state.setdefault("primary_phone", "")
+    st.session_state.setdefault("secondary_phone", "")
+    if st.session_state["primary_phone"]:
+        st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
+    if st.session_state["secondary_phone"]:
+        st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
+    if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
+        st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
