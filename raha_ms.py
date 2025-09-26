@@ -1250,12 +1250,14 @@ with st.sidebar.expander(exp_title, expanded=True):
             st.rerun()
 
 # Update page selection with bilingual label
-# nav_label = "التنقل" if app_language == "Arabic" else "Navigate"
-page_index = st.sidebar.radio("Navigation", 
-                             range(len(page_options)), 
-                             format_func=lambda x: page_options[x],
-                             index=st.session_state.current_page,
-                             key="nav_radio")
+# Render sidebar radio with stable IDs but translated labels
+page_id = st.sidebar.radio(
+    "📑 " + ("التنقل" if app_language == "Arabic" else "Navigate"),
+    options=PAGE_IDS,
+    format_func=lambda pid: PAGE_LABELS[pid],
+    index=PAGE_IDS.index(st.session_state["current_page"]),
+    key="nav_radio"
+)
 
 # Store current page for next render
 st.session_state.current_page = page_index
