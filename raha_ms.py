@@ -1440,19 +1440,49 @@ elif page == T["journal"]:
         st.markdown("### " + T["daily_logger"])
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            mood = st.selectbox(T["mood"], ["🙂 Okay","😌 Calm","😕 Low","😣 Stressed","😴 Tired"])
+            # Define mood options based on language
+            if app_language == "English":
+                mood_options = ["🙂 Okay", "😌 Calm", "😕 Low", "😣 Stressed", "😴 Tired"]
+            else:
+                mood_options = ["🙂 بخير", "😌 هادئ", "😕 منخفض", "😣 متوتر", "😴 متعب"]
+            
+            mood = st.selectbox(T["mood"], mood_options)
+        
         with col2:
             hydration = st.slider(T["hydration"], 0, 12, 6)
+        
         with col3:
             sleep = st.slider(T["sleep"], 0, 12, 7)
+        
         with col4:
-            fatigue = st.slider(T["fatigue"], 0, 10, 4)
+            # Define fatigue options based on language
+            if app_language == "English":
+                fatigue_options = [f"{i}/10" for i in range(0, 11)]
+            else:
+                fatigue_options = [f"{i}/10" for i in range(0, 11)]  # Numbers are universal
+            
+            fatigue = st.selectbox(T["fatigue"], fatigue_options)
 
-        trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
-        chosen_tr = st.multiselect("Triggers (optional)", trigger_options)
+        # Define trigger and symptom options based on language
+        if app_language == "English":
+            trigger_options = TRIGGERS_EN
+            symptom_options = SYMPTOMS_EN
+            other_text = "Other"
+            plan_activities = ["Walk", "Groceries", "Beach", "Errand"]
+            activity_options = ["Light walk (20–30 min)", "Moderate exercise (45 min)", "Outdoor errand (30–60 min)", "Beach (60–90 min)"]
+            location_options = ["Outdoor", "Indoor/AC"]
+        else:
+            trigger_options = TRIGGERS_AR
+            symptom_options = SYMPTOMS_AR
+            other_text = "أخرى"
+            plan_activities = ["مشي", "تسوق", "شاطئ", "مهمة"]
+            activity_options = ["مشي خفيف (20-30 دقيقة)", "تمريين متوسط (45 دقيقة)", "مهمة خارجية (30-60 دقيقة)", "شاطئ (60-90 دقيقة)"]
+            location_options = ["خارجي", "داخلي/مكيف"]
+
+        chosen_tr = st.multiselect("Triggers (optional)" if app_language == "English" else "المحفزات (اختياري)", trigger_options)
         tr_other = st.text_input(T["other"] + " (trigger)", "")
-        symptom_options = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-        chosen_sy = st.multiselect("Symptoms (optional)", symptom_options)
+        
+        chosen_sy = st.multiselect("Symptoms (optional)" if app_language == "English" else "الأعراض (اختياري)", symptom_options)
         sy_other = st.text_input(T["other"] + " (symptom)", "")
 
         free_note = st.text_area(T["free_note"], height=100)
@@ -1481,7 +1511,7 @@ elif page == T["journal"]:
         rows = c.fetchall()
 
         if not rows:
-            st.info("No journal entries yet.")
+            st.info("No journal entries yet." if app_language == "English" else "لا توجد مدخلات في اليوميات بعد.")
         else:
             # Filter by type
             available_types = ["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"]
@@ -1489,7 +1519,7 @@ elif page == T["journal"]:
                 T["filter_by_type"],
                 options=available_types,
                 default=["PLAN","ALERT","ALERT_AUTO","DAILY","NOTE"],
-                help="Show only selected entry types"
+                help="Show only selected entry types" if app_language == "English" else "إظهار أنواع المدخلات المحددة فقط"
             )
 
             # Pagination (show N at a time)
