@@ -1268,21 +1268,22 @@ page_id = st.sidebar.radio(
     key="nav_radio"
 )
 
-st.session_state["current_page"] = page_id  # persist across reruns
+# Use stable page_id stored in session_state
+page_id = st.session_state["current_page"]
 
-# Map page index to page key
-page_mapping = {
-    0: "about_title",
-    1: "temp_monitor", 
-    2: "planner",
-    3: "journal",
-    4: "assistant",
-    5: "exports",
-    6: "settings"
-}
+# Route to the right page
+if page_id == "about":
+    render_about_page(app_language)
+elif page_id == "monitor":
+    # render monitor page
+elif page_id == "planner":
+    render_planner()
+elif page_id == "journal":
+elif page_id == "assistant":
+elif page_id == "exports":
+elif page_id == "settings":
+    render_settings_page()
 
-page_key = page_mapping.get(page_index, "about_title")
-current_page = T[page_key]
 
 # ---- Global session defaults  ----
 st.session_state.setdefault("baseline", 37.0)
