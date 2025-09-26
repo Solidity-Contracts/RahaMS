@@ -1374,7 +1374,7 @@ else:
     """, unsafe_allow_html=True)
 
 # Set app_language for the rest of the code
-# app_language = current_language
+app_language = current_language
 
 
 # Emergency in sidebar (click-to-call)
@@ -1420,7 +1420,7 @@ def render_settings_page():
 
 # ================== PAGES ==================
 # ABOUT
-if page_key == "about_title":
+if page_id == "about_title":
     render_about_page(app_language)
 
 # HEAT MONITOR
