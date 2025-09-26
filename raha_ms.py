@@ -1320,7 +1320,7 @@ if "temp_baseline" not in st.session_state:
     st.session_state["temp_baseline"] = st.session_state["baseline"]
 
 # RTL for Arabic - Enhanced CSS for better slider alignment
-if current_language == "Arabic":
+if app_language == "Arabic":
     st.markdown("""
     <style>
     body, .block-container { 
