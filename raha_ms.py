@@ -1187,36 +1187,46 @@ def slider_with_icon(label, min_value, max_value, value, step=1, icon="📊"):
     return result
 
 # ================== SIDEBAR ==================
+# --- Sidebar: logo ---
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
-# Store current page before language change to preserve navigation
-if 'current_page' not in st.session_state:
-    st.session_state.current_page = 0
+# --- Sidebar: language selector (set BEFORE anything that uses T/app_language) ---
+app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
+T = TEXTS[app_language]
 
-# Get current page index before language change
-page_options_en = ["About Raha MS", "Heat Safety Monitor", "Planner & Tips", "Journal", "AI Companion", "Exports", "Settings"]
-page_options_ar = ["عن تطبيق راحة إم إس", "مراقبة السلامة الحرارية", "المخطط والنصائح", "اليوميات", "المساعد الذكي", "التصدير", "الإعدادات"]
+# RTL for Arabic
+if app_language == "Arabic":
+    st.markdown("""
+    <style>
+    body, .block-container { direction: rtl; text-align: right; }
+    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+    </style>
+    """, unsafe_allow_html=True)
 
-current_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
+# --- Navigation with stable IDs so page doesn't jump on language change ---
+PAGE_IDS = ["about", "monitor", "planner", "journal", "assistant", "exports", "settings"]
+PAGE_LABELS = {
+    "about": T["about_title"],
+    "monitor": T["temp_monitor"],
+    "planner": T["planner"],
+    "journal": T["journal"],
+    "assistant": T["assistant"],
+    "exports": T["exports"],
+    "settings": T["settings"],
+}
 
+# One-time migration: if an old int index is stored, convert it to a stable ID
+if "current_page" not in st.session_state:
+    st.session_state["current_page"] = "about"   # default
+elif isinstance(st.session_state["current_page"], int):
+    # map old index to ID safely
+    try:
+        st.session_state["current_page"] = PAGE_IDS[st.session_state["current_page"]]
+    except Exception:
+        st.session_state["current_page"] = "about"
 
-# Map page names between languages to maintain navigation
-if current_language == "Arabic":
-    page_options = page_options_ar
-    # Map current English page to Arabic equivalent
-    if st.session_state.current_page < len(page_options_en):
-        current_page_name = page_options_en[st.session_state.current_page]
-        if current_page_name in page_options_en:
-            arabic_index = page_options_en.index(current_page_name)
-            st.session_state.current_page = arabic_index
-else:
-    page_options = page_options_en
-
-# Update T dictionary based on selected language
-T = TEXTS[current_language]
-
-# Login/Register + Logout (expander)
+# --- Login/Register + Logout (expander) ---
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
 with st.sidebar.expander(exp_title, expanded=True):
     if "user" not in st.session_state:
@@ -1249,18 +1259,16 @@ with st.sidebar.expander(exp_title, expanded=True):
             st.success(T["logged_out"])
             st.rerun()
 
-# Update page selection with bilingual label
-# Render sidebar radio with stable IDs but translated labels
+# --- Page navigation (uses stable IDs; labels localized) ---
 page_id = st.sidebar.radio(
-    "📑 " + ("التنقل" if current_language == "Arabic" else "Navigate"),
+    "📑 " + ("التنقل" if app_language == "Arabic" else "Navigate"),
     options=PAGE_IDS,
     format_func=lambda pid: PAGE_LABELS[pid],
     index=PAGE_IDS.index(st.session_state["current_page"]),
     key="nav_radio"
 )
 
-# Store current page for next render
-st.session_state.current_page = page_index
+st.session_state["current_page"] = page_id  # persist across reruns
 
 # Map page index to page key
 page_mapping = {
