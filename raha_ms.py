@@ -1274,15 +1274,15 @@ page_id = st.session_state["current_page"]
 # Route to the right page
 if page_id == "about":
     render_about_page(app_language)
-elif page_id == "monitor":
-    # render monitor page
-elif page_id == "planner":
-    render_planner()
-elif page_id == "journal":
-elif page_id == "assistant":
-elif page_id == "exports":
-elif page_id == "settings":
-    render_settings_page()
+    elif page_id == "monitor":
+        # render monitor page
+    elif page_id == "planner":
+        render_planner()
+    elif page_id == "journal":
+    elif page_id == "assistant":
+    elif page_id == "exports":
+    elif page_id == "settings":
+        render_settings_page()
 
 
 # ---- Global session defaults  ----
