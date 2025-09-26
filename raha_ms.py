@@ -1202,7 +1202,7 @@ current_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English"
 
 
 # Map page names between languages to maintain navigation
-if current_language == "Arabic":
+if app_language == "Arabic":
     page_options = page_options_ar
     # Map current English page to Arabic equivalent
     if st.session_state.current_page < len(page_options_en):
