@@ -114,6 +114,8 @@ TEXTS = {
         "do_now": "Do now",
         "plan_later": "Plan later",
         "watch_for": "Watch for",
+        "trigger": "Trigger",
+        "symptom":"Symptom",
         
         # NEW ADDITIONS
         "start_monitoring": "▶️ Start monitoring",
@@ -197,6 +199,8 @@ TEXTS = {
         "do_now": "افعل الآن",
         "plan_later": "خطط لاحقًا",
         "watch_for": "انتبه إلى",
+        "trigger": "محفز",
+        "symptom":"الأعراض",
         
         # NEW ARABIC ADDITIONS
         "start_monitoring": "▶️ بدء المراقبة",
