@@ -128,6 +128,20 @@ TEXTS = {
         "reset_chat": "🧹 Reset chat",
         "thinking": "Thinking...",
         "ask_me_anything": "Ask me anything...",
+        
+        # Planner specific
+        "choose_slot": "Choose a slot",
+        "plan": "Plan",
+        "activity": "Activity",
+        "duration": "Duration (minutes)",
+        "location": "Location",
+        "add_plan": "Add this as a plan",
+        "planned_saved": "Planned & saved",
+        "place_name": "Place name (e.g., Saadiyat Beach)",
+        "plan_here": "Plan here for the next hour",
+        "best_windows": "Best windows",
+        "what_if": "What-if",
+        "places": "Places",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -213,6 +227,20 @@ TEXTS = {
         "reset_chat": "🧹 إعادة تعيين المحادثة",
         "thinking": "جاري التفكير...",
         "ask_me_anything": "اسألني أي شيء...",
+        
+        # Planner specific Arabic
+        "choose_slot": "اختر فترة",
+        "plan": "خطة",
+        "activity": "النشاط",
+        "duration": "المدة (دقائق)",
+        "location": "الموقع",
+        "add_plan": "أضف هذه كخطة",
+        "planned_saved": "تم التخطيط والحفظ",
+        "place_name": "اسم المكان (مثال: شاطئ السعديات)",
+        "plan_here": "خطط هنا للساعة القادمة",
+        "best_windows": "أفضل الأوقات",
+        "what_if": "ماذا لو",
+        "places": "الأماكن",
     }
 }
 
@@ -256,6 +284,40 @@ h3 { margin-top: 0.2rem; }
 }
 .fab-call:hover { background:#dc2626; text-decoration:none; }
 @media (min-width: 992px) { .fab-call { padding: 10px 14px; font-weight: 600; } }
+
+/* RTL Support */
+[dir="rtl"] .stSlider > div:first-child {
+    direction: ltr;
+}
+[dir="rtl"] .stSlider label {
+    text-align: right;
+    direction: rtl;
+}
+[dir="rtl"] .stSelectbox label,
+[dir="rtl"] .stTextInput label,
+[dir="rtl"] .stTextArea label {
+    text-align: right;
+    direction: rtl;
+}
+[dir="rtl"] .stRadio > label {
+    direction: rtl;
+    text-align: right;
+}
+[dir="rtl"] .stMultiSelect label {
+    text-align: right;
+    direction: rtl;
+}
+
+/* Icons for sliders */
+.slider-with-icon {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.slider-icon {
+    font-size: 24px;
+    min-width: 30px;
+}
 </style>
 """
 st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
@@ -654,10 +716,11 @@ def render_planner():
         st.error(f"{T['weather_fail']}: {err}")
         return
 
+    # Use translated tab names
     if app_language == "Arabic":
-        tabs = st.tabs(["✅ أفضل الأوقات", "🤔 ماذا لو", "📍 الأماكن"])
+        tabs = st.tabs(["✅ " + T["best_windows"], "🤔 " + T["what_if"], "📍 " + T["places"]])
     else:
-        tabs = st.tabs(["✅ Best windows", "🤔 What-if", "📍 Places"])
+        tabs = st.tabs(["✅ " + T["best_windows"], "🤔 " + T["what_if"], "📍 " + T["places"]])
 
     # -----------------------------
     # TAB 1: Best windows (compact)
@@ -672,7 +735,7 @@ def render_planner():
         )
 
         if not windows:
-            st.info("No optimal windows found; consider early morning or after sunset.")
+            st.info("No optimal windows found; consider early morning or after sunset." if app_language == "English" else "لم يتم العثور على فترات مثالية؛ فكر في الصباح الباكر أو بعد الغروب.")
         else:
             rows = [{
                 "idx": i,
@@ -686,16 +749,21 @@ def render_planner():
             df = pd.DataFrame(rows)
             st.dataframe(df.drop(columns=["idx"]), hide_index=True, use_container_width=True)
 
-            st.markdown("##### Add a plan")
+            st.markdown("##### " + ("Add a plan" if app_language == "English" else "أضف خطة"))
             colA, colB = st.columns([2,1])
             with colA:
                 labeler = lambda r: f"{r['Date']} • {r['Start']}–{r['End']} (≈{r['Feels-like (°C)']}°C, {r['Humidity (%)']}%)"
                 options = [labeler(r) for r in rows]
-                pick_label = st.selectbox("Choose a slot", options, index=0, key="plan_pick")
+                pick_label = st.selectbox(T["choose_slot"], options, index=0, key="plan_pick")
                 pick_idx = rows[options.index(pick_label)]["idx"]
                 chosen = sorted(windows, key=lambda x: x["start_dt"])[pick_idx]
             with colB:
-                act = st.selectbox("Plan", ["Walk","Groceries","Beach","Errand"], key="plan_act")
+                # Translated activity options
+                if app_language == "English":
+                    activities = ["Walk", "Groceries", "Beach", "Errand"]
+                else:
+                    activities = ["مشي", "تسوق", "شاطئ", "مهمة"]
+                act = st.selectbox(T["plan"], activities, key="plan_act")
             other_act = st.text_input(T["other_activity"], key="plan_act_other")
             final_act = other_act.strip() if other_act.strip() else act
 
@@ -710,43 +778,73 @@ def render_planner():
                     "humidity": int(chosen["avg_hum"])
                 }
                 insert_journal(st.session_state["user"], utc_iso_now(), entry)
-                st.success("Saved to Journal")
+                st.success("Saved to Journal" if app_language == "English" else "تم الحفظ في اليوميات")
 
     # -----------------------------
     # TAB 2: What-if (mini wizard)
     # -----------------------------
     with tabs[1]:
-        st.caption("Try a plan now and get instant tips.")
+        st.caption("Try a plan now and get instant tips." if app_language == "English" else "جرب خطة الآن واحصل على نصائح فورية.")
         col1, col2 = st.columns([2,1])
 
         with col1:
-            what_act = st.selectbox(
-                "Activity",
-                ["Light walk (20–30 min)","Moderate exercise (45 min)","Outdoor errand (30–60 min)","Beach (60–90 min)"],
-                key="what_if_act"
-            )
-            dur = st.slider("Duration (minutes)", 10, 120, 45, 5, key="what_if_dur")
-            indoor = st.radio("Location", ["Outdoor","Indoor/AC"], horizontal=True, key="what_if_loc")
-            other_notes = st.text_area("Notes (optional)", height=80, key="what_if_notes")
+            # Translated activity options
+            if app_language == "English":
+                activity_options = ["Light walk (20–30 min)", "Moderate exercise (45 min)", "Outdoor errand (30–60 min)", "Beach (60–90 min)"]
+            else:
+                activity_options = ["مشي خفيف (20-30 دقيقة)", "تمريين متوسط (45 دقيقة)", "مهمة خارجية (30-60 دقيقة)", "شاطئ (60-90 دقيقة)"]
+            
+            what_act = st.selectbox(T["activity"], activity_options, key="what_if_act")
+            dur = st.slider(T["duration"], 10, 120, 45, 5, key="what_if_dur")
+            
+            # Translated location options
+            if app_language == "English":
+                location_options = ["Outdoor", "Indoor/AC"]
+            else:
+                location_options = ["خارجي", "داخلي/مكيف"]
+            
+            indoor = st.radio(T["location"], location_options, horizontal=True, key="what_if_loc")
+            other_notes = st.text_area(T["what_if_tips"], height=80, key="what_if_notes")
 
         with col2:
             fl = weather["feels_like"]; hum = weather["humidity"]
-            go_badge = "🟢 Go" if (fl < 34 and hum < 60) else ("🟡 Caution" if (fl < 37 and hum < 70) else "🔴 Avoid now")
-            st.markdown(f"**Now:** {go_badge} — feels-like {round(fl,1)}°C, humidity {int(hum)}%")
+            if app_language == "English":
+                go_badge = "🟢 Go" if (fl < 34 and hum < 60) else ("🟡 Caution" if (fl < 37 and hum < 70) else "🔴 Avoid now")
+            else:
+                go_badge = "🟢 اذهب" if (fl < 34 and hum < 60) else ("🟡 احترس" if (fl < 37 and hum < 70) else "🔴 تجنب الآن")
+            
+            st.markdown(f"**{'Now' if app_language == 'English' else 'الآن'}:** {go_badge} — feels-like {round(fl,1)}°C, humidity {int(hum)}%")
 
             tips_now = []
             low = what_act.lower()
-            if "walk" in low: tips_now += ["Shaded route", "Carry cool water", "Light clothing"]
-            if "exercise" in low: tips_now += ["Pre-cool 15 min", "Prefer indoor/AC", "Electrolytes if >45 min"]
-            if "errand" in low: tips_now += ["Park in shade", "Shortest route", "Pre-cool car 5–10 min"]
-            if "beach" in low: tips_now += ["Umbrella & UV hat", "Cooling towel", "Rinse to cool"]
-            if fl >= 36: tips_now += ["Cooling scarf/bandana", "Use a cooler window"]
-            if hum >= 60: tips_now += ["Prefer AC over fan", "Extra hydration"]
+            if "walk" in low or "مشي" in low: 
+                tips_now.append("Shaded route" if app_language == "English" else "مسار مظلل")
+                tips_now.append("Carry cool water" if app_language == "English" else "احمل ماءً باردًا")
+                tips_now.append("Light clothing" if app_language == "English" else "ملابس خفيفة")
+            if "exercise" in low or "تمريين" in low: 
+                tips_now.append("Pre-cool 15 min" if app_language == "English" else "تبريد مسبق 15 دقيقة")
+                tips_now.append("Prefer indoor/AC" if app_language == "English" else "افضل الداخلي/مكيف")
+                tips_now.append("Electrolytes if >45 min" if app_language == "English" else "إلكتروليتات إذا كانت المدة >45 دقيقة")
+            if "errand" in low or "مهمة" in low: 
+                tips_now.append("Park in shade" if app_language == "English" else "اركن في الظل")
+                tips_now.append("Shortest route" if app_language == "English" else "أقصر طريق")
+                tips_now.append("Pre-cool car 5–10 min" if app_language == "English" else "تبريد السيارة مسبقًا 5-10 دقائق")
+            if "beach" in low or "شاطئ" in low: 
+                tips_now.append("Umbrella & UV hat" if app_language == "English" else "مظلة وقبعة للأشعة فوق البنفسجية")
+                tips_now.append("Cooling towel" if app_language == "English" else "منشفة تبريد")
+                tips_now.append("Rinse to cool" if app_language == "English" else "اشطف لتبريد")
+            if fl >= 36: 
+                tips_now.append("Cooling scarf/bandana" if app_language == "English" else "وشاح/باندانا للتبريد")
+                tips_now.append("Use a cooler window" if app_language == "English" else "استخدم نافذة أكثر برودة")
+            if hum >= 60: 
+                tips_now.append("Prefer AC over fan" if app_language == "English" else "افضل التكييف على المروحة")
+                tips_now.append("Extra hydration" if app_language == "English" else "ترطيب إضافي")
+            
             tips_now = list(dict.fromkeys(tips_now))[:8]
-            st.markdown("**Tips:**")
+            st.markdown("**" + ("Tips" if app_language == "English" else "نصائح") + ":**")
             st.markdown("- " + "\n- ".join(tips_now) if tips_now else "—")
 
-            if st.button("Add this as a plan", key="what_if_add_plan"):
+            if st.button(T["add_plan"], key="what_if_add_plan"):
                 now_dxb = datetime.now(TZ_DUBAI)
                 entry = {
                     "type":"PLAN",
@@ -757,10 +855,10 @@ def render_planner():
                     "activity": what_act + (f" — {other_notes.strip()}" if other_notes.strip() else ""),
                     "feels_like": round(fl, 1),
                     "humidity": int(hum),
-                    "indoor": (indoor == "Indoor/AC")
+                    "indoor": (indoor == ("Indoor/AC" if app_language == "English" else "داخلي/مكيف"))
                 }
                 insert_journal(st.session_state["user"], utc_iso_now(), entry)
-                st.success("Planned & saved")
+                st.success(T["planned_saved"])
 
             if client and st.button(T["ask_ai_tips"], key="what_if_ai"):
                 q = f"My plan: {what_act} for {dur} minutes. Location: {indoor}. Notes: {other_notes}. Current feels-like {round(fl,1)}°C, humidity {int(hum)}%."
@@ -771,16 +869,16 @@ def render_planner():
     # TAB 3: Places (Saadiyat, etc.)
     # -----------------------------
     with tabs[2]:
-        st.caption("Check a specific place in your city, like a beach or a park.")
-        place_q = st.text_input("Place name (e.g., Saadiyat Beach)", key="place_q")
+        st.caption("Check a specific place in your city, like a beach or a park." if app_language == "English" else "تحقق من مكان محدد في مدينتك، مثل شاطئ أو حديقة.")
+        place_q = st.text_input(T["place_name"], key="place_q")
         if place_q:
             place, lat, lon = geocode_place(place_q)
             pw = get_weather_by_coords(lat, lon) if lat and lon else None
             if pw:
                 st.info(f"**{place}** — feels-like {round(pw['feels_like'],1)}°C • humidity {int(pw['humidity'])}% • {pw['desc']}")
                 better = "place" if pw["feels_like"] < weather["feels_like"] else "city"
-                st.caption(f"Cooler now: **{place if better=='place' else city}**")
-                if st.button("Plan here for the next hour", key="place_plan"):
+                st.caption(f"{'Cooler now' if app_language == 'English' else 'أبرد الآن'}: **{place if better=='place' else city}**")
+                if st.button(T["plan_here"], key="place_plan"):
                     now_dxb = datetime.now(TZ_DUBAI)
                     entry = {
                         "type": "PLAN",
@@ -788,14 +886,14 @@ def render_planner():
                         "city": place,
                         "start": now_dxb.strftime("%Y-%m-%d %H:%M"),
                         "end": (now_dxb + timedelta(minutes=60)).strftime("%Y-%m-%d %H:%M"),
-                        "activity": "Visit",
+                        "activity": "Visit" if app_language == "English" else "زيارة",
                         "feels_like": round(pw['feels_like'], 1),
                         "humidity": int(pw['humidity'])
                     }
                     insert_journal(st.session_state["user"], utc_iso_now(), entry)
-                    st.success("Planned & saved")
+                    st.success(T["planned_saved"])
             else:
-                st.warning("Couldn't fetch that place's weather.")
+                st.warning("Couldn't fetch that place's weather." if app_language == "English" else "تعذر جلب طقس هذا المكان.")
 
     st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather.get('peak_hours', [])) if weather.get('peak_hours') else "—"))
 
@@ -837,28 +935,28 @@ def best_windows_from_forecast(
 def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
     do_now, plan_later, watch_for = [], [], []
     if delta >= 0.5:
-        do_now += ["Cool down (AC/cool shower)", "Sip cool water", "Rest 15–20 min"]
+        do_now += ["Cool down (AC/cool shower)", "Sip cool water", "Rest 15–20 min"] if lang == "English" else ["تبرد (مكيف/دش بارد)", "اشرب ماءً باردًا", "ارتح 15-20 دقيقة"]
     if feels_like >= 36:
-        do_now += ["Use cooling scarf/pack", "Stay in shade/indoors"]
-        plan_later += ["Shift activity to a cooler window"]
+        do_now += ["Use cooling scarf/pack", "Stay in shade/indoors"] if lang == "English" else ["استخدم وشاح/حزمة تبريد", "ابق في الظل/داخل المباني"]
+        plan_later += ["Shift activity to a cooler window"] if lang == "English" else ["انقل النشاط إلى نافذة أكثر برودة"]
     if humidity >= 60:
-        plan_later += ["Prefer AC over fan", "Add electrolytes if sweating"]
+        plan_later += ["Prefer AC over fan", "Add electrolytes if sweating"] if lang == "English" else ["افضل التكييف على المروحة", "أضف إلكتروليتات إذا كنت تتعرق"]
 
     for r in reasons:
         rl = r.lower()
         if "exercise" in rl or "رياضة" in rl:
-            do_now += ["Stop/pause activity", "Pre-cool next time 15 min"]
-            plan_later += ["Shorter intervals, more breaks"]
+            do_now += ["Stop/pause activity", "Pre-cool next time 15 min"] if lang == "English" else ["أوقف/أجل النشاط", "تبرد مسبقًا المرة القادمة 15 دقيقة"]
+            plan_later += ["Shorter intervals, more breaks"] if lang == "English" else ["فترات أقصر، فترات راحة أكثر"]
         if "sun" in rl or "شمس" in rl:
-            do_now += ["Move to shade/indoors"]
+            do_now += ["Move to shade/indoors"] if lang == "English" else ["انتقل إلى الظل/داخل المباني"]
         if "sauna" in rl or "hot bath" in rl or "ساونا" in rl:
-            do_now += ["Cool shower afterwards", "Avoid for now"]
+            do_now += ["Cool shower afterwards", "Avoid for now"] if lang == "English" else ["دش بارد بعد ذلك", "تجنب الآن"]
         if "car" in rl or "سيارة" in rl:
-            do_now += ["Pre-cool car 5–10 min"]
+            do_now += ["Pre-cool car 5–10 min"] if lang == "English" else ["تبرد السيارة مسبقًا 5-10 دقائق"]
         if "kitchen" in rl or "cooking" in rl or "مطبخ" in rl:
-            plan_later += ["Ventilate kitchen, cook earlier"]
+            plan_later += ["Ventilate kitchen, cook earlier"] if lang == "English" else ["تهوية المطبخ، طهي مبكر"]
         if "fever" in rl or "illness" in rl or "حمّى" in rl:
-            watch_for += ["Persistent high temp", "New neurological symptoms"]
+            watch_for += ["Persistent high temp", "New neurological symptoms"] if lang == "English" else ["ارتفاع درجة الحرارة المستمر", "أعراض عصبية جديدة"]
 
     do_now = list(dict.fromkeys(do_now))[:6]
     plan_later = list(dict.fromkeys(plan_later))[:6]
@@ -1072,35 +1170,138 @@ def render_entry_card(raw_entry_json, lang="English"):
         header, body = pretty_alert(obj, lang)
     elif t == "DAILY":
         header, body = pretty_daily(obj, lang)
-        # ^ This is where your previous crash happened; now it's safe.
     else:
         header, body = pretty_note(obj, lang)
 
     return header, body, icon, t, obj
 
+# Custom slider with icon
+def slider_with_icon(label, min_value, max_value, value, step=1, icon="📊"):
+    st.markdown(f"""
+    <div class="slider-with-icon">
+        <span class="slider-icon">{icon}</span>
+        <div style="flex-grow:1;">
+    """, unsafe_allow_html=True)
+    result = st.slider(label, min_value, max_value, value, step)
+    st.markdown("</div></div>", unsafe_allow_html=True)
+    return result
 
 # ================== SIDEBAR ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
-app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"])
-T = TEXTS[app_language]
+# Store current page before language change to preserve navigation
+if 'current_page' not in st.session_state:
+    st.session_state.current_page = 0
+
+# Get current page index before language change
+page_options_en = ["About Raha MS", "Heat Safety Monitor", "Planner & Tips", "Journal", "AI Companion", "Exports", "Settings"]
+page_options_ar = ["عن تطبيق راحة إم إس", "مراقبة السلامة الحرارية", "المخطط والنصائح", "اليوميات", "المساعد الذكي", "التصدير", "الإعدادات"]
+
+current_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
+
+# Map page names between languages to maintain navigation
+if current_language == "Arabic":
+    page_options = page_options_ar
+    # Map current English page to Arabic equivalent
+    if st.session_state.current_page < len(page_options_en):
+        current_page_name = page_options_en[st.session_state.current_page]
+        if current_page_name in page_options_en:
+            arabic_index = page_options_en.index(current_page_name)
+            st.session_state.current_page = arabic_index
+else:
+    page_options = page_options_en
+
+# Update T dictionary based on selected language
+T = TEXTS[current_language]
+
+# Update page selection
+page_index = st.sidebar.radio("Navigate", range(len(page_options)), 
+                             format_func=lambda x: page_options[x],
+                             index=st.session_state.current_page,
+                             key="nav_radio")
+
+# Store current page for next render
+st.session_state.current_page = page_index
+
+# Map page index to page key
+page_mapping = {
+    0: "about_title",
+    1: "temp_monitor", 
+    2: "planner",
+    3: "journal",
+    4: "assistant",
+    5: "exports",
+    6: "settings"
+}
+
+page_key = page_mapping.get(page_index, "about_title")
+current_page = T[page_key]
 
 # ---- Global session defaults  ----
 st.session_state.setdefault("baseline", 37.0)
-st.session_state.setdefault("use_temp_baseline", True)  # harmless if you still show it in Settings
+st.session_state.setdefault("use_temp_baseline", True)
+
 # BACKWARD COMPAT: if old code referenced temp_baseline, mirror baseline so old reads don't crash
 if "temp_baseline" not in st.session_state:
     st.session_state["temp_baseline"] = st.session_state["baseline"]
 
-# RTL for Arabic
-if app_language == "Arabic":
+# RTL for Arabic - Enhanced CSS for better slider alignment
+if current_language == "Arabic":
     st.markdown("""
     <style>
-    body, .block-container { direction: rtl; text-align: right; }
-    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+    body, .block-container { 
+        direction: rtl; 
+        text-align: right; 
+    }
+    [data-testid="stSidebar"] { 
+        direction: rtl; 
+        text-align: right; 
+    }
+    .stSlider > div:first-child {
+        direction: ltr;
+    }
+    .stSlider label {
+        text-align: right;
+        direction: rtl;
+        display: block;
+    }
+    .stSelectbox label,
+    .stTextInput label,
+    .stTextArea label {
+        text-align: right;
+        direction: rtl;
+    }
+    .stRadio > label {
+        direction: rtl;
+        text-align: right;
+    }
+    .stMultiSelect label {
+        text-align: right;
+        direction: rtl;
+    }
+    /* Ensure slider values display correctly in RTL */
+    .stSlider > div > div > div {
+        direction: ltr;
+    }
     </style>
     """, unsafe_allow_html=True)
+else:
+    st.markdown("""
+    <style>
+    body, .block-container { 
+        direction: ltr; 
+        text-align: left; 
+    }
+    [data-testid="stSidebar"] { 
+        direction: ltr; 
+        text-align: left; 
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+# Set app_language for the rest of the code
+app_language = current_language
 
 # Login/Register + Logout (expander)
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
@@ -1140,17 +1341,11 @@ with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
     st.session_state.setdefault("primary_phone", "")
     st.session_state.setdefault("secondary_phone", "")
     if st.session_state["primary_phone"]:
-        st.markdown(f"**Primary:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
+        st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
     if st.session_state["secondary_phone"]:
-        st.markdown(f"**Secondary:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
+        st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
     if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
-        st.caption("Set numbers in Settings to enable quick call.")
-
-# Navigation (added Exports)
-page = st.sidebar.radio(
-    "Navigate",
-    [T["about_title"], T["temp_monitor"], T["planner"], T["journal"], T["assistant"], T["exports"], T["settings"]]
-)
+        st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
 
 # ================== SETTINGS ==================
 def render_settings_page():
@@ -1184,11 +1379,11 @@ def render_settings_page():
 
 # ================== PAGES ==================
 # ABOUT
-if page == T["about_title"]:
+if page_key == "about_title":
     render_about_page(app_language)
 
 # HEAT MONITOR
-elif page == T["temp_monitor"]:
+elif page_key == "temp_monitor":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
@@ -1297,7 +1492,10 @@ elif page == T["temp_monitor"]:
             if should_alert(st.session_state["live_core_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
                 if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
                     st.session_state["last_alert_ts"] = now
-                    st.warning("⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest.")
+                    alert_msg = "⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest."
+                    if app_language == "Arabic":
+                        alert_msg = "⚠️ ارتفعت درجة حرارة الجسم الأساسية بمقدار ≥ 0.5°م فوق المستوى الأساسي. فكر في التبريد والراحة."
+                    st.warning(alert_msg)
 
             # Save to DB every Nth sample
             if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
@@ -1418,7 +1616,10 @@ elif page == T["temp_monitor"]:
                 ax.set_ylabel("°C")
                 ax.legend()
                 ax.grid(True, alpha=0.3)
-                ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
+                chart_title = "Core vs Peripheral vs Feels-like (one dot = one sample)"
+                if app_language == "Arabic":
+                    chart_title = "الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)"
+                ax.set_title(chart_title)
                 st.pyplot(fig)
 
             if app_language == "Arabic":
@@ -1429,18 +1630,18 @@ elif page == T["temp_monitor"]:
             st.error(f"Chart error: {e}")
 
 # PLANNER
-elif page == T["planner"]:
+elif page_key == "planner":
     render_planner()
 
 # JOURNAL
-elif page == T["journal"]:
+elif page_key == "journal":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("📒 " + TEXTS[app_language]["journal"])
-        st.caption(TEXTS[app_language]["journal_hint"])
+        st.title("📒 " + T["journal"])
+        st.caption(T["journal_hint"])
 
-        # --- quick logger (unchanged, keep your existing if you want) ---
+        # --- quick logger with icons ---
         st.markdown("### " + T["daily_logger"])
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -1453,41 +1654,45 @@ elif page == T["journal"]:
             mood = st.selectbox(T["mood"], mood_options)
         
         with col2:
-            hydration = st.slider(T["hydration"], 0, 12, 6)
+            # Hydration slider with water icon
+            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>💧</span>", unsafe_allow_html=True)
+            hydration = st.slider(T["hydration"], 0, 12, 6, key="hydration_slider")
+            st.markdown("</div>", unsafe_allow_html=True)
         
         with col3:
-            sleep = st.slider(T["sleep"], 0, 12, 7)
+            # Sleep slider with bed icon
+            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>🛏️</span>", unsafe_allow_html=True)
+            sleep = st.slider(T["sleep"], 0, 12, 7, key="sleep_slider")
+            st.markdown("</div>", unsafe_allow_html=True)
         
         with col4:
-            # Define fatigue options based on language
+            # Fatigue with tired face icon
+            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>😫</span>", unsafe_allow_html=True)
             if app_language == "English":
                 fatigue_options = [f"{i}/10" for i in range(0, 11)]
             else:
-                fatigue_options = [f"{i}/10" for i in range(0, 11)]  # Numbers are universal
+                fatigue_options = [f"{i}/10" for i in range(0, 11)]
             
-            fatigue = st.selectbox(T["fatigue"], fatigue_options)
+            fatigue = st.selectbox(T["fatigue"], fatigue_options, index=4)
+            st.markdown("</div>", unsafe_allow_html=True)
 
         # Define trigger and symptom options based on language
         if app_language == "English":
             trigger_options = TRIGGERS_EN
             symptom_options = SYMPTOMS_EN
-            other_text = "Other"
-            plan_activities = ["Walk", "Groceries", "Beach", "Errand"]
-            activity_options = ["Light walk (20–30 min)", "Moderate exercise (45 min)", "Outdoor errand (30–60 min)", "Beach (60–90 min)"]
-            location_options = ["Outdoor", "Indoor/AC"]
+            trigger_label = "Triggers (optional)"
+            symptom_label = "Symptoms (optional)"
         else:
             trigger_options = TRIGGERS_AR
             symptom_options = SYMPTOMS_AR
-            other_text = "أخرى"
-            plan_activities = ["مشي", "تسوق", "شاطئ", "مهمة"]
-            activity_options = ["مشي خفيف (20-30 دقيقة)", "تمريين متوسط (45 دقيقة)", "مهمة خارجية (30-60 دقيقة)", "شاطئ (60-90 دقيقة)"]
-            location_options = ["خارجي", "داخلي/مكيف"]
+            trigger_label = "المحفزات (اختياري)"
+            symptom_label = "الأعراض (اختياري)"
 
-        chosen_tr = st.multiselect("Triggers (optional)" if app_language == "English" else "المحفزات (اختياري)", trigger_options)
-        tr_other = st.text_input(f"{T['other']} ({T['triggers_today']})", "")
+        chosen_tr = st.multiselect(trigger_label, trigger_options)
+        tr_other = st.text_input(f"{T['other']} ({T['trigger']})", "")
         
-        chosen_sy = st.multiselect("Symptoms (optional)" if app_language == "English" else "الأعراض (اختياري)", symptom_options)
-        sy_other = st.text_input(f"{T['other']} ({T['symptoms_today']})", "")
+        chosen_sy = st.multiselect(symptom_label, symptom_options)
+        sy_other = st.text_input(f"{T['other']} ({T['symptom']})", "")
 
         free_note = st.text_area(T["free_note"], height=100)
 
@@ -1504,7 +1709,7 @@ elif page == T["journal"]:
                 "note": free_note.strip()
             }
             insert_journal(st.session_state["user"], utc_iso_now(), entry)
-            st.success("✅ Saved")
+            st.success("✅ " + ("Saved" if app_language == "English" else "تم الحفظ"))
 
         st.markdown("---")
 
@@ -1581,8 +1786,8 @@ elif page == T["journal"]:
                         st.rerun()
 
 # AI COMPANION
-elif page == T["assistant"]:
-    st.title("🤝 " + T["assistant"])
+elif page_key == "assistant":
+    st.title("🤝 " + T["assistant_title"])
 
     if not client:
         st.warning(T["ai_unavailable"])
@@ -1601,7 +1806,6 @@ elif page == T["assistant"]:
             ]
 
         # Optional: inject fresh personal context before each user question
-        # (We do not keep it permanently in history; we prepend it to the user message.)
         personal_context = build_personal_context(app_language)
 
         # Render past messages (skip the system message)
@@ -1611,7 +1815,7 @@ elif page == T["assistant"]:
             with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
                 st.markdown(m["content"])
 
-        # Chat input (this prevents "infinite loop" because it only fires on submit)
+        # Chat input
         user_msg = st.chat_input(T["ask_me_anything"])
 
         if user_msg:
@@ -1620,12 +1824,11 @@ elif page == T["assistant"]:
             with st.chat_message("user"):
                 st.markdown(user_msg)
 
-            # 2) Call the model ONCE with personal context prepended to the user content
-            # (We send a one-off messages array: system + prior turns + current turn with context)
+            # 2) Call the model ONCE with personal context
             with st.chat_message("assistant"):
                 with st.spinner(T["thinking"]):
                     try:
-                        # Build a one-off message list (don't mutate old turns)
+                        # Build a one-off message list
                         msgs = st.session_state["companion_messages"].copy()
                         # Replace last user message with context + question
                         msgs = msgs[:-1] + [{
@@ -1640,10 +1843,10 @@ elif page == T["assistant"]:
                         )
                         answer = resp.choices[0].message.content
                     except Exception as e:
-                        answer = "Sorry, I had trouble answering right now. Please try again."
+                        answer = "Sorry, I had trouble answering right now. Please try again." if app_language == "English" else "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
 
                     st.markdown(answer)
-                    # 3) Save the assistant answer to history (no rerun)
+                    # 3) Save the assistant answer to history
                     st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
 
         # Small toolbar below the chat
@@ -1662,14 +1865,14 @@ elif page == T["assistant"]:
                     st.caption("This chat gives general information and does not replace your medical provider.")
 
 # SETTINGS
-elif page == T["settings"]:
+elif page_key == "settings":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
         render_settings_page()
 
-# EXPORTS (new dedicated tab)
-elif page == T["exports"]:
+# EXPORTS
+elif page_key == "exports":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
@@ -1681,9 +1884,9 @@ elif page == T["exports"]:
         df_j = fetch_journal_df(st.session_state["user"])
 
         # Show quick preview
-        st.subheader("Preview — Temps")
+        st.subheader("Preview — Temps" if app_language == "English" else "معاينة — درجات الحرارة")
         st.dataframe(df_t.tail(20), use_container_width=True)
-        st.subheader("Preview — Journal")
+        st.subheader("Preview — Journal" if app_language == "English" else "معاينة — اليوميات")
         st.dataframe(df_j.tail(20), use_container_width=True)
 
         # Excel or ZIP (auto-fallback)
@@ -1697,7 +1900,7 @@ elif page == T["exports"]:
         )
 
         # Also offer raw CSVs directly
-        st.markdown("— or download raw CSVs —")
+        st.markdown("— or download raw CSVs —" if app_language == "English" else "— أو حمل ملفات CSV خام —")
         temp_label = "درجات الحرارة.csv" if app_language == "Arabic" else "Temps.csv"
         st.download_button(
             temp_label,
