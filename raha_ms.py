@@ -8,12 +8,7 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
-from companion import (
-    RahaCompanion,
-    CompanionOut,
-    detect_arabic_in_text,  
-    norm_lang,              
-)
+from companion import RahaCompanion, CompanionOut, detect_arabic_in_text, norm_lang
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
