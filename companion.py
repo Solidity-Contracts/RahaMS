@@ -15,18 +15,16 @@ class CompanionOut(BaseModel):
     safety_note: Optional[str] = None
 
 # ===== Utils =====
-AR_ALIASES = {"ar","arabic","ar-sa","ar-ae","ar_ae","ar_ksa","ar-kw","ar-bh","ar-qa","ar-om"}
-
 def norm_lang(lang: str) -> str:
     """
     Normalize language input.
-    Any value starting with 'ar' becomes 'ar'.
-    Everything else becomes 'en'.
+    Any code starting with 'ar' (e.g. 'ar', 'ar-AE', 'Arabic') → 'ar'
+    Everything else → 'en'
     """
     if not lang:
         return "en"
     lang = str(lang).strip().lower()
-    return "ar" if lang.startswith("ar") else "en"
+    return "ar" if lang.startswith("ar") or "arabic" in lang else "en"
 
 def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
     return [s.strip() for s in items if s.strip()][:k]
@@ -122,10 +120,9 @@ class RahaCompanion:
         safety_note = None
         if red_flags:
             safety_note = ("إذا كانت لديك أعراض خطيرة الآن (مثل ألم صدر أو صعوبة تنفس أو ضعف جديد شديد)، "
-                           "اتصل بالطوارئ فورًا أو راجع أقرب قسم طوارئ.")
-            if lang != "ar":
-                safety_note = ("If you have severe or new alarming symptoms (chest pain, trouble breathing, sudden weakness), "
-                               "call emergency services or go to the nearest ER now.")
+                           "اتصل بالطوارئ فورًا أو راجع أقرب قسم طوارئ.") if lang == "ar" else \
+                          ("If you have severe or new alarming symptoms (chest pain, trouble breathing, sudden weakness), "
+                           "call emergency services or go to the nearest ER now.")
 
         return CompanionOut(
             language=lang,
