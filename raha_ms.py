@@ -291,12 +291,11 @@ html, body, [class*="css"] { font-size: 18px; }
 h3 { margin-top: 0.2rem; }
 .stButton>button { padding: 0.6rem 1.1rem; font-weight: 600; }
 
-/* Floating emergency button */
-.fab-call { position: fixed; right: 18px; bottom: 18px; z-index: 9999; background: #ef4444; color: white; border-radius: 9999px; padding: 14px 18px; font-weight: 700; box-shadow:0 8px 24px rgba(0,0,0,0.18); text-decoration: none; }
-.fab-call:hover { background:#dc2626; text-decoration:none; }
-@media (min-width: 992px) { .fab-call { padding: 10px 14px; font-weight: 600; } }
+/* Global list spacing for readability (EN + AR, light + dark) */
+.stMarkdown ul li, .stMarkdown ol li { margin-bottom: 0.6em !important; }
+.stMarkdown ul, .stMarkdown ol { margin-bottom: 0.4em !important; }
 
-/* RTL Support */
+/* RTL Support (safe: do NOT touch the sidebar container here) */
 [dir="rtl"] .stSlider > div:first-child { direction: ltr; }
 [dir="rtl"] .stSlider label { text-align: right; direction: rtl; }
 [dir="rtl"] .stSelectbox label, [dir="rtl"] .stTextInput label, [dir="rtl"] .stTextArea label { text-align: right; direction: rtl; }
@@ -311,40 +310,27 @@ h3 { margin-top: 0.2rem; }
 st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
 
 # -# ---------- RTL SIDEBAR FIX (Arabic mobile + desktop) ----------
-RTL_SIDEBAR_FIX = """
+SAFE_RTL_CSS = """
 <style>
-/* 1) Let the sidebar container stay LTR so the slide animation works */
-[dir="rtl"] [data-testid="stSidebar"] {
-  direction: ltr !important;    /* keep container mechanics */
-  text-align: left !important;
-  left: auto !important;        /* ensure it's anchored to the right in RTL layouts */
-  right: 0 !important;
+/* Make the MAIN CONTENT RTL; do NOT touch the sidebar container here */
+[dir="rtl"] [data-testid="stAppViewContainer"] {
+  direction: rtl !important;
+  text-align: right !important;
 }
 
-/* 2) Flip only the inner content back to RTL for proper reading order */
+/* Sidebar container stays LTR so its slide animation/collapse works */
+[dir="rtl"] [data-testid="stSidebar"] {
+  direction: ltr !important;
+  text-align: left !important;
+}
+
+/* Flip ONLY the sidebar inner content to RTL for reading order */
 [dir="rtl"] [data-testid="stSidebar"] > div {
   direction: rtl !important;
   text-align: right !important;
 }
 
-/* Optional: also flip common inner wrappers if your Streamlit version nests differently */
-[dir="rtl"] [data-testid="stSidebar"] .sidebar-content,
-[dir="rtl"] [data-testid="stSidebar"] .element-container {
-  direction: rtl !important;
-  text-align: right !important;
-}
-
-/* 3) Safety: when collapsed, push the sidebar fully off-screen to the RIGHT in RTL */
-[dir="rtl"] [data-testid="stSidebar"][aria-expanded="false"] {
-  transform: translateX(100%) !important;
-}
-
-/* Ensure expanded state is normal */
-[dir="rtl"] [data-testid="stSidebar"][aria-expanded="true"] {
-  transform: translateX(0) !important;
-}
-
-/* Mobile polish: prevent tab headers/content overlap and keep good contrast */
+/* Mobile polish: scrollable tab headers; avoid overlap after tabs */
 @media (max-width: 640px) {
   div[role="tablist"] {
     overflow-x: auto !important;
@@ -352,11 +338,16 @@ RTL_SIDEBAR_FIX = """
     padding-bottom: 6px !important;
     margin-bottom: 8px !important;
   }
+  .stTabs + div, .stTabs + section {
+    margin-top: 6px !important;
+  }
 }
+
+/* Ensure bullets/paragraphs keep theme contrast */
 .stMarkdown p, .stMarkdown li { color: inherit !important; }
 </style>
 """
-st.markdown(RTL_SIDEBAR_FIX, unsafe_allow_html=True)
+st.markdown(SAFE_RTL_CSS, unsafe_allow_html=True)
 
 
 
