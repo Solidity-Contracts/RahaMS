@@ -1,7 +1,7 @@
 # companion.py
 from __future__ import annotations
 from typing import List, Optional, Literal, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 import re
 
 # ===== Shapes =====
@@ -10,107 +10,77 @@ class CompanionOut(BaseModel):
     role: Literal["companion"] = "companion"
     style: Literal["chat", "plan", "checklist"]
     message: str
-    bullets: Optional[List[str]] = None  # max 3 when present
+    bullets: Optional[List[str]] = None
     next_step: Optional[str] = None
     safety_note: Optional[str] = None
 
 # ===== Utils =====
-ARABIC_CHARS_RE = re.compile(r"[\u0600-\u06FF]")
-
-def norm_lang(lang: str) -> str:
-    if not lang:
-        return "en"
-    lang = str(lang).strip().lower()
-    return "ar" if lang.startswith("ar") or "arabic" in lang else "en"
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
 def detect_arabic_in_text(text: str) -> bool:
-    return bool(ARABIC_CHARS_RE.search(text or ""))
+    return bool(_ARABIC_RE.search(text or ""))
 
 def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
     return [s.strip() for s in items if s.strip()][:k]
 
-# ===== Prompts =====
+# ===== Prompts (strict, language-specific) =====
 SYSTEM_AR = (
     "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
-    "Default to 2–3 short sentences. Only use bullets when asked for tips/plan or when intent is 'plan'. "
-    "Keep max 3 bullets. Avoid long disclaimers. "
-    "Provide culturally aware guidance for GCC users (fasting, prayer times, AC/home environment, cooling garments, pacing). "
-    "Strictly educational — not medical care. No diagnosis. Encourage clinician follow-up for concerning symptoms. "
-    "**Respond ONLY in Arabic. Never use English. Use Gulf-friendly phrasing when relevant.**"
+    "Default to 2–3 short sentences; only use bullets when the user asks for tips/plan (max 3). "
+    "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
+    "Educational only, not medical care. "
+    "**Respond ONLY in Arabic. Never use English.**"
 )
 
 SYSTEM_EN = (
     "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
-    "Default to 2–3 short sentences. Only use bullets when asked for tips/plan or when intent is 'plan'. "
-    "Keep max 3 bullets. Avoid long disclaimers. "
-    "Provide culturally aware guidance for GCC users (fasting, prayer times, AC/home environment, cooling garments, pacing). "
-    "Strictly educational — not medical care. No diagnosis. Encourage clinician follow-up for concerning symptoms. "
+    "Default to 2–3 short sentences; only use bullets when the user asks for tips/plan (max 3). "
+    "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
+    "Educational only, not medical care. "
     "**Respond ONLY in English. Never use Arabic.**"
 )
 
-FEW_SHOTS_EN = [
-    {"role": "user", "content": "I'm feeling tired after being outside—should I worry?"},
-    {"role": "assistant", "content": (
-        "It sounds like heat might have nudged your MS symptoms a bit. "
-        "Rest in a cool room and sip water. If the tiredness doesn't settle after cooling and sleep, let your clinician know."
-    )},
-    {"role": "user", "content": "Give me a short plan for going to Friday prayer in the heat."},
-    {"role": "assistant", "content": (
-        "• Go during the coolest slot you can and pre-cool at home.\n"
-        "• Wear breathable layers or a cooling scarf/vest.\n"
-        "• Park close, pace your steps, and hydrate before/after (if not fasting)."
-    )},
-]
-
 FEW_SHOTS_AR = [
     {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
-    {"role": "assistant", "content": (
-        "الحر قد يرفع الأعراض مؤقتًا. حاول الجلوس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. "
-        "إذا لم تتحسن بعد التبريد والنوم، تواصل مع طبيبك."
-    )},
-    {"role": "user", "content": "أريد خطة قصيرة للذهاب لصلاة الجمعة في الحر"},
-    {"role": "assistant", "content": (
-        "• اذهب في أبرد الأوقات وقم بتبريد جسمك مسبقًا في البيت.\n"
-        "• ارتدِ ملابس خفيفة أو استخدم وشاح/سترة تبريد.\n"
-        "• أوقف السيارة قريبًا وخذ وقتك في المشي وتناول الماء قبل/بعد الصلاة (إذا لم تكن صائمًا)."
-    )},
+    {"role": "assistant", "content": "الحر قد يرفع الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا."},
 ]
 
-INTENT_PATTERNS = {
-    "plan": re.compile(r"\b(plan|tips|steps|how to|checklist|ماذا أفعل|خطة|نصائح)\b", re.I),
-}
-RED_FLAG_PATTERNS = [
+FEW_SHOTS_EN = [
+    {"role": "user", "content": "I'm feeling tired after being outside—should I worry?"},
+    {"role": "assistant", "content": "Heat may have nudged your MS symptoms. Rest in a cool room and sip water."},
+]
+
+_INTENT_PLAN = re.compile(r"\b(plan|tips|steps|how to|checklist)\b|ماذا أفعل|خطة|نصائح", re.I)
+_RED_FLAGS = [
     re.compile(r"(chest pain|trouble breathing|fainting|loss of vision|new weakness|can't walk|suicid|harm)", re.I),
     re.compile(r"(ألم صدر|صعوبة التنفس|إغماء|فقدان الرؤية|ضعف جديد|لا أستطيع المشي|انتحار|أؤذي نفسي)", re.I),
 ]
 
 def detect_intent(text: str) -> Literal["chat", "plan"]:
-    return "plan" if any(p.search(text or "") for p in INTENT_PATTERNS.values()) else "chat"
+    return "plan" if _INTENT_PLAN.search(text or "") else "chat"
 
 def detect_red_flags(text: str) -> bool:
-    return any(p.search(text or "") for p in RED_FLAG_PATTERNS)
+    return any(p.search(text or "") for p in _RED_FLAGS)
 
 # ===== Core =====
 class RahaCompanion:
-    def __init__(self, openai_client, default_lang: str = "en",
-                 model: str = "gpt-4o-mini", temperature: float = 0.4, max_tokens: int = 350):
+    def __init__(self, openai_client, model: str = "gpt-4o-mini", temperature: float = 0.4, max_tokens: int = 350):
         self.client = openai_client
-        self.default_lang = norm_lang(default_lang)
         self.model = model
         self.temperature = temperature
         self.max_tokens = max_tokens
 
     def _system(self, lang: str) -> str:
-        return SYSTEM_AR if lang == 'ar' else SYSTEM_EN
+        return SYSTEM_AR if lang == "ar" else SYSTEM_EN
 
     def _messages(self, lang: str, user_text: str, intent: str) -> List[Dict[str, Any]]:
         style_hint = "Write a brief chat-style reply (2–3 sentences)." if intent == "chat" \
                      else "Write a tiny action plan as 2–3 concise bullets."
-        few_shots = FEW_SHOTS_AR if lang == "ar" else FEW_SHOTS_EN
+        shots = FEW_SHOTS_AR if lang == "ar" else FEW_SHOTS_EN
         return [
             {"role": "system", "content": self._system(lang)},
             {"role": "system", "content": style_hint},
-            *few_shots,
+            *shots,
             {"role": "user", "content": user_text},
         ]
 
@@ -124,11 +94,10 @@ class RahaCompanion:
             frequency_penalty=0.2,
         )
 
-    def _post(self, text: str, intent: str, lang: str, red_flags: bool) -> CompanionOut:
+    def _post(self, text: str, intent: str, lang: str, red: bool) -> CompanionOut:
         msg = text.strip()
         lines = [l.strip("•-* \t") for l in msg.splitlines() if l.strip()]
         bullets = None
-
         if intent == "plan" or (len(lines) >= 2 and sum(len(l) for l in lines[:3]) < 300):
             bullets = clamp_bullets(lines, 3)
             if bullets and len(lines) > len(bullets):
@@ -140,11 +109,10 @@ class RahaCompanion:
                 msg = msg[:447] + "…"
 
         safety_note = None
-        if red_flags:
-            safety_note = ("إذا كانت لديك أعراض خطيرة الآن (مثل ألم صدر أو صعوبة تنفس أو ضعف جديد شديد)، "
-                           "اتصل بالطوارئ فورًا أو راجع أقرب قسم طوارئ.") if lang == "ar" else \
-                          ("If you have severe or new alarming symptoms (chest pain, trouble breathing, sudden weakness), "
-                           "call emergency services or go to the nearest ER now.")
+        if red:
+            safety_note = ("إذا كانت لديك أعراض خطيرة الآن (مثل ألم صدر أو صعوبة تنفس أو ضعف جديد شديد)، اتصل بالطوارئ فورًا."
+                           if lang == "ar" else
+                           "If you have severe or new alarming symptoms (chest pain, trouble breathing, sudden weakness), call emergency services now.")
 
         return CompanionOut(
             language=lang,
@@ -156,15 +124,15 @@ class RahaCompanion:
         )
 
     def respond(self, user_text: str, lang: Optional[str] = None) -> CompanionOut:
-        # Force Arabic if the text contains Arabic; else use normalized input/default
-        lang_final = "ar" if detect_arabic_in_text(user_text) else norm_lang(lang or self.default_lang)
+        # Language = based purely on user text
+        lang_final = "ar" if detect_arabic_in_text(user_text) else "en"
         intent = detect_intent(user_text)
         red = detect_red_flags(user_text)
         try:
             resp = self._call_llm(self._messages(lang_final, user_text, intent))
             content = resp.choices[0].message.content or ""
         except Exception:
-            content = ("يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلًا."
-                       if lang_final == "ar"
-                       else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest.")
+            content = ("يبدو أن هناك مشكلة تقنية. حاول لاحقًا."
+                       if lang_final == "ar" else
+                       "Sorry—something went wrong. Please try again later.")
         return self._post(content, intent, lang_final, red)
