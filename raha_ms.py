@@ -666,34 +666,76 @@ def _render_plain(result: CompanionOut) -> str:
         parts.append(f"💡 {result.next_step}")
     return "\n\n".join(p for p in parts if p)
 
+def _direct_minimal_call(prompt_text: str, lang_detected: str) -> str:
+    """
+    Emergency fallback: one tiny call straight to OpenAI with the simplest prompt.
+    """
+    sys = "Respond only in Arabic." if lang_detected == "ar" else "Respond only in English."
+    resp = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": sys},
+            {"role": "user", "content": prompt_text},
+        ],
+        temperature=0.3,
+        max_tokens=300,
+    )
+    return resp.choices[0].message.content or ""
+
 def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
     """
-    Backward-compatible signature, but language is decided ONLY from prompt text.
+    Always reply in the same language as the question:
+    - Arabic if the text contains Arabic characters
+    - otherwise English
+
+    If the structured companion call fails, retry with a minimal direct call.
     """
+    lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
+
     try:
-        # Force language purely from the prompt
-        lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
-        result: CompanionOut = companion.respond(user_text=prompt, lang=None)  # lang ignored internally
-        text = _render_plain(result)
+        # 1) Primary path: structured companion
+        result: CompanionOut = companion.respond(user_text=prompt, lang=None)  # companion infers language from text
+        txt = _render_plain(result)
 
-        # Safety: if model drifted into the wrong language, prepend a cue and retry once.
-        if lang_detected == "ar" and not detect_arabic_in_text(text):
+        # 2) Guard-rail: correct any language drift with a quick retry
+        if lang_detected == "ar" and not detect_arabic_in_text(txt):
             result = companion.respond(user_text="الرجاء الإجابة بالعربية فقط.\n\n" + prompt, lang=None)
-            text = _render_plain(result)
-        elif lang_detected == "en" and detect_arabic_in_text(text):
+            txt = _render_plain(result)
+        elif lang_detected == "en" and detect_arabic_in_text(txt):
             result = companion.respond(user_text="Please answer in English only.\n\n" + prompt, lang=None)
-            text = _render_plain(result)
+            txt = _render_plain(result)
 
-        return text, None
-    except Exception as e:
-        # Localized fallback based on detected language
-        lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
-        fallback = ("عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى."
-                    if lang_detected == "ar" else
-                    "Sorry, I had trouble answering right now. Please try again.")
-        # Optional: print for debugging
-        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e))
-        return fallback, "err"
+        return txt, None
+
+    except Exception as e1:
+        # 3) Fallback path: minimal direct call in the same language
+        try:
+            txt = _direct_minimal_call(prompt, lang_detected)
+
+            # If the minimal call drifted, add a one-line cue and try once more
+            if lang_detected == "en" and detect_arabic_in_text(txt):
+                txt = _direct_minimal_call("Please answer in English only.\n\n" + prompt, "en")
+            elif lang_detected == "ar" and not detect_arabic_in_text(txt):
+                txt = _direct_minimal_call("الرجاء الإجابة بالعربية فقط.\n\n" + prompt, "ar")
+
+            return txt, None
+
+        except Exception as e2:
+            # 4) Final: show a friendly message + the real error snippet
+            print("AI_RESPONSE_EXCEPTION(primary):", e1.__class__.__name__, str(e1))
+            print("AI_RESPONSE_EXCEPTION(fallback):", e2.__class__.__name__, str(e2))
+            if lang_detected == "ar":
+                return (
+                    "عذرًا، واجهت مشكلة أثناء الإجابة. جرّب مرة أخرى.\n"
+                    f"(تفاصيل فنية: {e2.__class__.__name__}: {str(e2)[:150]})",
+                    "err",
+                )
+            else:
+                return (
+                    "Sorry, I had trouble answering right now. Please try again.\n"
+                    f"(Tech details: {e2.__class__.__name__}: {str(e2)[:150]})",
+                    "err",
+                )
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
