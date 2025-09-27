@@ -18,7 +18,15 @@ class CompanionOut(BaseModel):
 AR_ALIASES = {"ar","arabic","ar-sa","ar-ae","ar_ae","ar_ksa","ar-kw","ar-bh","ar-qa","ar-om"}
 
 def norm_lang(lang: str) -> str:
-    return "ar" if str(lang).strip().lower() in AR_ALIASES else "en"
+    """
+    Normalize language input.
+    Any value starting with 'ar' becomes 'ar'.
+    Everything else becomes 'en'.
+    """
+    if not lang:
+        return "en"
+    lang = str(lang).strip().lower()
+    return "ar" if lang.startswith("ar") else "en"
 
 def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
     return [s.strip() for s in items if s.strip()][:k]
