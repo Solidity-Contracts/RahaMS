@@ -310,10 +310,41 @@ h3 { margin-top: 0.2rem; }
 """
 st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
 
-# ---------- MOBILE RTL TAB FIX ----------
-MOBILE_TAB_FIX_CSS = """
+# -# ---------- RTL SIDEBAR FIX (Arabic mobile + desktop) ----------
+RTL_SIDEBAR_FIX = """
 <style>
-/* Make the tab header row scrollable on small screens */
+/* 1) Let the sidebar container stay LTR so the slide animation works */
+[dir="rtl"] [data-testid="stSidebar"] {
+  direction: ltr !important;    /* keep container mechanics */
+  text-align: left !important;
+  left: auto !important;        /* ensure it's anchored to the right in RTL layouts */
+  right: 0 !important;
+}
+
+/* 2) Flip only the inner content back to RTL for proper reading order */
+[dir="rtl"] [data-testid="stSidebar"] > div {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* Optional: also flip common inner wrappers if your Streamlit version nests differently */
+[dir="rtl"] [data-testid="stSidebar"] .sidebar-content,
+[dir="rtl"] [data-testid="stSidebar"] .element-container {
+  direction: rtl !important;
+  text-align: right !important;
+}
+
+/* 3) Safety: when collapsed, push the sidebar fully off-screen to the RIGHT in RTL */
+[dir="rtl"] [data-testid="stSidebar"][aria-expanded="false"] {
+  transform: translateX(100%) !important;
+}
+
+/* Ensure expanded state is normal */
+[dir="rtl"] [data-testid="stSidebar"][aria-expanded="true"] {
+  transform: translateX(0) !important;
+}
+
+/* Mobile polish: prevent tab headers/content overlap and keep good contrast */
 @media (max-width: 640px) {
   div[role="tablist"] {
     overflow-x: auto !important;
@@ -321,23 +352,12 @@ MOBILE_TAB_FIX_CSS = """
     padding-bottom: 6px !important;
     margin-bottom: 8px !important;
   }
-  /* Prevent overlap in RTL: add some breathing room below the tabs */
-  [dir="rtl"] .stTabs {
-    margin-top: 6px !important;
-    margin-bottom: 8px !important;
-  }
-  /* Ensure first block after tabs isn't stuck under the tab row */
-  .stTabs + div, .stTabs + section {
-    margin-top: 6px !important;
-  }
 }
-/* Improve text contrast for dark mode: list items and paragraphs inherit theme color */
-.stMarkdown p, .stMarkdown li {
-  color: inherit !important;
-}
+.stMarkdown p, .stMarkdown li { color: inherit !important; }
 </style>
 """
-st.markdown(MOBILE_TAB_FIX_CSS, unsafe_allow_html=True)
+st.markdown(RTL_SIDEBAR_FIX, unsafe_allow_html=True)
+
 
 
 # ================== DB ==================
@@ -1161,8 +1181,9 @@ st.session_state["_prev_lang"] = app_language
 if app_language == "Arabic":
     st.markdown("""
     <style>
+      /* Make the main content RTL */
       body, .block-container { direction: rtl; text-align: right; }
-      [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+      /* Do NOT flip the sidebar container here (the fix above handles it). */
     </style>
     """, unsafe_allow_html=True)
 
