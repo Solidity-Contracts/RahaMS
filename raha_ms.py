@@ -26,7 +26,7 @@ except Exception:
     client = None
 
 # Initialize once (choose your default language)
-bot = RahaCompanion(openai_client=client, default_lang="ar")
+out = bot.respond(prompt, norm_lang(lang))
 
 # GCC quick picks
 GCC_CITIES = [
