@@ -625,141 +625,93 @@ def ai_response(prompt, lang):
     except Exception:
         return None, "err"
 
-# ================== ABOUT (NEW & STRONG) ==================
+# ================== ABOUT  ============================================
 def render_about_page(lang: str = "English"):
-    def go_to(pid):
-        st.session_state["current_page"] = pid
-        st.rerun()
+    # small helper to render a colored card with your existing .big-card CSS
+    def card(title_icon: str, title_text: str, left_color: str, body_md: str):
+        st.markdown(
+            f"""
+            <div class="big-card" style="--left:{left_color};margin-bottom:14px;">
+              <h3 style="margin:0">{title_icon} <strong>{title_text}</strong></h3>
+              <div style="margin-top:8px">{body_md}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     if lang == "Arabic":
         st.title("🧠 مرحبًا بك في راحة إم إس")
-        st.caption("مُصمّم مع مجتمع التصلب المتعدد في الخليج — خصوصًا لحرارتنا ورطوبتنا.")
-        tabs = st.tabs(["نظرة عامة", "أليس هذا «بديهيًا»؟", "ما الذي يميّزه", "جرّب سيناريو فعلي", "الخصوصية"])
+        st.caption("مُصمَّم مع مجتمع التصلّب المتعدّد في الخليج — خصيصًا لحرارتنا ورطوبتنا.")
 
-        with tabs[0]:
-            st.subheader("🌡️ لماذا تطبيق للحرارة إذا كنا «نعرف» أن الجو حار؟")
-            st.info("في التصلب المتعدد يمكن لارتفاع **0.5°م** فقط أن يزيد الأعراض مؤقتًا (ظاهرة أوتهوف). ليس الأمر مجرد حرارة الجو، بل **كيف يتفاعل جسمك أنت** الآن.")
-            st.markdown("""
-**راحة إم إس** يربط **حرارة جسمك** بالطقس المحلي (الإحساس الحراري + الرطوبة) ليعطيك:
-- **تنبيهات شخصية** حسب **أساسك** أنت (baseline) وليس 37°م للجميع.
-- **فترات آمنة ذكية** لليوم/الغد (نوافذ ساعتين خارج أوقات الذروة).
-- مقارنة **مكان محدد** (شاطئ/حديقة/مول) مقابل المدينة لمعرفة أين الجو ألطف الآن.
-- **تتبّع الأعراض والمحفزات** وحفظها في يوميات قابلة للتصدير لطبيبك.
-- نصائح عملية **باللغة العربية وبسياق الخليج** (صيام، صلاة، سيارة، شواطئ).
-            """)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("▶️ ابدأ المراقبة الآن"):
-                    go_to("monitor")
-            with c2:
-                if st.button("🗺️ ابحث أفضل الأوقات للخروج"):
-                    go_to("planner")
+        # Section 1: Why Raha MS?
+        body1 = """
+        - مع **التصلّب المتعدّد (MS)**، الحرارة في الخليج ليست مجرد إزعاج — قد تُحفّز الأعراض.
+        - حتى ارتفاع **0.5°م** فقط في حرارة الجسم قد يسبب إرهاقًا أو تشوّشًا أو ضعفًا (**ظاهرة أوتهوف**).
+        - هذا الفرق الصغير **يصعب الشعور به** بدقة — غالبًا لا تلاحظه إلا بعد بدء الأعراض.
+        <br><br>
+        👉 <strong>راحة إم إس يحوِّل هذا الفرق غير المرئي إلى <u>نظام إنذار مبكر</u>.</strong>
+        """
+        card("🌡️", "لماذا راحة إم إس؟", "#f59e0b", body1)
 
-        with tabs[1]:
-            st.subheader("«الجو حار؛ لا تخرج.» — لماذا لا يكفي هذا؟")
-            st.markdown("""
-- **ليست نفس الحرارة للجميع**: تطبيقنا يستخدم **فرقك عن الأساس** (+0.5°م مثلًا) لينبهك قبل تفاقم الأعراض.
-- **الإحساس الحراري ≠ درجة الهواء**: الرطوبة العالية تغيّر القصة. التطبيق يخطط حسب **Feels-like** و**الرطوبة**.
-- **التوقيت يصنع الفرق**: نوافذ صباح/مساء محددة بدقة لساعتين—هذا أكثر من “لا تخرج ظهرًا فقط”.
-- **سياقك اليومي**: صيام/وقوف طويل، تبريد السيارة، إنجاز مشوار سريع، شاطئ… نصائح دقيقة لحظيًا.
-- **تعلم شخصي**: اليوميات + التصدير تساعدك أنت (وطبيبك) على فهم ما يحفّزك فعليًا عبر الوقت.
-            """)
+        # Section 2: What makes it unique?
+        body2 = """
+        - **تنبيهات شخصية مبكرة**: يقيس ارتفاعك عن **أساسك أنت** وينبّهك <em>قبل أن تشعر</em>.
+        - **نوافذ أكثر أمانًا**: يبرز فترات ساعتين أبرد خلال 48 ساعة اعتمادًا على **الإحساس الحراري** والرطوبة.
+        - **فحص المكان**: قارن مدينتك بموقع محدد (شاطئ/مول/حديقة) لمعرفة أين الجو ألطف **الآن**.
+        - **اليوميات + التصدير**: سجّل الأعراض والمحفزات والملاحظات — ونزّلها كـ **Excel/CSV** لمشاركتها مع طبيبك أو مقدم الرعاية.
+        - **مصمم لحياة الخليج**: نصائح عملية للصيام، الوقوف للصلاة، المسارات المظللة، تبريد السيارة، والبحر.
+        - **الأول من نوعه** في الخليج: لا يوجد تطبيق آخر يركّز على حساسية الحرارة مع MS بهذه الدقة.
+        """
+        card("✨", "ما الذي يميّزه؟", "#10b981", body2)
 
-        with tabs[2]:
-            st.subheader("ما الذي يميّز راحة إم إس؟")
-            st.markdown("""
-- **تنبيه مبكر قائم على الأساس الشخصي**: عندما ترتفع حرارتك الأساسية **≥0.5°م** مرتين متتاليتين.
-- **نوافذ آمنة ذكية** لليومين القادمين تعتمد على الإحساس الحراري والرطوبة وتتحاشى ساعات الذروة.
-- **مقارنة أماكن داخل مدينتك**: مثل **شاطئ السعديات** مقابل **أبوظبي** لمعرفة أيهما ألطَف الآن.
-- **ربط السبب بالأثر**: سجّل “رياضة/مشوار/شمس” وشاهد كيف تغيرت الأعراض/الحرارة لديك بالفعل.
-- **لغتنا وسياقنا**: نصائح تناسب الخليج (AC، تبريد السيارة، المول، البحر، أوقات الصلاة).
-            """)
+        # Section 3: How this helps
+        body3 = """
+        - **التقاط الخطر مبكرًا**: لتأخذ استراحة أو تبرد *قبل* تفاقم الأعراض.
+        - **تخطيط بثقة**: اعرف بالضبط متى وأين يكون الخروج أكثر أمانًا.
+        - **فهم محفزاتك**: اربط بين الطقس وحرارتك وأعراضك عبر الوقت.
+        - **مشاركة بياناتك**: قدّم سجلات واضحة ومنظّمة لدعم رعاية أفضل.
+        """
+        card("🧭", "كيف يساعدك؟", "#3b82f6", body3)
 
-        with tabs[3]:
-            st.subheader("جرّب سيناريو فعلي (60 ثانية)")
-            st.markdown("""
-**الموقف:** عندك مشوار 45 دقيقة عصرًا.
-1) افتح **المخطط** لمعرفة أفضل نافذة ساعتين اليوم/غدًا.
-2) بدّل إلى **مكان محدد** (حديقة/مول) لترى أيهما ألطف.
-3) لو خرجت الآن، سيعطيك التطبيق **نصائح فورية** (تبريد مسبق، ماء بارد، ظلّ، فترات راحة).
-4) بعد العودة سجّل بسرعة ما حدث—لترى لاحقًا **ما الذي حرّك الأعراض لديك فعلًا**.
-            """)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🧭 افتح المخطط الآن"):
-                    go_to("planner")
-            with c2:
-                if st.button("☀️ افتح المراقبة"):
-                    go_to("monitor")
-
-        with tabs[4]:
-            st.subheader("الخصوصية")
-            st.caption("بياناتك تُحفَظ محليًا (SQLite). هذا نموذج تعليمي وتجريبي — **ليس جهازًا طبيًا**.")
+        # Privacy note (concise) + export reminder
+        st.caption("🔒 بياناتك محفوظة محليًا على جهازك (SQLite). هذا نموذج توعوي للتنظيم الذاتي — وليس جهازًا طبيًا. ويمكنك تنزيل درجات الحرارة واليوميات كـ **Excel/CSV** لمشاركتها مع طبيبك.")
 
     else:
         st.title("🧠 Welcome to Raha MS")
-        st.caption("Co-created with the MS community in the Gulf—built for our heat and humidity.")
-        tabs = st.tabs(["Overview", "Isn’t this ‘common sense’?", "What’s unique", "Try a real scenario", "Privacy"])
+        st.caption("Co-created with the MS community in the Gulf — built for our heat and humidity.")
 
-        with tabs[0]:
-            st.subheader("🌡️ Why an app if we ‘know’ it’s hot?")
-            st.info("In MS, a **0.5°C** rise can temporarily worsen symptoms (Uhthoff). It’s not just the weather—it’s **how your body reacts today**.")
-            st.markdown("""
-**Raha MS** links **your body temperature** with local weather (feels-like + humidity) to give you:
-- **Personal alerts** based on **your baseline**, not a generic 37°C.
-- **Smart safe windows** (2-hour slots) for today/tomorrow, not just “avoid midday”.
-- **Place vs. city checks** (e.g., Saadiyat Beach vs Abu Dhabi) to find the cooler micro-spot **now**.
-- **Trigger/symptom journaling** you can **export** to your clinician.
-- Practical advice in **English/Arabic** tailored to **GCC routines** (fasting, prayers, driving, beach).
-            """)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("▶️ Start Monitoring"):
-                    go_to("monitor")
-            with c2:
-                if st.button("🗺️ Find cooler windows"):
-                    go_to("planner")
+        # Section 1: Why Raha MS?
+        body1 = """
+        - For people with **Multiple Sclerosis (MS)**, Gulf heat can trigger symptoms.
+        - A rise as small as **0.5°C** in body temperature can bring on fatigue, blurred vision, or weakness (**Uhthoff’s phenomenon**).
+        - That tiny rise is **hard to feel** until symptoms already disrupt your day.
+        <br><br>
+        👉 <strong>Raha MS turns that invisible 0.5°C into an <u>early warning system</u>.</strong>
+        """
+        card("🌡️", "Why Raha MS?", "#f59e0b", body1)
 
-        with tabs[1]:
-            st.subheader("“It’s hot; don’t go out.” — Why that’s not enough")
-            st.markdown("""
-- **Heat isn’t equal for everyone**: we alert when **your core** is **+0.5°C** above **your** baseline—early, before symptoms snowball.
-- **Feels-like ≠ air temp**: humidity changes the game; planning uses **feels-like** and **humidity**.
-- **Timing matters**: precise 2-hour windows vs. vague rules.
-- **Daily context**: fasting/standing, pre-cooling the car, quick errand, beach—**situational** tips.
-- **Learning over time**: journal + export → understand **your personal triggers** with evidence.
-            """)
+        # Section 2: What makes it unique?
+        body2 = """
+        - **Personal early alerts**: watches your rise above **your baseline** and warns you <em>before you notice</em>.
+        - **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
+        - **Place check**: compare your city with a specific spot (beach, mall, park) to see where it’s safer **right now**.
+        - **Journal + exports**: record symptoms, triggers, and notes — download as **Excel/CSV** to share with your clinician or caregiver.
+        - **Designed for Gulf life**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
+        - **First of its kind** in the GCC: no other app focuses on MS heat sensitivity like this.
+        """
+        card("✨", "What makes it unique?", "#10b981", body2)
 
-        with tabs[2]:
-            st.subheader("What’s unique about Raha MS?")
-            st.markdown("""
-- **Baseline-driven early alert**: when your core rises **≥0.5°C** twice in a row.
-- **Smart windows** for the next 48h that avoid heat spikes automatically.
-- **Place comparison** within your city to pick the friendliest micro-climate.
-- **Cause → effect loop**: log triggers and see how temps/symptoms actually shifted.
-- **Gulf-specific coaching**: AC vs fan in humidity, car pre-cool, shaded routes, beach routines.
-            """)
+        # Section 3: How this helps
+        body3 = """
+        - **Catch risks early**: cool down or pause *before* symptoms escalate.
+        - **Plan confidently**: know exactly when and where it’s safer to go out.
+        - **Understand your triggers**: connect weather, body temperature, and symptoms over time.
+        - **Share evidence**: give your doctor clear, organized records to support better care.
+        """
+        card("🧭", "How this helps you", "#3b82f6", body3)
 
-        with tabs[3]:
-            st.subheader("Try a real-life scenario (60 seconds)")
-            st.markdown("""
-**Scenario:** You have a 45-minute errand near sunset.
-1) Open **Planner** → pick a cooler 2-hour window today/tomorrow.
-2) Check a **specific place** (park/mall) vs your city.
-3) If you must go now, get **instant tips** (pre-cool, shaded path, water/electrolytes).
-4) After you’re back, quick-log what happened → build **your personal playbook**.
-            """)
-            c1, c2 = st.columns(2)
-            with c1:
-                if st.button("🧭 Open Planner"):
-                    go_to("planner")
-            with c2:
-                if st.button("☀️ Open Monitor"):
-                    go_to("monitor")
-
-        with tabs[4]:
-            st.subheader("Privacy")
-            st.caption("Your data stays local (SQLite). This is an educational prototype — **not a medical device**.")
+        # Privacy note (concise) + export reminder
+        st.caption("🔒 Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver.")
 
 # ================== PLANNER HELPERS ==================
 def render_planner():
