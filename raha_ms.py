@@ -698,9 +698,10 @@ def render_about_page(lang: str = "English"):
             """)
 # ================== PLANNER HELPERS ==================
 def render_planner():
+    st.title("🗺️ " + T["planner"])
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
-    st.title("🗺️ " + T["planner"])
+    
     city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
     weather, err = get_weather(city)
     if weather is None:
@@ -1194,10 +1195,11 @@ if page_id == "about":
     render_about_page(app_language)
 
 elif page_id == "monitor":
+    st.title("☀️ " + T["risk_dashboard"])
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("☀️ " + T["risk_dashboard"])
+        
         st.session_state.setdefault("live_running", False)
         st.session_state.setdefault("live_core_smoothed", [])
         st.session_state.setdefault("live_core_raw", [])
@@ -1409,10 +1411,11 @@ elif page_id == "planner":
     render_planner()
 
 elif page_id == "journal":
+    st.title("📒 " + T["journal"])
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("📒 " + T["journal"])
+        
         st.caption(T["journal_hint"])
 
         st.markdown("### " + T["daily_logger"])
@@ -1578,10 +1581,11 @@ elif page_id == "assistant":
                     st.caption("This chat gives general information and does not replace your medical provider.")
 
 elif page_id == "exports":
+    st.title("📦 " + T["export_title"])
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("📦 " + T["export_title"])
+        
         st.caption(T["export_desc"])
         df_t = fetch_temps_df(st.session_state["user"])
         df_j = fetch_journal_df(st.session_state["user"])
@@ -1603,10 +1607,11 @@ elif page_id == "exports":
         st.download_button(journal_label, data=df_j.to_csv(index=False).encode("utf-8"), file_name="Journal.csv", mime="text/csv", use_container_width=True)
 
 elif page_id == "settings":
+    st.title("⚙️ " + T["settings"])
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-        st.title("⚙️ " + T["settings"])
+        
         st.subheader(T["baseline_setting"])
         st.session_state.setdefault("baseline", 37.0)
         st.session_state.setdefault("use_temp_baseline", True)
