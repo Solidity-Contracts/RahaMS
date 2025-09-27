@@ -1517,10 +1517,13 @@ elif page_id == "journal":
                         st.rerun()
 
 elif page_id == "assistant":
+    st.title("🤝 " + T["assistant_title"])
+
+    # Require login first (matches other pages)
     if "user" not in st.session_state:
         st.warning(T["login_first"])
-    else:
-        st.title("🤝 " + T["assistant_title"])
+        st.stop()  # IMPORTANT: prevents the rest of the assistant UI from rendering
+
     if not client:
         st.warning(T["ai_unavailable"])
     else:
