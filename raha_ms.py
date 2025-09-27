@@ -1677,31 +1677,18 @@ elif page_id == "journal":
 elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
 
-    # Require login first (matches other pages)
     if "user" not in st.session_state:
         st.warning(T["login_first"])
-        st.stop()  # IMPORTANT: prevents the rest of the assistant UI from rendering
+        st.stop()
 
     if not client:
         st.warning(T["ai_unavailable"])
     else:
         if "companion_messages" not in st.session_state:
-            st.session_state["companion_messages"] = [{
-                "role":"system",
-                "content": (
-                    "You are Raha MS Companion: warm, concise, and practical. "
-                    "Audience: people living with MS in the Gulf (GCC). "
-                    "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
-                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-                    "Avoid medical diagnosis; remind this is general info. " +
-                    ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
-                )
-            }]
+            st.session_state["companion_messages"] = []
 
-        personal_context = build_personal_context(app_language)
-
+        # Display chat history
         for m in st.session_state["companion_messages"]:
-            if m["role"] == "system": continue
             with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
                 st.markdown(m["content"])
 
@@ -1710,16 +1697,13 @@ elif page_id == "assistant":
             st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
             with st.chat_message("user"):
                 st.markdown(user_msg)
+            
             with st.chat_message("assistant"):
                 with st.spinner(T["thinking"]):
-                    try:
-                        msgs = st.session_state["companion_messages"].copy()
-                        msgs = msgs[:-1] + [{"role":"user","content": personal_context + "\n\nUser question:\n" + user_msg}]
-                        resp = client.chat.completions.create(model="gpt-4o-mini", messages=msgs, temperature=0.6)
-                        answer = resp.choices[0].message.content
-                    except Exception as e:
-                        answer = "Sorry, I had trouble answering right now. Please try again." if app_language == "English" else "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
+                    # USE THE FIXED AI_RESPONSE FUNCTION
+                    answer, error = ai_response(user_msg, app_language)
                     st.markdown(answer)
+            
             st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
 
         with st.container():
