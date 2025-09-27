@@ -1520,7 +1520,7 @@ elif page_id == "assistant":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
-    st.title("🤝 " + T["assistant_title"])
+        st.title("🤝 " + T["assistant_title"])
     if not client:
         st.warning(T["ai_unavailable"])
     else:
