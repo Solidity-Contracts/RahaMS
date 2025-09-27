@@ -651,7 +651,6 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
 # Initialize the companion
 companion = RahaCompanion(
     openai_client=OPENAI_API_KEY,
-    default_lang="en",  # Default language
     model="gpt-4o-mini",
     temperature=0.4,
     max_tokens=350
