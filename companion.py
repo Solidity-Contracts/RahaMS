@@ -15,6 +15,8 @@ class CompanionOut(BaseModel):
     safety_note: Optional[str] = None
 
 # ===== Utils =====
+ARABIC_CHARS_RE = re.compile(r"[\u0600-\u06FF]")
+
 def norm_lang(lang: str) -> str:
     """
     Normalize language input.
@@ -25,6 +27,10 @@ def norm_lang(lang: str) -> str:
         return "en"
     lang = str(lang).strip().lower()
     return "ar" if lang.startswith("ar") or "arabic" in lang else "en"
+
+def detect_arabic_in_text(text: str) -> bool:
+    """Return True if the input contains Arabic script."""
+    return bool(ARABIC_CHARS_RE.search(text or ""))
 
 def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
     return [s.strip() for s in items if s.strip()][:k]
@@ -41,6 +47,7 @@ SYSTEM_AR = "Respond only in Arabic. Use Gulf-friendly phrasing when relevant."
 SYSTEM_EN = "Respond only in English."
 
 FEW_SHOTS = [
+    # English anchor
     {"role": "user", "content": "I'm feeling tired after being outside—should I worry?"},
     {"role": "assistant", "content": (
         "It sounds like heat might have nudged your MS symptoms a bit. "
@@ -51,6 +58,12 @@ FEW_SHOTS = [
         "• Go during the coolest slot you can and pre-cool at home.\n"
         "• Wear breathable layers or a cooling scarf/vest.\n"
         "• Park close, pace your steps, and hydrate before/after (if not fasting)."
+    )},
+    # Arabic anchor (helps keep replies Arabic when user writes Arabic)
+    {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
+    {"role": "assistant", "content": (
+        "الحر قد يرفع الأعراض مؤقتًا. حاول الجلوس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. "
+        "إذا لم تتحسن بعد التبريد والنوم، تواصل مع طبيبك."
     )},
 ]
 
@@ -134,14 +147,20 @@ class RahaCompanion:
         )
 
     def respond(self, user_text: str, lang: Optional[str] = None) -> CompanionOut:
-        lang = norm_lang(lang or self.default_lang)
+        """
+        Auto-detect Arabic from user_text. If Arabic script is present, force 'ar'.
+        Otherwise, fall back to normalized input/lang default.
+        """
+        lang_from_text = "ar" if detect_arabic_in_text(user_text) else None
+        lang_final = lang_from_text or norm_lang(lang or self.default_lang)
+
         intent = detect_intent(user_text)
         red = detect_red_flags(user_text)
         try:
-            resp = self._call_llm(self._messages(lang, user_text, intent))
+            resp = self._call_llm(self._messages(lang_final, user_text, intent))
             content = resp.choices[0].message.content or ""
         except Exception:
             content = ("يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلاً."
-                       if lang == "ar"
+                       if lang_final == "ar"
                        else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest.")
-        return self._post(content, intent, lang, red)
+        return self._post(content, intent, lang_final, red)
