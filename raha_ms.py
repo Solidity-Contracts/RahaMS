@@ -26,8 +26,6 @@ try:
 except Exception:
     client = None
 
-# Initialize once (choose your default language)
-out = bot.respond(prompt, norm_lang(lang))
 
 # GCC quick picks
 GCC_CITIES = [
@@ -659,7 +657,7 @@ def ai_response(prompt, lang):
     if not client:
         return None, "no_key"
     try:
-        out = bot.respond(prompt, lang)
+        out = bot.respond(prompt, norm_lang(lang))
         # keep returning a simple string so the rest of your code doesn’t break
         text = out.message
         # if you want to opportunistically add bullets to the text:
