@@ -1145,6 +1145,10 @@ logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826
 st.sidebar.image(logo_url, use_container_width=True)
 
 # --- Sidebar: language selector (set BEFORE anything that uses T/app_language) ---
+
+if "_prev_lang" not in st.session_state:
+    st.session_state["_prev_lang"] = None
+    
 app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
 T = TEXTS[app_language]
 
@@ -1191,6 +1195,8 @@ page_id = st.sidebar.radio(
 # Keep the single source of truth
 st.session_state["current_page"] = page_id
 
+# Update stored language for next rerun
+st.session_state["_prev_lang"] = app_language
 
 # --- Login/Register + Logout (expander) ---
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
