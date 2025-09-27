@@ -1,4 +1,5 @@
 import streamlit as st
+import os
 import sqlite3, json, requests, random, time, zipfile, io
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,6 +10,7 @@ from collections import defaultdict
 from datetime import datetime as _dt
 import json
 import re
+from openai import OpenAI
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -20,7 +22,6 @@ OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHER_API_KEY", "")
 
 # OpenAI (optional)
 try:
-    from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 except Exception:
     client = None
