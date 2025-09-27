@@ -658,78 +658,50 @@ companion = RahaCompanion(
 )
 
 def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
-    """
-    Simplified interface that matches your original function signature.
-    Returns (response_text, error_code) where error_code is None if successful.
-    """
     try:
-        # 1) Decide the final language (force Arabic if the text contains Arabic script)
         lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
-
-        # 2) Hard-nudge the model to Arabic by prepending an Arabic-only cue to the user message
         user_text = prompt if lang_final == "en" else f"الرجاء الإجابة بالعربية فقط.\n\n{prompt}"
 
-        # 3) Ask the companion with the final language
         result: CompanionOut = companion.respond(user_text=user_text, lang=lang_final)
 
-        # 4) Build your plain-text output (like your old function)
+        # Build plain text as before
+        parts = [result.message]
         if result.bullets:
-            response_text = f"{result.message}\n\n" + "\n".join(f"• {b}" for b in result.bullets)
-        else:
-            response_text = result.message
-
+            parts.append("\n".join(f"• {b}" for b in result.bullets))
         if result.safety_note:
-            response_text += f"\n\n⚠️ {result.safety_note}"
+            parts.append(f"⚠️ {result.safety_note}")
         if result.next_step:
-            response_text += f"\n\n💡 {result.next_step}"
+            parts.append(f"💡 {result.next_step}")
+        response_text = "\n\n".join(p for p in parts if p)
 
-        # 5) If we expected Arabic but somehow got mostly non-Arabic, add a last-resort cue
+        # Last-resort: if we expected Arabic but output is not Arabic, try one more time
         if lang_final == "ar" and not detect_arabic_in_text(response_text):
-            # one retry using the same call but with an even clearer instruction
             retry_text = "من فضلك أجب بالعربية فقط.\n\n" + prompt
             result = companion.respond(user_text=retry_text, lang="ar")
+            parts = [result.message]
             if result.bullets:
-                response_text = f"{result.message}\n\n" + "\n".join(f"• {b}" for b in result.bullets)
-            else:
-                response_text = result.message
+                parts.append("\n".join(f"• {b}" for b in result.bullets))
             if result.safety_note:
-                response_text += f"\n\n⚠️ {result.safety_note}"
+                parts.append(f"⚠️ {result.safety_note}")
             if result.next_step:
-                response_text += f"\n\n💡 {result.next_step}"
+                parts.append(f"💡 {result.next_step}")
+            response_text = "\n\n".join(p for p in parts if p)
 
         return response_text, None
 
-    except Exception:
-        # Use the correct helpers (not attributes on the instance)
+    except Exception as e:
+        # >>> Debug output to terminal/logs
+        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e))
+
         lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
         fallback = (
-            "يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلًا."
+            "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى.\n"
+            f"(خطأ: {e.__class__.__name__}: {str(e)[:180]})"
             if lang_final == "ar"
-            else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest."
+            else "Sorry—something went wrong. Please try again.\n"
+                 f"(Error: {e.__class__.__name__}: {str(e)[:180]})"
         )
         return fallback, "err"
-
-
-# Optional: direct companion usage for structured responses
-def get_companion_response(prompt: str, lang: str = None) -> CompanionOut:
-    # Force Arabic if the text is Arabic; otherwise normalize
-    lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang or "en")
-    user_text = prompt if lang_final == "en" else f"الرجاء الإجابة بالعربية فقط.\n\n{prompt}"
-    return companion.respond(user_text=user_text, lang=lang_final)
-
-
-# Example usage
-if __name__ == "__main__":
-    arabic_prompt = "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"
-    response, error = ai_response(arabic_prompt, "en")  # even if 'en', should come back Arabic
-    print("Arabic Response:\n", response, "\n")
-
-    english_prompt = "I feel tired after walking in the afternoon heat. Is this normal?"
-    response, error = ai_response(english_prompt, "en")
-    print("English Response:\n", response, "\n")
-
-    structured = get_companion_response(arabic_prompt, "ar-AE")
-    print("Structured:\n", structured.model_dump())
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
