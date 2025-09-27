@@ -8,7 +8,6 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
-#from companion import RahaCompanion, CompanionOut, detect_arabic_in_text
 import re
 
 # ================== CONFIG ==================
@@ -648,123 +647,6 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     next_p = prev_periph + (target - prev_periph) * 0.3 + ambient_push + noise
     return max(32.0, min(40.0, round(next_p, 2)))
 
-# ================== AI ==================
-_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
-
-def _is_arabic(s: str) -> bool:
-    return bool(_ARABIC_RE.search(s or ""))
-
-def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
-    """
-    Always reply in the same language as the user's text.
-    - If the prompt has Arabic script -> Arabic response.
-    - Otherwise -> English response.
-    The `lang` argument is ignored for reliability (kept only for compatibility).
-    """
-    # 0) Key check
-    if not client:
-        return ("عذرًا، لا توجد مفاتيح API مهيّأة."
-                if _is_arabic(prompt) else
-                "Sorry, no API key configured."), "no_key"
-
-    # 1) Detect language from the actual text - FIXED LOGIC
-    want_ar = _is_arabic(prompt)
-    
-    # 2) Use explicit language-specific system prompts (not mixed)
-    if want_ar:
-        system_prompt = (
-            "أنت رفيق رها AI للأشخاص المصابين بالتصلب المتعدد. "
-            "كن دافئًا، داعمًا، ومختصرًا. استخدم جملتين إلى ثلاث جمل قصيرة كافتراضي؛ "
-            "استخدم النقاط فقط إذا طلب المستخدم نصائح/خطة (بحد أقصى 3 نقاط). "
-            "كن واعيًا ثقافيًا لمستخدمي دول الخليج (الصيام، أوقات الصلاة، التكييف المنزلي، ملابس التبريد، تنظيم الجهد). "
-            "هذا تثقيف عام وليس رعاية طبية. "
-            "**الرد باللغة العربية فقط دائمًا. لا تستخدم الإنجليزية أبدًا.**"
-        )
-    else:
-        system_prompt = (
-            "You are Raha MS AI Companion for people with multiple sclerosis. "
-            "Be warm, supportive, and concise. Use 2–3 short sentences by default; "
-            "only use bullets if the user explicitly asks for tips/plan (max 3 bullets). "
-            "Be culturally aware for GCC users (fasting, prayer times, home AC, cooling garments, pacing). "
-            "This is general education, not medical care. "
-            "**Reply in English only. Never use Arabic.**"
-        )
-
-    try:
-        # 3) Add language-specific few-shot examples
-        messages = [
-            {"role": "system", "content": system_prompt},
-        ]
-        
-        # Add Arabic examples for Arabic prompts, English for English
-        if want_ar:
-            messages.extend([
-                {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
-                {"role": "assistant", "content": "الحر قد يرفع الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. إذا استمر الإرهاق، تواصل مع طبيبك."},
-                {"role": "user", "content": "أريد نصائح للخروج في الحر"},
-                {"role": "assistant", "content": "• اختر الأوقات الباردة مثل الصباح الباكر أو بعد المغرب\n• ارتدِ ملابس قطنية فاتحة اللون\n• خذ فترات راحة واستخدم مظلة أو قبعة"},
-            ])
-        else:
-            messages.extend([
-                {"role": "user", "content": "I feel tired after walking in the afternoon heat. Is this normal?"},
-                {"role": "assistant", "content": "Heat can temporarily worsen MS symptoms. Rest in a cool place, drink water, and take a short break. If fatigue persists, contact your doctor."},
-                {"role": "user", "content": "Give me tips for going out in the heat"},
-                {"role": "assistant", "content": "• Choose cooler times like early morning or after sunset\n• Wear light-colored cotton clothing\n• Take breaks and use an umbrella or hat"},
-            ])
-        
-        messages.append({"role": "user", "content": prompt})
-        
-        # 4) One clean call
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            temperature=0.4,
-            max_tokens=350,
-            presence_penalty=0.0,
-            frequency_penalty=0.2,
-        )
-        text = (resp.choices[0].message.content or "").strip()
-
-        # 5) Simple validation - if language is wrong, force correction
-        response_is_arabic = _is_arabic(text)
-        if want_ar and not response_is_arabic:
-            # Model responded in English when we wanted Arabic - force Arabic
-            correction_prompt = "الرجاء الرد باللغة العربية فقط. لا تستخدم الإنجليزية.\n\n" + prompt
-            resp2 = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": correction_prompt},
-                ],
-                temperature=0.3,
-                max_tokens=350,
-            )
-            text = (resp2.choices[0].message.content or "").strip()
-            
-        elif not want_ar and response_is_arabic:
-            # Model responded in Arabic when we wanted English - force English
-            correction_prompt = "Please respond in English only. Do not use Arabic.\n\n" + prompt
-            resp2 = client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": correction_prompt},
-                ],
-                temperature=0.3,
-                max_tokens=350,
-            )
-            text = (resp2.choices[0].message.content or "").strip()
-
-        return text, None
-
-    except Exception as e:
-        # 6) Localized, friendly fallback; print real cause once for debugging
-        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e)[:300])
-        if want_ar:
-            return "عذرًا، حدث خطأ أثناء الإجابة. يرجى المحاولة مرة أخرى.", "err"
-        else:
-            return "Sorry, I had trouble answering right now. Please try again.", "err"
-# ---------- end ----------
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1675,50 +1557,140 @@ elif page_id == "journal":
                         st.rerun()
 
 elif page_id == "assistant":
+    
+    # Arabic script detector
+    _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+    def _is_arabic(s: str) -> bool:
+        return bool(_ARABIC_RE.search(s or ""))
+
     st.title("🤝 " + T["assistant_title"])
 
+    # Require login first (matches other pages)
     if "user" not in st.session_state:
         st.warning(T["login_first"])
         st.stop()
 
+    # If OpenAI client isn't configured
     if not client:
         st.warning(T["ai_unavailable"])
+        st.stop()
+
+    # Seed the conversation once with a language-flexible core policy
+    if "companion_messages" not in st.session_state:
+        st.session_state["companion_messages"] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are Raha MS Companion: warm, concise, and practical. "
+                    "Audience: people living with MS in the Gulf (GCC). "
+                    "Tone: calm, friendly, encouraging; short paragraphs (2–3 sentences). "
+                    "Use at most 3 bullets only when the user explicitly asks for tips/plan. "
+                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
+                    "Avoid diagnosis; this is general information only. "
+                    "IMPORTANT: Always reply in the SAME LANGUAGE as the user's message. "
+                    "If the user's text contains Arabic script, reply in Modern Standard Arabic; otherwise reply in English."
+                ),
+            }
+        ]
+
+    # Build/refresh personal context as a separate system message
+    # (You already have build_personal_context(app_language) in your app)
+    personal_context = build_personal_context(app_language)
+    if len(st.session_state["companion_messages"]) == 1:
+        st.session_state["companion_messages"].append({"role": "system", "content": personal_context})
     else:
-        if "companion_messages" not in st.session_state:
-            st.session_state["companion_messages"] = []
+        st.session_state["companion_messages"][1] = {"role": "system", "content": personal_context}
 
-        # Display chat history
-        for m in st.session_state["companion_messages"]:
-            with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
-                st.markdown(m["content"])
+    # Render existing conversation (skip system messages)
+    for m in st.session_state["companion_messages"]:
+        if m["role"] == "system":
+            continue
+        with st.chat_message("assistant" if m["role"] == "assistant" else "user"):
+            st.markdown(m["content"])
 
-        user_msg = st.chat_input(T["ask_me_anything"])
-        if user_msg:
-            st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
-            with st.chat_message("user"):
-                st.markdown(user_msg)
-            
-            with st.chat_message("assistant"):
-                with st.spinner(T["thinking"]):
-                    # USE THE FIXED AI_RESPONSE FUNCTION
-                    answer, error = ai_response(user_msg, app_language)
-                    st.markdown(answer)
-            
-            st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+    # User input
+    user_msg = st.chat_input(T["ask_me_anything"])
+    if user_msg:
+        st.session_state["companion_messages"].append({"role": "user", "content": user_msg})
+        with st.chat_message("user"):
+            st.markdown(user_msg)
 
-        with st.container():
-            colA, colB = st.columns(2)
-            with colA:
-                if st.button(T["reset_chat"]):
-                    base = st.session_state["companion_messages"][0]
-                    st.session_state["companion_messages"] = [base]
-                    st.rerun()
-            with colB:
-                if app_language == "Arabic":
-                    st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-                else:
-                    st.caption("This chat gives general information and does not replace your medical provider.")
+        # Decide expected language from THIS user message only
+        want_ar = _is_arabic(user_msg)
 
+        # Per-turn language lock (system message)
+        turn_lang_cue = "Please answer ONLY in Arabic." if want_ar else "Please answer ONLY in English."
+
+        # Build the messages for this API call:
+        # - system[0]: core policy (language-flexible)
+        # - system[1]: personal context
+        # - system[2]: per-turn language cue (locks the reply language)
+        # - user: the actual user message
+        msgs = [
+            st.session_state["companion_messages"][0],
+            st.session_state["companion_messages"][1],
+            {"role": "system", "content": turn_lang_cue},
+            {"role": "user", "content": user_msg},
+        ]
+
+        # Call OpenAI
+        with st.chat_message("assistant"):
+            with st.spinner(T["thinking"]):
+                try:
+                    resp = client.chat.completions.create(
+                        model="gpt-4o-mini",
+                        messages=msgs,
+                        temperature=0.4,
+                        max_tokens=350,
+                        presence_penalty=0.0,
+                        frequency_penalty=0.2,
+                    )
+                    answer = (resp.choices[0].message.content or "").strip()
+
+                    # One tiny nudge retry if model drifted from desired language
+                    drifted = (_is_arabic(answer) != want_ar)
+                    if drifted:
+                        cue = "Please answer ONLY in Arabic.\n\n" if want_ar else "Please answer ONLY in English.\n\n"
+                        resp2 = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=[
+                                st.session_state["companion_messages"][0],
+                                st.session_state["companion_messages"][1],
+                                {"role": "system", "content": turn_lang_cue},
+                                {"role": "user", "content": cue + user_msg},
+                            ],
+                            temperature=0.3,
+                            max_tokens=350,
+                        )
+                        ans2 = (resp2.choices[0].message.content or "").strip()
+                        if ans2:
+                            answer = ans2
+
+                except Exception:
+                    # Localized apology based on THIS turn's language
+                    answer = (
+                        "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
+                        if want_ar
+                        else "Sorry, I had trouble answering right now. Please try again."
+                    )
+
+            st.markdown(answer)
+        st.session_state["companion_messages"].append({"role": "assistant", "content": answer})
+
+    # Footer: Reset + disclaimer
+    with st.container():
+        colA, colB = st.columns(2)
+        with colA:
+            if st.button(T["reset_chat"]):
+                base = st.session_state["companion_messages"][0]
+                st.session_state["companion_messages"] = [base]  # personal context re-injected on next render
+                st.rerun()
+        with colB:
+            if app_language == "Arabic":
+                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+            else:
+                st.caption("This chat gives general information and does not replace your medical provider.")
+    
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
     if "user" not in st.session_state:
