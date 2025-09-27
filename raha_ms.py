@@ -1566,17 +1566,18 @@ elif page_id == "assistant":
 
     st.title("🤝 " + T["assistant_title"])
 
-    # Require login first (matches other pages)
+    # Require login first
     if "user" not in st.session_state:
         st.warning(T["login_first"])
         st.stop()
 
-    # If OpenAI client isn't configured
+    # Block early if OpenAI client is not ready
     if not client:
         st.warning(T["ai_unavailable"])
+        st.caption("Tip: Ensure OPENAI_API_KEY is set in Streamlit Secrets or environment.")
         st.stop()
 
-    # Seed the conversation once with a language-flexible core policy
+    # Seed conversation (language-flexible core policy)
     if "companion_messages" not in st.session_state:
         st.session_state["companion_messages"] = [
             {
@@ -1594,52 +1595,42 @@ elif page_id == "assistant":
             }
         ]
 
-    # Build/refresh personal context as a separate system message
-    # (You already have build_personal_context(app_language) in your app)
+    # Personal context as a separate system message
     personal_context = build_personal_context(app_language)
     if len(st.session_state["companion_messages"]) == 1:
         st.session_state["companion_messages"].append({"role": "system", "content": personal_context})
     else:
         st.session_state["companion_messages"][1] = {"role": "system", "content": personal_context}
 
-    # Render existing conversation (skip system messages)
+    # Render history (skip system messages)
     for m in st.session_state["companion_messages"]:
         if m["role"] == "system":
             continue
         with st.chat_message("assistant" if m["role"] == "assistant" else "user"):
             st.markdown(m["content"])
 
-    # User input
+    # Input
     user_msg = st.chat_input(T["ask_me_anything"])
     if user_msg:
         st.session_state["companion_messages"].append({"role": "user", "content": user_msg})
         with st.chat_message("user"):
             st.markdown(user_msg)
 
-        # Decide expected language from THIS user message only
         want_ar = _is_arabic(user_msg)
-
-        # Per-turn language lock (system message)
         turn_lang_cue = "Please answer ONLY in Arabic." if want_ar else "Please answer ONLY in English."
 
-        # Build the messages for this API call:
-        # - system[0]: core policy (language-flexible)
-        # - system[1]: personal context
-        # - system[2]: per-turn language cue (locks the reply language)
-        # - user: the actual user message
         msgs = [
-            st.session_state["companion_messages"][0],
-            st.session_state["companion_messages"][1],
-            {"role": "system", "content": turn_lang_cue},
+            st.session_state["companion_messages"][0],  # core system
+            st.session_state["companion_messages"][1],  # personal context system
+            {"role": "system", "content": turn_lang_cue},  # per-turn language lock
             {"role": "user", "content": user_msg},
         ]
 
-        # Call OpenAI
         with st.chat_message("assistant"):
             with st.spinner(T["thinking"]):
                 try:
                     resp = client.chat.completions.create(
-                        model="gpt-4o-mini",
+                        model="gpt-4o-mini",  # if you see a model error, try: "gpt-4o-mini-2024-07-18"
                         messages=msgs,
                         temperature=0.4,
                         max_tokens=350,
@@ -1648,7 +1639,7 @@ elif page_id == "assistant":
                     )
                     answer = (resp.choices[0].message.content or "").strip()
 
-                    # One tiny nudge retry if model drifted from desired language
+                    # One nudge retry if language drifted
                     drifted = (_is_arabic(answer) != want_ar)
                     if drifted:
                         cue = "Please answer ONLY in Arabic.\n\n" if want_ar else "Please answer ONLY in English.\n\n"
@@ -1667,8 +1658,14 @@ elif page_id == "assistant":
                         if ans2:
                             answer = ans2
 
-                except Exception:
-                    # Localized apology based on THIS turn's language
+                except Exception as e:
+                    # >>> Show the true cause in the UI so you can fix it fast
+                    st.error(
+                        "The assistant hit an error when calling OpenAI. "
+                        "Fix the issue below and try again."
+                    )
+                    st.caption(f"{e.__class__.__name__}: {str(e)[:300]}")
+                    # Localized apology
                     answer = (
                         "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
                         if want_ar
@@ -1684,13 +1681,14 @@ elif page_id == "assistant":
         with colA:
             if st.button(T["reset_chat"]):
                 base = st.session_state["companion_messages"][0]
-                st.session_state["companion_messages"] = [base]  # personal context re-injected on next render
+                st.session_state["companion_messages"] = [base]  # personal context re-inserted next render
                 st.rerun()
         with colB:
             if app_language == "Arabic":
                 st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
             else:
                 st.caption("This chat gives general information and does not replace your medical provider.")
+    # ---------------- end AI Companion (diagnostic) ----------------
     
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
