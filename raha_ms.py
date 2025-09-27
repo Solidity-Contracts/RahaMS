@@ -668,44 +668,32 @@ def _render_plain(result: CompanionOut) -> str:
     return "\n\n".join(p for p in parts if p)
 
 def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
+    """
+    Backward-compatible signature, but language is decided ONLY from prompt text.
+    """
     try:
-        # Decide language from text first, then from lang param
-        lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
+        # Force language purely from the prompt
+        lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
+        result: CompanionOut = companion.respond(user_text=prompt, lang=None)  # lang ignored internally
+        text = _render_plain(result)
 
-        # Add explicit language cue to stabilize output
-        if lang_final == "ar":
-            user_text = "الرجاء الإجابة بالعربية فقط.\n\n" + prompt
-        else:
-            user_text = "Please answer in English only.\n\n" + prompt
+        # Safety: if model drifted into the wrong language, prepend a cue and retry once.
+        if lang_detected == "ar" and not detect_arabic_in_text(text):
+            result = companion.respond(user_text="الرجاء الإجابة بالعربية فقط.\n\n" + prompt, lang=None)
+            text = _render_plain(result)
+        elif lang_detected == "en" and detect_arabic_in_text(text):
+            result = companion.respond(user_text="Please answer in English only.\n\n" + prompt, lang=None)
+            text = _render_plain(result)
 
-        # First attempt
-        result: CompanionOut = companion.respond(user_text=user_text, lang=lang_final)
-        response_text = _render_plain(result)
-
-        # If we expected Arabic but didn't get it, retry once with a stricter cue
-        if lang_final == "ar" and not detect_arabic_in_text(response_text):
-            retry_text = "من فضلك أجب بالعربية فقط.\n\n" + prompt
-            result = companion.respond(user_text=retry_text, lang="ar")
-            response_text = _render_plain(result)
-
-        # If we expected English but the model drifted (rare), retry once with a stricter cue
-        if lang_final == "en" and detect_arabic_in_text(response_text):
-            retry_text = "Please answer ONLY in English. Do not use Arabic.\n\n" + prompt
-            result = companion.respond(user_text=retry_text, lang="en")
-            response_text = _render_plain(result)
-
-        return response_text, None
-
+        return text, None
     except Exception as e:
-        # Log exact error to console for debugging
-        print("AI_RESPONSE_EXCEPTION(EN/AR):", e.__class__.__name__, str(e))
-
-        lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
-        fallback = (
-            "عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى لاحقًا."
-            if lang_final == "ar"
-            else "Sorry, I had trouble answering right now. Please try again."
-        )
+        # Localized fallback based on detected language
+        lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
+        fallback = ("عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى."
+                    if lang_detected == "ar" else
+                    "Sorry, I had trouble answering right now. Please try again.")
+        # Optional: print for debugging
+        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e))
         return fallback, "err"
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
