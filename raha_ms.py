@@ -25,6 +25,9 @@ try:
 except Exception:
     client = None
 
+# Initialize once (choose your default language)
+bot = RahaCompanion(openai_client=client, default_lang="ar")
+
 # GCC quick picks
 GCC_CITIES = [
     "Abu Dhabi,AE", "Dubai,AE", "Sharjah,AE",
