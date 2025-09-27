@@ -8,8 +8,7 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
-from companion import RahaCompanion
-from companion import norm_lang
+from companion import RahaCompanion, CompanionOut
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -649,65 +648,84 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-import re
+# Initialize the companion
+companion = RahaCompanion(
+    openai_client=client,
+    default_lang="en",  # Default language
+    model="gpt-4o-mini",
+    temperature=0.4,
+    max_tokens=350
+)
 
-_ARABIC_CHARS_RE = re.compile(r"[\u0600-\u06FF]")
-
-def _norm_lang(lang: str) -> str:
-    """Any value that starts with 'ar' or contains 'arabic' => 'ar', else 'en'."""
-    if not lang:
-        return "en"
-    s = str(lang).strip().lower()
-    return "ar" if s.startswith("ar") or "arabic" in s else "en"
-
-def _looks_arabic(text: str) -> bool:
-    return bool(_ARABIC_CHARS_RE.search(text or ""))
-
-def ai_response(prompt, lang):
-    # 1) Decide language: Arabic if the text contains Arabic OR lang indicates Arabic
-    lang_final = "ar" if _looks_arabic(prompt) else _norm_lang(lang)
-
-    # 2) System prompt (keeps your original vibe, but forces the language reliably)
-    sys_prompt = (
-        "You are Raha MS AI Companion. Be warm, supportive, and concise. "
-        "Default to 2–3 short sentences. Only use bullets when the user asks for tips/plan. "
-        "Provide culturally relevant MS heat safety advice for Gulf (GCC) users "
-        "(fasting, prayer times, home AC, cooling garments, pacing). "
-        "This is general education, not medical care."
-    )
-    sys_prompt += " Respond only in Arabic." if lang_final == "ar" else " Respond only in English."
-
-    if not client:
-        return None, "no_key"
-
+def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
+    """
+    Simplified interface that matches your original function signature.
+    Returns (response_text, error_code) where error_code is None if successful.
+    """
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": sys_prompt},
-                # A tiny few-shot to “anchor” Arabic when needed without changing your structure
-                *(
-                    [
-                        {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
-                        {"role": "assistant", "content": "الحر قد يرفع الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا."},
-                    ] if lang_final == "ar" else []
-                ),
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.4,   # steadier, less list-y
-            max_tokens=350,
-            presence_penalty=0.0,
-            frequency_penalty=0.2,
-        )
-        return response.choices[0].message.content, None
-    except Exception:
-        # Localized fallback
+        # Use the companion to generate response
+        result: CompanionOut = companion.respond(user_text=prompt, lang=lang)
+        
+        # Format the response based on the style
+        if result.bullets:
+            response_text = f"{result.message}\n\n" + "\n".join(f"• {bullet}" for bullet in result.bullets)
+        else:
+            response_text = result.message
+            
+        # Add safety note if present
+        if result.safety_note:
+            response_text += f"\n\n⚠️ {result.safety_note}"
+            
+        # Add next step suggestion if present
+        if result.next_step:
+            response_text += f"\n\n💡 {result.next_step}"
+            
+        return response_text, None
+        
+    except Exception as e:
+        # Fallback response in appropriate language
+        lang_final = "ar" if companion.detect_arabic_in_text(prompt) else companion.norm_lang(lang)
+        
         fallback = (
             "يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلًا."
             if lang_final == "ar"
             else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest."
         )
         return fallback, "err"
+
+# Alternative: Direct companion usage (recommended)
+def get_companion_response(prompt: str, lang: str = None) -> CompanionOut:
+    """
+    Direct usage of the companion for more structured responses.
+    """
+    return companion.respond(user_text=prompt, lang=lang)
+
+# Example usage
+if __name__ == "__main__":
+    # Test Arabic response
+    arabic_prompt = "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"
+    response, error = ai_response(arabic_prompt, "ar")
+    print("Arabic Response:")
+    print(response)
+    print()
+    
+    # Test English response
+    english_prompt = "I feel tired after walking in the afternoon heat. Is this normal?"
+    response, error = ai_response(english_prompt, "en")
+    print("English Response:")
+    print(response)
+    print()
+    
+    # Test structured response
+    structured_response = get_companion_response(arabic_prompt, "ar")
+    print("Structured Response:")
+    print(f"Language: {structured_response.language}")
+    print(f"Style: {structured_response.style}")
+    print(f"Message: {structured_response.message}")
+    if structured_response.bullets:
+        print(f"Bullets: {structured_response.bullets}")
+    if structured_response.safety_note:
+        print(f"Safety Note: {structured_response.safety_note}")
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
