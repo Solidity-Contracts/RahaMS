@@ -657,49 +657,54 @@ companion = RahaCompanion(
     max_tokens=350
 )
 
+def _render_plain(result: CompanionOut) -> str:
+    parts = [result.message]
+    if result.bullets:
+        parts.append("\n".join(f"• {b}" for b in result.bullets))
+    if result.safety_note:
+        parts.append(f"⚠️ {result.safety_note}")
+    if result.next_step:
+        parts.append(f"💡 {result.next_step}")
+    return "\n\n".join(p for p in parts if p)
+
 def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
     try:
+        # Decide language from text first, then from lang param
         lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
-        user_text = prompt if lang_final == "en" else f"الرجاء الإجابة بالعربية فقط.\n\n{prompt}"
 
+        # Add explicit language cue to stabilize output
+        if lang_final == "ar":
+            user_text = "الرجاء الإجابة بالعربية فقط.\n\n" + prompt
+        else:
+            user_text = "Please answer in English only.\n\n" + prompt
+
+        # First attempt
         result: CompanionOut = companion.respond(user_text=user_text, lang=lang_final)
+        response_text = _render_plain(result)
 
-        # Build plain text as before
-        parts = [result.message]
-        if result.bullets:
-            parts.append("\n".join(f"• {b}" for b in result.bullets))
-        if result.safety_note:
-            parts.append(f"⚠️ {result.safety_note}")
-        if result.next_step:
-            parts.append(f"💡 {result.next_step}")
-        response_text = "\n\n".join(p for p in parts if p)
-
-        # Last-resort: if we expected Arabic but output is not Arabic, try one more time
+        # If we expected Arabic but didn't get it, retry once with a stricter cue
         if lang_final == "ar" and not detect_arabic_in_text(response_text):
             retry_text = "من فضلك أجب بالعربية فقط.\n\n" + prompt
             result = companion.respond(user_text=retry_text, lang="ar")
-            parts = [result.message]
-            if result.bullets:
-                parts.append("\n".join(f"• {b}" for b in result.bullets))
-            if result.safety_note:
-                parts.append(f"⚠️ {result.safety_note}")
-            if result.next_step:
-                parts.append(f"💡 {result.next_step}")
-            response_text = "\n\n".join(p for p in parts if p)
+            response_text = _render_plain(result)
+
+        # If we expected English but the model drifted (rare), retry once with a stricter cue
+        if lang_final == "en" and detect_arabic_in_text(response_text):
+            retry_text = "Please answer ONLY in English. Do not use Arabic.\n\n" + prompt
+            result = companion.respond(user_text=retry_text, lang="en")
+            response_text = _render_plain(result)
 
         return response_text, None
 
     except Exception as e:
-        # >>> Debug output to terminal/logs
-        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e))
+        # Log exact error to console for debugging
+        print("AI_RESPONSE_EXCEPTION(EN/AR):", e.__class__.__name__, str(e))
 
         lang_final = "ar" if detect_arabic_in_text(prompt) else norm_lang(lang)
         fallback = (
-            "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى.\n"
-            f"(خطأ: {e.__class__.__name__}: {str(e)[:180]})"
+            "عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى لاحقًا."
             if lang_final == "ar"
-            else "Sorry—something went wrong. Please try again.\n"
-                 f"(Error: {e.__class__.__name__}: {str(e)[:180]})"
+            else "Sorry, I had trouble answering right now. Please try again."
         )
         return fallback, "err"
 
