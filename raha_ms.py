@@ -648,94 +648,94 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-# Initialize the companion
-companion = RahaCompanion(
-    openai_client=OPENAI_API_KEY,
-    model="gpt-4o-mini",
-    temperature=0.4,
-    max_tokens=350
-)
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 
-def _render_plain(result: CompanionOut) -> str:
-    parts = [result.message]
-    if result.bullets:
-        parts.append("\n".join(f"• {b}" for b in result.bullets))
-    if result.safety_note:
-        parts.append(f"⚠️ {result.safety_note}")
-    if result.next_step:
-        parts.append(f"💡 {result.next_step}")
-    return "\n\n".join(p for p in parts if p)
-
-def _direct_minimal_call(prompt_text: str, lang_detected: str) -> str:
-    """
-    Emergency fallback: one tiny call straight to OpenAI with the simplest prompt.
-    """
-    sys = "Respond only in Arabic." if lang_detected == "ar" else "Respond only in English."
-    resp = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=[
-            {"role": "system", "content": sys},
-            {"role": "user", "content": prompt_text},
-        ],
-        temperature=0.3,
-        max_tokens=300,
-    )
-    return resp.choices[0].message.content or ""
+def _is_arabic(s: str) -> bool:
+    return bool(_ARABIC_RE.search(s or ""))
 
 def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
     """
-    Always reply in the same language as the question:
-    - Arabic if the text contains Arabic characters
-    - otherwise English
-
-    If the structured companion call fails, retry with a minimal direct call.
+    Always reply in the same language as the user's text.
+    - If the prompt has Arabic script -> Arabic response.
+    - Otherwise -> English response.
+    The `lang` argument is ignored (kept only for backward compatibility).
+    Returns: (text, error_code) where error_code is None on success.
     """
-    lang_detected = "ar" if detect_arabic_in_text(prompt) else "en"
+    if not client:
+        return ("عذرًا، لا توجد مفاتيح API مهيّأة." if _is_arabic(prompt)
+                else "Sorry, no API key configured."), "no_key"
+
+    lang_detected = "ar" if _is_arabic(prompt) else "en"
+
+    SYSTEM_AR = (
+        "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
+        "Default to 2–3 short sentences; only use bullets on explicit request (max 3). "
+        "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
+        "Educational only, not medical care. "
+        "Respond ONLY in Arabic."
+    )
+    SYSTEM_EN = (
+        "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
+        "Default to 2–3 short sentences; only use bullets on explicit request (max 3). "
+        "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
+        "Educational only, not medical care. "
+        "Respond ONLY in English."
+    )
+
+    # Tiny few-shot in the same language (stabilizes tone without being heavy)
+    FEW_AR = [
+        {"role": "user", "content": "أشعر بإرهاق بسبب الحر. ماذا أفعل؟"},
+        {"role": "assistant", "content": "قد يرفع الحر الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً ثم ارتَح قليلًا."},
+    ]
+    FEW_EN = [
+        {"role": "user", "content": "I feel more fatigued in this heat. What should I do?"},
+        {"role": "assistant", "content": "Heat may temporarily worsen symptoms. Rest in a cool room and sip water."},
+    ]
+
+    sys = SYSTEM_AR if lang_detected == "ar" else SYSTEM_EN
+    few = FEW_AR if lang_detected == "ar" else FEW_EN
 
     try:
-        # 1) Primary path: structured companion
-        result: CompanionOut = companion.respond(user_text=prompt, lang=None)  # companion infers language from text
-        txt = _render_plain(result)
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": sys},
+                *few,
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,
+            max_tokens=350,
+            presence_penalty=0.0,
+            frequency_penalty=0.2,
+        )
+        text = (resp.choices[0].message.content or "").strip()
 
-        # 2) Guard-rail: correct any language drift with a quick retry
-        if lang_detected == "ar" and not detect_arabic_in_text(txt):
-            result = companion.respond(user_text="الرجاء الإجابة بالعربية فقط.\n\n" + prompt, lang=None)
-            txt = _render_plain(result)
-        elif lang_detected == "en" and detect_arabic_in_text(txt):
-            result = companion.respond(user_text="Please answer in English only.\n\n" + prompt, lang=None)
-            txt = _render_plain(result)
+        # Guardrail: if the model drifted into the wrong language, nudge once and retry
+        drifted = (_is_arabic(text) and lang_detected == "en") or (not _is_arabic(text) and lang_detected == "ar")
+        if drifted:
+            cue = "الرجاء الإجابة بالعربية فقط.\n\n" if lang_detected == "ar" else "Please answer in English only.\n\n"
+            resp2 = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": sys},
+                    {"role": "user", "content": cue + prompt},
+                ],
+                temperature=0.3,
+                max_tokens=350,
+            )
+            text2 = (resp2.choices[0].message.content or "").strip()
+            if text2:
+                text = text2
 
-        return txt, None
+        return text, None
 
-    except Exception as e1:
-        # 3) Fallback path: minimal direct call in the same language
-        try:
-            txt = _direct_minimal_call(prompt, lang_detected)
-
-            # If the minimal call drifted, add a one-line cue and try once more
-            if lang_detected == "en" and detect_arabic_in_text(txt):
-                txt = _direct_minimal_call("Please answer in English only.\n\n" + prompt, "en")
-            elif lang_detected == "ar" and not detect_arabic_in_text(txt):
-                txt = _direct_minimal_call("الرجاء الإجابة بالعربية فقط.\n\n" + prompt, "ar")
-
-            return txt, None
-
-        except Exception as e2:
-            # 4) Final: show a friendly message + the real error snippet
-            print("AI_RESPONSE_EXCEPTION(primary):", e1.__class__.__name__, str(e1))
-            print("AI_RESPONSE_EXCEPTION(fallback):", e2.__class__.__name__, str(e2))
-            if lang_detected == "ar":
-                return (
-                    "عذرًا، واجهت مشكلة أثناء الإجابة. جرّب مرة أخرى.\n"
-                    f"(تفاصيل فنية: {e2.__class__.__name__}: {str(e2)[:150]})",
-                    "err",
-                )
-            else:
-                return (
-                    "Sorry, I had trouble answering right now. Please try again.\n"
-                    f"(Tech details: {e2.__class__.__name__}: {str(e2)[:150]})",
-                    "err",
-                )
+    except Exception as e:
+        # Print once to console for debugging, but return localized, user-friendly text
+        print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e)[:300])
+        if lang_detected == "ar":
+            return "عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى.", "err"
+        else:
+            return "Sorry, I had trouble answering right now. Please try again.", "err"
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
