@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
+from companion import RahaCompanion
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -646,23 +647,23 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
+# Initialize once (choose your default language)
+bot = RahaCompanion(openai_client=client, default_lang="ar")
+
+# Backward-compatible wrapper
 def ai_response(prompt, lang):
-    sys_prompt = (
-        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
-        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
-        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
-        "This is general education, not medical care."
-    )
-    sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     if not client:
         return None, "no_key"
     try:
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7,
-        )
-        return response.choices[0].message.content, None
+        out = bot.respond(prompt, lang)
+        # keep returning a simple string so the rest of your code doesn’t break
+        text = out.message
+        # if you want to opportunistically add bullets to the text:
+        if out.bullets:
+            text += "\n\n" + "\n".join([f"• {b}" for b in out.bullets])
+        if out.safety_note:
+            text += "\n\n" + ("ℹ️ " if out.language == "en" else "ℹ️ ") + out.safety_note
+        return text, None
     except Exception:
         return None, "err"
 
