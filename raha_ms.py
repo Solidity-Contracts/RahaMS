@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
-from companion import RahaCompanion, CompanionOut, detect_arabic_in_text
+#from companion import RahaCompanion, CompanionOut, detect_arabic_in_text
 import re
 
 # ================== CONFIG ==================
@@ -659,49 +659,35 @@ def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
     Always reply in the same language as the user's text.
     - If the prompt has Arabic script -> Arabic response.
     - Otherwise -> English response.
-    The `lang` argument is ignored (kept only for backward compatibility).
-    Returns: (text, error_code) where error_code is None on success.
+    The `lang` argument is ignored for reliability (kept only for compatibility).
     """
+    # 0) Key check
     if not client:
-        return ("عذرًا، لا توجد مفاتيح API مهيّأة." if _is_arabic(prompt)
-                else "Sorry, no API key configured."), "no_key"
+        return ("عذرًا، لا توجد مفاتيح API مهيّأة."
+                if _is_arabic(prompt) else
+                "Sorry, no API key configured."), "no_key"
 
-    lang_detected = "ar" if _is_arabic(prompt) else "en"
+    # 1) Detect language from the actual text
+    want_ar = _is_arabic(prompt)
 
-    SYSTEM_AR = (
-        "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
-        "Default to 2–3 short sentences; only use bullets on explicit request (max 3). "
-        "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
-        "Educational only, not medical care. "
-        "Respond ONLY in Arabic."
+    # 2) Single, ASCII-only system prompt (no Arabic literals)
+    system_prompt = (
+        "You are Raha MS AI Companion for people with multiple sclerosis. "
+        "Be warm, supportive, and concise. Use 2–3 short sentences by default; "
+        "only use bullets if the user explicitly asks for tips/plan (max 3 bullets). "
+        "Be culturally aware for GCC users (fasting, prayer times, home AC, cooling garments, pacing). "
+        "This is general education, not medical care. "
+        "CRITICAL: Reply in the user's language. "
+        "If the user's message contains Arabic script, reply in Modern Standard Arabic. "
+        "Otherwise, reply in English."
     )
-    SYSTEM_EN = (
-        "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
-        "Default to 2–3 short sentences; only use bullets on explicit request (max 3). "
-        "GCC context (fasting, prayer times, AC/home, cooling garments, pacing). "
-        "Educational only, not medical care. "
-        "Respond ONLY in English."
-    )
-
-    # Tiny few-shot in the same language (stabilizes tone without being heavy)
-    FEW_AR = [
-        {"role": "user", "content": "أشعر بإرهاق بسبب الحر. ماذا أفعل؟"},
-        {"role": "assistant", "content": "قد يرفع الحر الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً ثم ارتَح قليلًا."},
-    ]
-    FEW_EN = [
-        {"role": "user", "content": "I feel more fatigued in this heat. What should I do?"},
-        {"role": "assistant", "content": "Heat may temporarily worsen symptoms. Rest in a cool room and sip water."},
-    ]
-
-    sys = SYSTEM_AR if lang_detected == "ar" else SYSTEM_EN
-    few = FEW_AR if lang_detected == "ar" else FEW_EN
 
     try:
+        # 3) One clean call
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": sys},
-                *few,
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.4,
@@ -711,14 +697,14 @@ def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
         )
         text = (resp.choices[0].message.content or "").strip()
 
-        # Guardrail: if the model drifted into the wrong language, nudge once and retry
-        drifted = (_is_arabic(text) and lang_detected == "en") or (not _is_arabic(text) and lang_detected == "ar")
+        # 4) Guardrail: if model drifted, nudge once and retry (still ASCII-only)
+        drifted = _is_arabic(text) != want_ar
         if drifted:
-            cue = "الرجاء الإجابة بالعربية فقط.\n\n" if lang_detected == "ar" else "Please answer in English only.\n\n"
+            cue = "Please answer ONLY in English.\n\n" if not want_ar else "Please answer ONLY in Arabic.\n\n"
             resp2 = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
-                    {"role": "system", "content": sys},
+                    {"role": "system", "content": system_prompt},
                     {"role": "user", "content": cue + prompt},
                 ],
                 temperature=0.3,
@@ -731,10 +717,10 @@ def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
         return text, None
 
     except Exception as e:
-        # Print once to console for debugging, but return localized, user-friendly text
+        # 5) Localized, friendly fallback; print real cause once for debugging
         print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e)[:300])
-        if lang_detected == "ar":
-            return "عذرًا، حدث خطأ أثناء الإجابة. حاول مرة أخرى.", "err"
+        if want_ar:
+            return "عذرًا، حدث خطأ أثناء الإجابة. يرجى المحاولة مرة أخرى.", "err"
         else:
             return "Sorry, I had trouble answering right now. Please try again.", "err"
 
