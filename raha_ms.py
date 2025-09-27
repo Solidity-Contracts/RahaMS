@@ -649,25 +649,65 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-# Initialize once (choose your default language)
-bot = RahaCompanion(openai_client=client, default_lang="ar")
+import re
 
-# Backward-compatible wrapper
+_ARABIC_CHARS_RE = re.compile(r"[\u0600-\u06FF]")
+
+def _norm_lang(lang: str) -> str:
+    """Any value that starts with 'ar' or contains 'arabic' => 'ar', else 'en'."""
+    if not lang:
+        return "en"
+    s = str(lang).strip().lower()
+    return "ar" if s.startswith("ar") or "arabic" in s else "en"
+
+def _looks_arabic(text: str) -> bool:
+    return bool(_ARABIC_CHARS_RE.search(text or ""))
+
 def ai_response(prompt, lang):
+    # 1) Decide language: Arabic if the text contains Arabic OR lang indicates Arabic
+    lang_final = "ar" if _looks_arabic(prompt) else _norm_lang(lang)
+
+    # 2) System prompt (keeps your original vibe, but forces the language reliably)
+    sys_prompt = (
+        "You are Raha MS AI Companion. Be warm, supportive, and concise. "
+        "Default to 2–3 short sentences. Only use bullets when the user asks for tips/plan. "
+        "Provide culturally relevant MS heat safety advice for Gulf (GCC) users "
+        "(fasting, prayer times, home AC, cooling garments, pacing). "
+        "This is general education, not medical care."
+    )
+    sys_prompt += " Respond only in Arabic." if lang_final == "ar" else " Respond only in English."
+
     if not client:
         return None, "no_key"
+
     try:
-        out = bot.respond(prompt, norm_lang(lang))
-        # keep returning a simple string so the rest of your code doesn’t break
-        text = out.message
-        # if you want to opportunistically add bullets to the text:
-        if out.bullets:
-            text += "\n\n" + "\n".join([f"• {b}" for b in out.bullets])
-        if out.safety_note:
-            text += "\n\n" + ("ℹ️ " if out.language == "en" else "ℹ️ ") + out.safety_note
-        return text, None
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                # A tiny few-shot to “anchor” Arabic when needed without changing your structure
+                *(
+                    [
+                        {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
+                        {"role": "assistant", "content": "الحر قد يرفع الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا."},
+                    ] if lang_final == "ar" else []
+                ),
+                {"role": "user", "content": prompt},
+            ],
+            temperature=0.4,   # steadier, less list-y
+            max_tokens=350,
+            presence_penalty=0.0,
+            frequency_penalty=0.2,
+        )
+        return response.choices[0].message.content, None
     except Exception:
-        return None, "err"
+        # Localized fallback
+        fallback = (
+            "يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلًا."
+            if lang_final == "ar"
+            else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest."
+        )
+        return fallback, "err"
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
