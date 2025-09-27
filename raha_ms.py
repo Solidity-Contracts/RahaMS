@@ -310,6 +310,36 @@ h3 { margin-top: 0.2rem; }
 """
 st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
 
+# ---------- MOBILE RTL TAB FIX ----------
+MOBILE_TAB_FIX_CSS = """
+<style>
+/* Make the tab header row scrollable on small screens */
+@media (max-width: 640px) {
+  div[role="tablist"] {
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    padding-bottom: 6px !important;
+    margin-bottom: 8px !important;
+  }
+  /* Prevent overlap in RTL: add some breathing room below the tabs */
+  [dir="rtl"] .stTabs {
+    margin-top: 6px !important;
+    margin-bottom: 8px !important;
+  }
+  /* Ensure first block after tabs isn't stuck under the tab row */
+  .stTabs + div, .stTabs + section {
+    margin-top: 6px !important;
+  }
+}
+/* Improve text contrast for dark mode: list items and paragraphs inherit theme color */
+.stMarkdown p, .stMarkdown li {
+  color: inherit !important;
+}
+</style>
+"""
+st.markdown(MOBILE_TAB_FIX_CSS, unsafe_allow_html=True)
+
+
 # ================== DB ==================
 @st.cache_resource
 def get_conn():
@@ -1139,18 +1169,23 @@ PAGE_LABELS = {
     "settings": T["settings"],
 }
 
-# Set a default ONCE
-st.session_state.setdefault("current_page")
+# Single source of truth
+st.session_state.setdefault("current_page", "about")
 
-# Seed the radio's state ONCE, then don't pass `index` again
+# Seed radio state once; DO NOT pass index afterward
 if "nav_radio" not in st.session_state:
     st.session_state["nav_radio"] = st.session_state["current_page"]
 
+# If language changed this rerun, keep the same page selection
+if prev_lang is not None and prev_lang != app_language:
+    if st.session_state.get("current_page") in PAGE_IDS:
+        st.session_state["nav_radio"] = st.session_state["current_page"]
+
 page_id = st.sidebar.radio(
     "📑 " + ("التنقل" if app_language == "Arabic" else "Navigate"),
-    options=PAGE_IDS,                         # values never change
-    format_func=lambda pid: PAGE_LABELS[pid], # labels change with language (OK)
-    key="nav_radio",                          # persists across reruns/language changes
+    options=PAGE_IDS,                          # stable IDs
+    format_func=lambda pid: PAGE_LABELS[pid],  # localized labels
+    key="nav_radio",
 )
 
 # Keep the single source of truth
