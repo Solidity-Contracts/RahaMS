@@ -1126,7 +1126,7 @@ if app_language == "Arabic":
     </style>
     """, unsafe_allow_html=True)
 
-# --- Navigation state (fix double-click issue) ---
+# --- Navigation with stable IDs (LANG-SWITCH SAFE) ---
 PAGE_IDS = ["about", "monitor", "planner", "journal", "assistant", "exports", "settings"]
 PAGE_LABELS = {
     "about": T["about_title"],
@@ -1138,22 +1138,23 @@ PAGE_LABELS = {
     "settings": T["settings"],
 }
 
-# One-time migration: old int index → stable id
-if "current_page" not in st.session_state:
-    st.session_state["current_page"] = "about"
-elif isinstance(st.session_state["current_page"], int):
-    try:
-        st.session_state["current_page"] = PAGE_IDS[st.session_state["current_page"]]
-    except Exception:
-        st.session_state["current_page"] = "about"
+# Set a default ONCE
+st.session_state.setdefault("current_page", "about")
 
-# Bind radio directly to "current_page" (NO dynamic index) → solves double-click
+# Seed the radio's state ONCE, then don't pass `index` again
+if "nav_radio" not in st.session_state:
+    st.session_state["nav_radio"] = st.session_state["current_page"]
+
 page_id = st.sidebar.radio(
     "📑 " + ("التنقل" if app_language == "Arabic" else "Navigate"),
-    options=PAGE_IDS,
-    format_func=lambda pid: PAGE_LABELS[pid],
-    key="current_page"
+    options=PAGE_IDS,                         # values never change
+    format_func=lambda pid: PAGE_LABELS[pid], # labels change with language (OK)
+    key="nav_radio",                          # persists across reruns/language changes
 )
+
+# Keep the single source of truth
+st.session_state["current_page"] = page_id
+
 
 # --- Login/Register + Logout (expander) ---
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
