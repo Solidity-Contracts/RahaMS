@@ -625,93 +625,102 @@ def ai_response(prompt, lang):
     except Exception:
         return None, "err"
 
-# ================== ABOUT  ============================================
+# ================== ABOUT  ==================
 def render_about_page(lang: str = "English"):
-    # small helper to render a colored card with your existing .big-card CSS
+    # Card header with left color stripe; body rendered as native Markdown for proper bullets
     def card(title_icon: str, title_text: str, left_color: str, body_md: str):
         st.markdown(
             f"""
-            <div class="big-card" style="--left:{left_color};margin-bottom:14px;">
+            <div class="big-card" style="--left:{left_color};margin-bottom:10px;">
               <h3 style="margin:0">{title_icon} <strong>{title_text}</strong></h3>
-              <div style="margin-top:8px">{body_md}</div>
             </div>
             """,
             unsafe_allow_html=True,
         )
+        # Body in native Markdown so "-" lists render as bullets; add slight indent spacing
+        st.markdown(body_md)
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
 
+    # Page title + intro
     if lang == "Arabic":
         st.title("🧠 مرحبًا بك في راحة إم إس")
-        st.caption("مُصمَّم مع مجتمع التصلّب المتعدّد في الخليج — خصيصًا لحرارتنا ورطوبتنا.")
+        st.caption("مُصمَّم مع مجتمع التصلّب المتعدد في الخليج — خصيصًا لحرارتنا ورطوبتنا.")
 
-        # Section 1: Why Raha MS?
+        # 1) Why
         body1 = """
-        - مع **التصلّب المتعدّد (MS)**، الحرارة في الخليج ليست مجرد إزعاج — قد تُحفّز الأعراض.
-        - حتى ارتفاع **0.5°م** فقط في حرارة الجسم قد يسبب إرهاقًا أو تشوّشًا أو ضعفًا (**ظاهرة أوتهوف**).
-        - هذا الفرق الصغير **يصعب الشعور به** بدقة — غالبًا لا تلاحظه إلا بعد بدء الأعراض.
-        <br><br>
-        👉 <strong>راحة إم إس يحوِّل هذا الفرق غير المرئي إلى <u>نظام إنذار مبكر</u>.</strong>
-        """
+- مع **التصلّب المتعدّد (MS)**، حرارة الخليج قد تُحفِّز الأعراض.
+- حتى **+0.5°م** فقط قد يسبّب إرهاقًا أو تشوّشًا أو ضعفًا (**ظاهرة أوتهوف**).
+- هذا الفرق الصغير **يصعب الإحساس به** بدقة — غالبًا لا تلاحظه إلا بعد بدء الأعراض.
+
+👉 **راحة إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
+"""
         card("🌡️", "لماذا راحة إم إس؟", "#f59e0b", body1)
 
-        # Section 2: What makes it unique?
+        # 2) Unique / Novelty
         body2 = """
-        - **تنبيهات شخصية مبكرة**: يقيس ارتفاعك عن **أساسك أنت** وينبّهك <em>قبل أن تشعر</em>.
-        - **نوافذ أكثر أمانًا**: يبرز فترات ساعتين أبرد خلال 48 ساعة اعتمادًا على **الإحساس الحراري** والرطوبة.
-        - **فحص المكان**: قارن مدينتك بموقع محدد (شاطئ/مول/حديقة) لمعرفة أين الجو ألطف **الآن**.
-        - **اليوميات + التصدير**: سجّل الأعراض والمحفزات والملاحظات — ونزّلها كـ **Excel/CSV** لمشاركتها مع طبيبك أو مقدم الرعاية.
-        - **مصمم لحياة الخليج**: نصائح عملية للصيام، الوقوف للصلاة، المسارات المظللة، تبريد السيارة، والبحر.
-        - **الأول من نوعه** في الخليج: لا يوجد تطبيق آخر يركّز على حساسية الحرارة مع MS بهذه الدقة.
-        """
+- **تنبيهات شخصية مبكّرة**: يقيس ارتفاعك عن **أساسك أنت** وينبّهك *قبل أن تشعر*.
+- **نوافذ أكثر أمانًا**: يبرز فترات ساعتين أبرد خلال 48 ساعة اعتمادًا على **الإحساس الحراري** والرطوبة.
+- **فحص المكان**: قارن مدينتك بموقع محدد (شاطئ/مول/حديقة) لمعرفة أين الجو ألطف **الآن**.
+- **اليوميات + التصدير**: سجّل الأعراض والمحفزات والملاحظات — ونزّلها كـ **Excel/CSV** لمشاركتها مع طبيبك أو مقدم الرعاية.
+- **مصمم لحياة الخليج**: نصائح عملية للصيام، الوقوف للصلاة، المسارات المظللة، تبريد السيارة، والبحر.
+- **الأول من نوعه في الخليج**: لا يوجد تطبيق آخر يركّز على حساسية الحرارة مع MS بهذه الدقة.
+"""
         card("✨", "ما الذي يميّزه؟", "#10b981", body2)
 
-        # Section 3: How this helps
+        # 3) Impact
         body3 = """
-        - **التقاط الخطر مبكرًا**: لتأخذ استراحة أو تبرد *قبل* تفاقم الأعراض.
-        - **تخطيط بثقة**: اعرف بالضبط متى وأين يكون الخروج أكثر أمانًا.
-        - **فهم محفزاتك**: اربط بين الطقس وحرارتك وأعراضك عبر الوقت.
-        - **مشاركة بياناتك**: قدّم سجلات واضحة ومنظّمة لدعم رعاية أفضل.
-        """
+- **التقاط الخطر مبكرًا**: لتأخذ استراحة أو تبرد *قبل* تفاقم الأعراض.
+- **تخطيط بثقة**: اعرف بالضبط متى وأين يكون الخروج أكثر أمانًا.
+- **افهم محفزاتك**: اربط بين الطقس وحرارتك وأعراضك عبر الوقت.
+- **شارك بياناتك**: قدّم سجلات واضحة ومنظّمة لدعم رعاية أفضل.
+"""
         card("🧭", "كيف يساعدك؟", "#3b82f6", body3)
 
-        # Privacy note (concise) + export reminder
-        st.caption("🔒 بياناتك محفوظة محليًا على جهازك (SQLite). هذا نموذج توعوي للتنظيم الذاتي — وليس جهازًا طبيًا. ويمكنك تنزيل درجات الحرارة واليوميات كـ **Excel/CSV** لمشاركتها مع طبيبك.")
+        # Privacy + exports (concise)
+        st.markdown(
+            "🔒 **الخصوصية**: بياناتك محفوظة محليًا على جهازك (SQLite). هذا نموذج توعوي للتنظيم الذاتي — وليس جهازًا طبيًا. "
+            "ويمكنك تنزيل درجات الحرارة واليوميات كـ **Excel/CSV** لمشاركتها مع طبيبك.",
+        )
 
     else:
         st.title("🧠 Welcome to Raha MS")
         st.caption("Co-created with the MS community in the Gulf — built for our heat and humidity.")
 
-        # Section 1: Why Raha MS?
+        # 1) Why
         body1 = """
-        - For people with **Multiple Sclerosis (MS)**, Gulf heat can trigger symptoms.
-        - A rise as small as **0.5°C** in body temperature can bring on fatigue, blurred vision, or weakness (**Uhthoff’s phenomenon**).
-        - That tiny rise is **hard to feel** until symptoms already disrupt your day.
-        <br><br>
-        👉 <strong>Raha MS turns that invisible 0.5°C into an <u>early warning system</u>.</strong>
-        """
+- For people with **Multiple Sclerosis (MS)**, Gulf heat can trigger symptoms.
+- A rise as small as **+0.5°C** can bring on fatigue, blurred vision, or weakness (**Uhthoff’s phenomenon**).
+- That tiny rise is **hard to feel** until symptoms already disrupt your day.
+
+👉 **Raha MS turns that invisible 0.5°C into an _early warning system_.**
+"""
         card("🌡️", "Why Raha MS?", "#f59e0b", body1)
 
-        # Section 2: What makes it unique?
+        # 2) Unique / Novelty
         body2 = """
-        - **Personal early alerts**: watches your rise above **your baseline** and warns you <em>before you notice</em>.
-        - **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
-        - **Place check**: compare your city with a specific spot (beach, mall, park) to see where it’s safer **right now**.
-        - **Journal + exports**: record symptoms, triggers, and notes — download as **Excel/CSV** to share with your clinician or caregiver.
-        - **Designed for Gulf life**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
-        - **First of its kind** in the GCC: no other app focuses on MS heat sensitivity like this.
-        """
+- **Personal early alerts**: watches your rise above **your baseline** and warns you *before you notice*.
+- **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
+- **Place check**: compare your city with a specific spot (beach, mall, park) to see where it’s safer **right now**.
+- **Journal + exports**: record symptoms, triggers, and notes — download as **Excel/CSV** to share with your clinician or caregiver.
+- **Designed for Gulf life**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
+- **First of its kind in the GCC**: no other app focuses on MS heat sensitivity like this.
+"""
         card("✨", "What makes it unique?", "#10b981", body2)
 
-        # Section 3: How this helps
+        # 3) Impact
         body3 = """
-        - **Catch risks early**: cool down or pause *before* symptoms escalate.
-        - **Plan confidently**: know exactly when and where it’s safer to go out.
-        - **Understand your triggers**: connect weather, body temperature, and symptoms over time.
-        - **Share evidence**: give your doctor clear, organized records to support better care.
-        """
+- **Catch risks early**: cool down or pause *before* symptoms escalate.
+- **Plan confidently**: know exactly when and where it’s safer to go out.
+- **Understand your triggers**: connect weather, body temperature, and symptoms over time.
+- **Share evidence**: give your doctor clear, organized records to support better care.
+"""
         card("🧭", "How this helps you", "#3b82f6", body3)
 
-        # Privacy note (concise) + export reminder
-        st.caption("🔒 Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver.")
+        # Privacy + exports (concise)
+        st.markdown(
+            "🔒 **Privacy**: Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. "
+            "You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver."
+        )
 
 # ================== PLANNER HELPERS ==================
 def render_planner():
