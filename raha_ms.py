@@ -667,29 +667,57 @@ def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
                 if _is_arabic(prompt) else
                 "Sorry, no API key configured."), "no_key"
 
-    # 1) Detect language from the actual text
+    # 1) Detect language from the actual text - FIXED LOGIC
     want_ar = _is_arabic(prompt)
-
-    # 2) Single, ASCII-only system prompt (no Arabic literals)
-    system_prompt = (
-        "You are Raha MS AI Companion for people with multiple sclerosis. "
-        "Be warm, supportive, and concise. Use 2–3 short sentences by default; "
-        "only use bullets if the user explicitly asks for tips/plan (max 3 bullets). "
-        "Be culturally aware for GCC users (fasting, prayer times, home AC, cooling garments, pacing). "
-        "This is general education, not medical care. "
-        "CRITICAL: Reply in the user's language. "
-        "If the user's message contains Arabic script, reply in Modern Standard Arabic. "
-        "Otherwise, reply in English."
-    )
+    
+    # 2) Use explicit language-specific system prompts (not mixed)
+    if want_ar:
+        system_prompt = (
+            "أنت رفيق رها AI للأشخاص المصابين بالتصلب المتعدد. "
+            "كن دافئًا، داعمًا، ومختصرًا. استخدم جملتين إلى ثلاث جمل قصيرة كافتراضي؛ "
+            "استخدم النقاط فقط إذا طلب المستخدم نصائح/خطة (بحد أقصى 3 نقاط). "
+            "كن واعيًا ثقافيًا لمستخدمي دول الخليج (الصيام، أوقات الصلاة، التكييف المنزلي، ملابس التبريد، تنظيم الجهد). "
+            "هذا تثقيف عام وليس رعاية طبية. "
+            "**الرد باللغة العربية فقط دائمًا. لا تستخدم الإنجليزية أبدًا.**"
+        )
+    else:
+        system_prompt = (
+            "You are Raha MS AI Companion for people with multiple sclerosis. "
+            "Be warm, supportive, and concise. Use 2–3 short sentences by default; "
+            "only use bullets if the user explicitly asks for tips/plan (max 3 bullets). "
+            "Be culturally aware for GCC users (fasting, prayer times, home AC, cooling garments, pacing). "
+            "This is general education, not medical care. "
+            "**Reply in English only. Never use Arabic.**"
+        )
 
     try:
-        # 3) One clean call
+        # 3) Add language-specific few-shot examples
+        messages = [
+            {"role": "system", "content": system_prompt},
+        ]
+        
+        # Add Arabic examples for Arabic prompts, English for English
+        if want_ar:
+            messages.extend([
+                {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
+                {"role": "assistant", "content": "الحر قد يرفع الأعراض مؤقتًا. اجلس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. إذا استمر الإرهاق، تواصل مع طبيبك."},
+                {"role": "user", "content": "أريد نصائح للخروج في الحر"},
+                {"role": "assistant", "content": "• اختر الأوقات الباردة مثل الصباح الباكر أو بعد المغرب\n• ارتدِ ملابس قطنية فاتحة اللون\n• خذ فترات راحة واستخدم مظلة أو قبعة"},
+            ])
+        else:
+            messages.extend([
+                {"role": "user", "content": "I feel tired after walking in the afternoon heat. Is this normal?"},
+                {"role": "assistant", "content": "Heat can temporarily worsen MS symptoms. Rest in a cool place, drink water, and take a short break. If fatigue persists, contact your doctor."},
+                {"role": "user", "content": "Give me tips for going out in the heat"},
+                {"role": "assistant", "content": "• Choose cooler times like early morning or after sunset\n• Wear light-colored cotton clothing\n• Take breaks and use an umbrella or hat"},
+            ])
+        
+        messages.append({"role": "user", "content": prompt})
+        
+        # 4) One clean call
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt},
-            ],
+            messages=messages,
             temperature=0.4,
             max_tokens=350,
             presence_penalty=0.0,
@@ -697,32 +725,46 @@ def ai_response(prompt: str, lang: str) -> tuple[str | None, str | None]:
         )
         text = (resp.choices[0].message.content or "").strip()
 
-        # 4) Guardrail: if model drifted, nudge once and retry (still ASCII-only)
-        drifted = _is_arabic(text) != want_ar
-        if drifted:
-            cue = "Please answer ONLY in English.\n\n" if not want_ar else "Please answer ONLY in Arabic.\n\n"
+        # 5) Simple validation - if language is wrong, force correction
+        response_is_arabic = _is_arabic(text)
+        if want_ar and not response_is_arabic:
+            # Model responded in English when we wanted Arabic - force Arabic
+            correction_prompt = "الرجاء الرد باللغة العربية فقط. لا تستخدم الإنجليزية.\n\n" + prompt
             resp2 = client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": cue + prompt},
+                    {"role": "user", "content": correction_prompt},
                 ],
                 temperature=0.3,
                 max_tokens=350,
             )
-            text2 = (resp2.choices[0].message.content or "").strip()
-            if text2:
-                text = text2
+            text = (resp2.choices[0].message.content or "").strip()
+            
+        elif not want_ar and response_is_arabic:
+            # Model responded in Arabic when we wanted English - force English
+            correction_prompt = "Please respond in English only. Do not use Arabic.\n\n" + prompt
+            resp2 = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": correction_prompt},
+                ],
+                temperature=0.3,
+                max_tokens=350,
+            )
+            text = (resp2.choices[0].message.content or "").strip()
 
         return text, None
 
     except Exception as e:
-        # 5) Localized, friendly fallback; print real cause once for debugging
+        # 6) Localized, friendly fallback; print real cause once for debugging
         print("AI_RESPONSE_EXCEPTION:", e.__class__.__name__, str(e)[:300])
         if want_ar:
             return "عذرًا، حدث خطأ أثناء الإجابة. يرجى المحاولة مرة أخرى.", "err"
         else:
             return "Sorry, I had trouble answering right now. Please try again.", "err"
+# ---------- end ----------
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
