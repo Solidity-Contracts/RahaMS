@@ -1144,24 +1144,29 @@ def slider_with_icon(label, min_value, max_value, value, step=1, icon="📊"):
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
 st.sidebar.image(logo_url, use_container_width=True)
 
-# --- Sidebar: language selector (set BEFORE anything that uses T/app_language) ---
+# ---------- LANGUAGE (read previous -> pick new -> save new) ----------
+# 1) Read previously stored language (may be None on first run)
+prev_lang = st.session_state.get("_prev_lang", None)
 
-if "_prev_lang" not in st.session_state:
-    st.session_state["_prev_lang"] = None
-    
+# 2) Let the user pick the current language
 app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
+
+# 3) Use texts for the CURRENT language
 T = TEXTS[app_language]
 
-# RTL for Arabic
+# 4) Save the CURRENT language for the NEXT rerun
+st.session_state["_prev_lang"] = app_language
+
+# ---------- RTL tweak (optional) ----------
 if app_language == "Arabic":
     st.markdown("""
     <style>
-    body, .block-container { direction: rtl; text-align: right; }
-    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
+      body, .block-container { direction: rtl; text-align: right; }
+      [data-testid="stSidebar"] { direction: rtl; text-align: right; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- Navigation with stable IDs (LANG-SWITCH SAFE) ---
+# ---------- NAVIGATION (LANG-SWITCH SAFE) ----------
 PAGE_IDS = ["about", "monitor", "planner", "journal", "assistant", "exports", "settings"]
 PAGE_LABELS = {
     "about": T["about_title"],
@@ -1173,10 +1178,10 @@ PAGE_LABELS = {
     "settings": T["settings"],
 }
 
-# Single source of truth
+# Single source of truth for current page
 st.session_state.setdefault("current_page", "about")
 
-# Seed radio state once; DO NOT pass index afterward
+# Seed radio state once (do NOT pass `index` ever again)
 if "nav_radio" not in st.session_state:
     st.session_state["nav_radio"] = st.session_state["current_page"]
 
@@ -1192,11 +1197,8 @@ page_id = st.sidebar.radio(
     key="nav_radio",
 )
 
-# Keep the single source of truth
+# Keep single source of truth synced
 st.session_state["current_page"] = page_id
-
-# Update stored language for next rerun
-st.session_state["_prev_lang"] = app_language
 
 # --- Login/Register + Logout (expander) ---
 exp_title = (f"{T['login_title']} — {st.session_state['user']}" if "user" in st.session_state else T["login_title"])
