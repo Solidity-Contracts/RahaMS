@@ -36,17 +36,26 @@ def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
     return [s.strip() for s in items if s.strip()][:k]
 
 # ===== Prompts =====
-SYSTEM_BASE = (
+SYSTEM_AR = (
     "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
     "Default to 2–3 short sentences. Only use bullets when asked for tips/plan or when intent is 'plan'. "
     "Keep max 3 bullets. Avoid long disclaimers. "
     "Provide culturally aware guidance for GCC users (fasting, prayer times, AC/home environment, cooling garments, pacing). "
-    "Strictly educational — not medical care. No diagnosis. Encourage clinician follow-up for concerning symptoms."
+    "Strictly educational — not medical care. No diagnosis. Encourage clinician follow-up for concerning symptoms. "
+    "**Respond ONLY in Arabic. Never use English. Use Gulf-friendly phrasing when relevant.**"
 )
-SYSTEM_AR = "Respond only in Arabic. Use Gulf-friendly phrasing when relevant."
-SYSTEM_EN = "Respond only in English."
 
-FEW_SHOTS = [
+SYSTEM_EN = (
+    "You are Raha MS AI Companion. Be warm, encouraging, and concise. "
+    "Default to 2–3 short sentences. Only use bullets when asked for tips/plan or when intent is 'plan'. "
+    "Keep max 3 bullets. Avoid long disclaimers. "
+    "Provide culturally aware guidance for GCC users (fasting, prayer times, AC/home environment, cooling garments, pacing). "
+    "Strictly educational — not medical care. No diagnosis. Encourage clinician follow-up for concerning symptoms. "
+    "**Respond ONLY in English. Never use Arabic.**"
+)
+
+# Split few-shots by language
+FEW_SHOTS_EN = [
     # English anchor
     {"role": "user", "content": "I'm feeling tired after being outside—should I worry?"},
     {"role": "assistant", "content": (
@@ -59,11 +68,20 @@ FEW_SHOTS = [
         "• Wear breathable layers or a cooling scarf/vest.\n"
         "• Park close, pace your steps, and hydrate before/after (if not fasting)."
     )},
+]
+
+FEW_SHOTS_AR = [
     # Arabic anchor (helps keep replies Arabic when user writes Arabic)
     {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
     {"role": "assistant", "content": (
         "الحر قد يرفع الأعراض مؤقتًا. حاول الجلوس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. "
         "إذا لم تتحسن بعد التبريد والنوم، تواصل مع طبيبك."
+    )},
+    {"role": "user", "content": "أريد خطة قصيرة للذهاب لصلاة الجمعة في الحر"},
+    {"role": "assistant", "content": (
+        "• اذهب في أبرد الأوقات وقم بتبريد جسمك مسبقًا في البيت.\n"
+        "• ارتدِ ملابس خفيفة أو استخدم وشاح/سترة تبريد.\n"
+        "• أوقف السيارة قريبًا وخذ وقتك في المشي وتناول الماء قبل/بعد الصلاة (إذا لم تكن صائمًا)."
     )},
 ]
 
@@ -92,15 +110,19 @@ class RahaCompanion:
         self.max_tokens = max_tokens
 
     def _system(self, lang: str) -> str:
-        return f"{SYSTEM_BASE} {(SYSTEM_AR if lang=='ar' else SYSTEM_EN)}"
+        return SYSTEM_AR if lang == 'ar' else SYSTEM_EN
 
     def _messages(self, lang: str, user_text: str, intent: str) -> List[Dict[str, Any]]:
         style_hint = "Write a brief chat-style reply (2–3 sentences)." if intent == "chat" \
                      else "Write a tiny action plan as 2–3 concise bullets."
+        
+        # Use language-specific few-shots
+        few_shots = FEW_SHOTS_AR if lang == "ar" else FEW_SHOTS_EN
+        
         return [
             {"role": "system", "content": self._system(lang)},
             {"role": "system", "content": style_hint},
-            *FEW_SHOTS,
+            *few_shots,
             {"role": "user", "content": user_text},
         ]
 
@@ -125,7 +147,7 @@ class RahaCompanion:
             if bullets and len(lines) > len(bullets):
                 msg = lines[0]
             else:
-                msg = "ها هي خطة قصيرة:" if lang == "ar" else "Here’s a short plan:"
+                msg = "ها هي خطة قصيرة:" if lang == "ar" else "Here's a short plan:"
         else:
             if len(msg) > 450:
                 msg = msg[:447] + "…"
@@ -151,8 +173,11 @@ class RahaCompanion:
         Auto-detect Arabic from user_text. If Arabic script is present, force 'ar'.
         Otherwise, fall back to normalized input/lang default.
         """
-        lang_from_text = "ar" if detect_arabic_in_text(user_text) else None
-        lang_final = lang_from_text or norm_lang(lang or self.default_lang)
+        # FIXED: Prioritize Arabic detection over everything else
+        if detect_arabic_in_text(user_text):
+            lang_final = "ar"
+        else:
+            lang_final = norm_lang(lang or self.default_lang)
 
         intent = detect_intent(user_text)
         red = detect_red_flags(user_text)
