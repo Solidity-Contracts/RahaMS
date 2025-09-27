@@ -18,18 +18,12 @@ class CompanionOut(BaseModel):
 ARABIC_CHARS_RE = re.compile(r"[\u0600-\u06FF]")
 
 def norm_lang(lang: str) -> str:
-    """
-    Normalize language input.
-    Any code starting with 'ar' (e.g. 'ar', 'ar-AE', 'Arabic') → 'ar'
-    Everything else → 'en'
-    """
     if not lang:
         return "en"
     lang = str(lang).strip().lower()
     return "ar" if lang.startswith("ar") or "arabic" in lang else "en"
 
 def detect_arabic_in_text(text: str) -> bool:
-    """Return True if the input contains Arabic script."""
     return bool(ARABIC_CHARS_RE.search(text or ""))
 
 def clamp_bullets(items: List[str], k: int = 3) -> List[str]:
@@ -54,9 +48,7 @@ SYSTEM_EN = (
     "**Respond ONLY in English. Never use Arabic.**"
 )
 
-# Split few-shots by language
 FEW_SHOTS_EN = [
-    # English anchor
     {"role": "user", "content": "I'm feeling tired after being outside—should I worry?"},
     {"role": "assistant", "content": (
         "It sounds like heat might have nudged your MS symptoms a bit. "
@@ -71,7 +63,6 @@ FEW_SHOTS_EN = [
 ]
 
 FEW_SHOTS_AR = [
-    # Arabic anchor (helps keep replies Arabic when user writes Arabic)
     {"role": "user", "content": "أشعر بإرهاق بعد المشي وقت الظهر. هل هذا طبيعي؟"},
     {"role": "assistant", "content": (
         "الحر قد يرفع الأعراض مؤقتًا. حاول الجلوس في مكان مبرّد واشرب ماءً، ثم ارتَح قليلًا. "
@@ -115,10 +106,7 @@ class RahaCompanion:
     def _messages(self, lang: str, user_text: str, intent: str) -> List[Dict[str, Any]]:
         style_hint = "Write a brief chat-style reply (2–3 sentences)." if intent == "chat" \
                      else "Write a tiny action plan as 2–3 concise bullets."
-        
-        # Use language-specific few-shots
         few_shots = FEW_SHOTS_AR if lang == "ar" else FEW_SHOTS_EN
-        
         return [
             {"role": "system", "content": self._system(lang)},
             {"role": "system", "content": style_hint},
@@ -141,13 +129,12 @@ class RahaCompanion:
         lines = [l.strip("•-* \t") for l in msg.splitlines() if l.strip()]
         bullets = None
 
-        # prefer bullets if intent=plan OR reply looks like short lines
         if intent == "plan" or (len(lines) >= 2 and sum(len(l) for l in lines[:3]) < 300):
             bullets = clamp_bullets(lines, 3)
             if bullets and len(lines) > len(bullets):
                 msg = lines[0]
             else:
-                msg = "ها هي خطة قصيرة:" if lang == "ar" else "Here's a short plan:"
+                msg = "ها هي خطة قصيرة:" if lang == "ar" else "Here is a short plan:"
         else:
             if len(msg) > 450:
                 msg = msg[:447] + "…"
@@ -169,23 +156,15 @@ class RahaCompanion:
         )
 
     def respond(self, user_text: str, lang: Optional[str] = None) -> CompanionOut:
-        """
-        Auto-detect Arabic from user_text. If Arabic script is present, force 'ar'.
-        Otherwise, fall back to normalized input/lang default.
-        """
-        # FIXED: Prioritize Arabic detection over everything else
-        if detect_arabic_in_text(user_text):
-            lang_final = "ar"
-        else:
-            lang_final = norm_lang(lang or self.default_lang)
-
+        # Force Arabic if the text contains Arabic; else use normalized input/default
+        lang_final = "ar" if detect_arabic_in_text(user_text) else norm_lang(lang or self.default_lang)
         intent = detect_intent(user_text)
         red = detect_red_flags(user_text)
         try:
             resp = self._call_llm(self._messages(lang_final, user_text, intent))
             content = resp.choices[0].message.content or ""
         except Exception:
-            content = ("يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلاً."
+            content = ("يبدو أن هناك مشكلة تقنية. جرّب مرة أخرى لاحقًا. في هذه الأثناء: اجلس في مكان مبرّد واشرب ماءً، وارتَح قليلًا."
                        if lang_final == "ar"
                        else "Looks like a technical hiccup. Try again shortly. Meanwhile: cool down, hydrate, and take a short rest.")
         return self._post(content, intent, lang_final, red)
