@@ -1139,7 +1139,7 @@ PAGE_LABELS = {
 }
 
 # Set a default ONCE
-st.session_state.setdefault("current_page", "about")
+st.session_state.setdefault("current_page")
 
 # Seed the radio's state ONCE, then don't pass `index` again
 if "nav_radio" not in st.session_state:
