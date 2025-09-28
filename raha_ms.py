@@ -1579,7 +1579,7 @@ elif page_id == "assistant":
         st.stop()
 
     # Check if DeepSeek is available
-    if not OPENAI_API_KEY:
+    if not DEEPSEEK_API_KEY:
         st.warning("DeepSeek API key not configured. Please add DEEPSEEK_API_KEY to secrets.")
         st.stop()
 
