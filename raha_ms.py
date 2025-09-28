@@ -647,218 +647,183 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-# ======== LLM limits / models ========
-PRIMARY_MODEL = st.secrets.get("OPENAI_PRIMARY_MODEL", "gpt-4o-mini")
-BACKUP_MODEL  = st.secrets.get("OPENAI_BACKUP_MODEL",  "gpt-4o")  # different bucket, helps when PRIMARY hits 429
-MAX_CALLS_PER_USER_PER_DAY = int(st.secrets.get("LLM_MAX_CALLS_PER_USER", 40))
-RPD_COOLDOWN_SEC = int(st.secrets.get("LLM_RPD_COOLDOWN_SEC", 600))  # 10 min default
-
-# Arabic detector
 import re
+
+# --- Language & tone ---
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+
 def _is_arabic(s: str) -> bool:
     return bool(_ARABIC_RE.search(s or ""))
 
-# Simple per-session accounting & cooldown
-def _calls_today() -> int:
-    return int(st.session_state.get("_llm_calls_today", 0))
-
-def _bump_calls(n=1):
-    st.session_state["_llm_calls_today"] = _calls_today() + n
-
-def _set_rpd_cooldown():
-    st.session_state["_rpd_until"] = time.time() + RPD_COOLDOWN_SEC
-
-def _rpd_cooldown_active() -> bool:
-    return time.time() < float(st.session_state.get("_rpd_until", 0))
-
-# Tiny context compressor for last_check (keeps tokens low)
-def _compress_last_check(last):
-    if not last: return ""
-    try:
-        return (
-            f"City: {last.get('city','?')}. "
-            f"Feels-like: {round(last.get('feels_like',0),1)}°C. "
-            f"Humidity: {int(last.get('humidity',0))}%. "
-            f"Core: {round(last.get('body_temp',0),1)}°C vs baseline {round(last.get('baseline',0),1)}°C. "
-            f"Status: {last.get('status','?')}."
-        )
-    except Exception:
-        return ""
-
-# ---------- Local Place Recommender (offline) ----------
-CITY_ALIASES = {
-    "sharjah":"Sharjah","الشارقة":"Sharjah",
-    "dubai":"Dubai","دبي":"Dubai",
-    "abu dhabi":"Abu Dhabi","أبوظبي":"Abu Dhabi","ابوظبي":"Abu Dhabi",
-    "doha":"Doha","الدوحة":"Doha",
-    "riyadh":"Riyadh","الرياض":"Riyadh",
-    "jeddah":"Jeddah","جدة":"Jeddah",
-}
-
-PLACE_DB = {
-    "Sharjah": [
-        {"name":"Al Majaz Waterfront","indoor":False,
-         "en":"Shaded paths, cafés; better after sunset.","ar":"ممرات مظللة ومقاهٍ؛ الأفضل بعد الغروب."},
-        {"name":"Al Noor Island (Butterfly House)","indoor":True,
-         "en":"AC indoor butterfly house; gentle walking.","ar":"بيت فراشات مكيّف؛ مشي لطيف."},
-        {"name":"Sharjah Art Museum","indoor":True,
-         "en":"Large AC galleries; easy pacing.","ar":"صالات مكيفة واسعة؛ إيقاع مريح."},
-        {"name":"Museum of Islamic Civilization","indoor":True,
-         "en":"Calm AC environment; short sections with breaks.","ar":"بيئة مكيفة هادئة؛ أقسام قصيرة مع استراحات."},
-        {"name":"Al Qasba Canal","indoor":False,
-         "en":"Promenade + cafés; go at dusk.","ar":"ممشى ومقاهٍ؛ الأفضل وقت الغروب."},
-        {"name":"Sahara Centre (Mall)","indoor":True,
-         "en":"AC mall walking; easy hydration & seating.","ar":"مول مكيّف للمشي؛ يسهل الترطيب والجلوس."},
-        {"name":"Wasit Wetland Centre","indoor":False,
-         "en":"Nature viewing; choose early or late evening.","ar":"مشاهدة طبيعة؛ صباح مبكر أو مساء متأخر."},
-    ],
-    "Dubai": [
-        {"name":"Dubai Mall (Zabeel link)","indoor":True,
-         "en":"Long shaded/AC route with many benches.","ar":"مسار مظلل/مكيّف طويل مع مقاعد كثيرة."},
-        {"name":"Alserkal Avenue","indoor":True,
-         "en":"AC galleries; keep visits short.","ar":"صالات مكيّفة؛ زيارات قصيرة."},
-        {"name":"JBR Walk (evening)","indoor":False
-         ,"en":"Sea breeze helps; best after sunset.","ar":"نسيم البحر يساعد؛ الأفضل بعد الغروب."},
-    ],
-    # add more cities later if you like
-}
-
-PLACE_INTENT_RE = re.compile(
-    r"(where\s+.*go|recommend.*(place|go)|places?|visit|mall|beach|park|go\s+in\s+|go\s+to\s+)"
-    r"|(?:أين.*(أذهب|أروح)|وين.*(أروح|أذهب)|أماكن|زيارة|مول|شاطئ|حديقة)",
-    re.IGNORECASE
-)
-
-def _extract_city_from_text(text: str) -> str | None:
-    t = (text or "").lower()
-    for k, v in CITY_ALIASES.items():
-        if k in t: return v
-    return None
-
-def _city_from_context_or_default(user_text: str) -> str:
-    c = _extract_city_from_text(user_text)
-    if c: return c
-    lc = (st.session_state.get("last_check") or {}).get("city")
-    if isinstance(lc, str) and lc:
-        return lc.split(",")[0].strip()
-    return "Sharjah"
-
-def is_place_intent(text: str) -> bool:
-    return bool(PLACE_INTENT_RE.search(text or ""))
-
-def suggest_places(user_text: str, want_ar: bool, last_check: dict | None) -> str:
-    city = _city_from_context_or_default(user_text)
-    items = PLACE_DB.get(city, [])
-    if not items:
-        return ("أخبرني باسم مدينة (مثل الشارقة/دبي/أبوظبي) لأقترح أماكن مناسبة."
-                if want_ar else
-                "Tell me a city (e.g., Sharjah/Dubai/Abu Dhabi) and I’ll suggest MS-friendly places.")
-    feels = (last_check or {}).get("feels_like", 0.0)
-    hum   = (last_check or {}).get("humidity", 0.0)
-    hot = (feels >= 36) or (hum >= 60)
-    indoor = [p for p in items if p["indoor"]]
-    outdoor = [p for p in items if not p["indoor"]]
-    picks = (indoor[:5] + outdoor[:3]) if hot else (indoor[:3] + outdoor[:4])
-    picks = picks[:7]
-
-    head = (f"اقتراحات مناسبة في **{city}** الآن (الإحساس الحراري ≈ {round(feels,1)}°م، الرطوبة {int(hum)}%)."
-            if want_ar else
-            f"MS-friendly picks in **{city}** (feels-like ≈ {round(feels,1)}°C, humidity {int(hum)}%).")
-    lines = []
-    for p in picks:
-        tip = p["ar"] if want_ar else p["en"]
-        lines.append(f"- **{p['name']}** — {tip}")
-    tail = ("نصيحة: فضّل المكيّف وقت الذروة وخذ استراحات قصيرة مع ماء بارد."
-            if want_ar else
-            "Tip: prefer AC at midday and take short, cool-water breaks.")
-    return head + "\n\n" + "\n".join(lines) + "\n\n" + tail
-    
-# ================== AI ==================
-def ai_response(user_msg: str, ui_lang: str):
-    want_ar = _is_arabic(user_msg) or (ui_lang == "Arabic")
-
-    # 0) If user asks for places, always use offline recommender (no API use)
-    if is_place_intent(user_msg):
-        return suggest_places(user_msg, want_ar, st.session_state.get("last_check")), None
-
-    # 1) RPD guard, missing client, or budget reached -> offline fallback
-    if (client is None) or _rpd_cooldown_active() or (_calls_today() >= MAX_CALLS_PER_USER_PER_DAY):
-        return offline_answer(user_msg, want_ar), "offline"
-
-    # 2) Compose a SHORT prompt (no long history)
-    style = (
-        "Write like a warm companion. Use 2–3 short sentences. "
-        "Only use bullets (max 3) if the user asks for tips/plan. "
-        "This is general information, not medical advice. "
-        + ("Answer ONLY in Arabic." if want_ar else "Answer ONLY in English.")
+def human_system_prompt(lang: str) -> str:
+    base = (
+        "You are Raha MS Companion for people living with MS in the GCC. "
+        "Be warm, clear, and practical. Start with a direct answer in one sentence. "
+        "Then add up to 3 short bullets with specific, local tips (no more than 10–14 words each). "
+        "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
+        "Avoid diagnosis; this is general info. Do NOT use phrases like 'I hear you' or 'let’s use steps'. "
     )
-    ctx = _compress_last_check(st.session_state.get("last_check"))
-    user_content = (f"Context: {ctx}\n\nUser: {user_msg}").strip()
+    if lang == "Arabic":
+        base += "اجب بالعربية الفصحى فقط."
+    else:
+        base += "Answer only in English."
+    return base
 
-    messages = [
-        {"role": "system", "content": style},
-        {"role": "user", "content": user_content}
-    ]
-
-    # 3) Call primary, then backup on 429; otherwise offline
-    def _call(model_name):
-        return client.chat.completions.create(
-            model=model_name,
-            messages=messages,
-            temperature=0.4,
-            max_tokens=280,
+def ai_response(prompt: str, lang: str, context: str = ""):
+    """
+    One-shot call: [system, user]. Returns (answer, err_code). err_code in {None,'no_key','rate_limit','err'}
+    """
+    if not client:
+        return None, "no_key"
+    sys_prompt = human_system_prompt("Arabic" if lang == "Arabic" else "English")
+    user_payload = (context.strip() + "\n\n" if context else "") + prompt
+    try:
+        resp = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": user_payload}
+            ],
+            temperature=0.5,
+            max_tokens=350,
             presence_penalty=0.0,
             frequency_penalty=0.2,
         )
-
-    try:
-        out = _call(PRIMARY_MODEL)
-        _bump_calls()
-        ans = (out.choices[0].message.content or "").strip()
-        # one-shot nudge if language drifted
-        if (_is_arabic(ans) != want_ar):
-            nudged = _call(PRIMARY_MODEL)
-            _bump_calls()
-            ans2 = (nudged.choices[0].message.content or "").strip()
-            if ans2: ans = ans2
+        ans = (resp.choices[0].message.content or "").strip()
         return ans, None
     except Exception as e:
-        msg = str(e)
-        if "Rate limit" in msg or "429" in msg:
-            try:
-                out = _call(BACKUP_MODEL)
-                _bump_calls()
-                ans = (out.choices[0].message.content or "").strip()
-                return ans, None
-            except Exception:
-                _set_rpd_cooldown()
-                return offline_answer(user_msg, want_ar), "rpd"
-        # other errors -> offline
-        return offline_answer(user_msg, want_ar), "err"
+        msg = str(e).lower()
+        if "rate limit" in msg or "rpd" in msg:
+            return None, "rate_limit"
+        return None, "err"
 
-def offline_answer(user_msg: str, want_ar: bool) -> str:
-    # Heat-aware generic fallback (short, still helpful)
-    last = st.session_state.get("last_check") or {}
-    feels = last.get("feels_like", 0.0); hum = last.get("humidity", 0.0)
-    delta = 0.0
-    if last and (last.get("body_temp") is not None) and (last.get("baseline") is not None):
-        try:
-            delta = float(last["body_temp"]) - float(last["baseline"])
-        except Exception:
-            delta = 0.0
-    do_now, plan_later, watch_for = tailored_tips([], feels, hum, delta, "Arabic" if want_ar else "English")
+# --- Weather-aware windows (deterministic; no LLM) ---
+def _today_str_tz():
+    return datetime.now(TZ_DUBAI).strftime("%Y-%m-%d")
 
-    if want_ar:
-        parts = ["أفهمك. إليك خطوات بسيطة الآن:"]
-        if do_now: parts += ["- " + "\n- ".join(do_now[:3])]
-        if plan_later: parts += ["\nثم خطة قصيرة:", "- " + "\n- ".join(plan_later[:3])]
-        return "\n".join(parts)
+def beach_windows_today(city: str, *, max_feels_like=35.0, max_humidity=70):
+    """
+    Use your existing forecast + best_windows_from_forecast() to propose 2-hour windows for outdoor/beach.
+    Returns list of dicts: [{start_dt, end_dt, avg_feels, avg_hum}] limited to 'today' in Dubai tz.
+    """
+    weather, err = get_weather(city)
+    if not weather or "forecast" not in weather:
+        return [], err or "weather_error"
+
+    all_windows = best_windows_from_forecast(
+        weather["forecast"],
+        window_hours=2,
+        top_k=12,
+        max_feels_like=max_feels_like,
+        max_humidity=max_humidity,
+        avoid_hours=(10, 16)  # avoid midday
+    )
+
+    # Keep only windows that start today (Dubai)
+    today = _today_str_tz()
+    windows_today = [w for w in all_windows if w["start_dt"].strftime("%Y-%m-%d") == today]
+    return windows_today, None
+
+# --- Minimal local place catalog (no API) ---
+CITY_PLACES = {
+    "Sharjah,AE": {
+        "beach": [
+            ("Sharjah Beach", "walk early or after sunset; bring cooling towel"),
+            ("Al Khan Beach", "shade + short dips; avoid midday"),
+            ("Al Mamzar Beach Park (nearby)", "more shade options; go at dusk"),
+        ],
+        "indoor": [
+            ("Sharjah Art Museum", "large AC galleries; sit-and-rest spots"),
+            ("Museum of Islamic Civilization", "AC + short sections for pacing"),
+            ("Al Noor Island Butterfly House", "AC indoors; gentle walking")
+        ]
+    },
+    # Add more cities as needed…
+}
+
+def city_key_from_query(q: str, default_city: str) -> str:
+    # Very simple mapper; extend if you like
+    ql = (q or "").lower()
+    for k in CITY_PLACES.keys():
+        if k.split(",")[0].lower() in ql:
+            return k
+    return default_city
+
+def format_windows(wins, lang="English"):
+    if not wins:
+        return "—"
+    lines = []
+    for w in wins[:3]:
+        s = w["start_dt"].strftime("%H:%M")
+        e = w["end_dt"].strftime("%H:%M")
+        feels = round(w["avg_feels"], 1)
+        hum = int(w["avg_hum"])
+        if lang == "Arabic":
+            lines.append(f"- {s}–{e} (≈{feels}°م، رطوبة {hum}%)")
+        else:
+            lines.append(f"- {s}–{e} (≈{feels}°C, {hum}% humidity)")
+    return "\n".join(lines)
+
+def local_recommendations(city: str, purpose: str, lang: str, wins):
+    places = CITY_PLACES.get(city, {})
+    picks = places.get(purpose, [])[:3]
+    if not picks:
+        return ""
+    if lang == "Arabic":
+        header = "أماكن مقترحة:"
+        items = "\n".join([f"- **{n}** — {hint}" for n, hint in picks])
     else:
-        parts = ["I’ve got you. Here are simple steps now:"]
-        if do_now: parts += ["- " + "\n- ".join(do_now[:3])]
-        if plan_later: parts += ["\nThen a short plan:", "- " + "\n- ".join(plan_later[:3])]
-        return "\n".join(parts)
+        header = "Suggested places:"
+        items = "\n".join([f"- **{n}** — {hint}" for n, hint in picks])
+    return f"{header}\n{items}"
+
+# --- Intent router: handle beach/where-to-go locally (no LLM) ---
+_BEACH_PATTERNS_EN = re.compile(r"\b(beach|swim|sea|coast)\b", re.I)
+_BEACH_PATTERNS_AR = re.compile(r"(شاطئ|سباحة|بحر)")
+_WHERE_GO_EN = re.compile(r"\b(where|recommend).*(go|place|plan)", re.I)
+_WHERE_GO_AR = re.compile(r"(أين|اقترح|توصي).*(أذهب|مكان|خطة)")
+
+def route_locally(user_q: str, user_city: str, lang: str):
+    want_ar = (lang == "Arabic") or _is_arabic(user_q)
+    city = city_key_from_query(user_q, user_city)
+
+    # 1) Beach timing queries
+    if (_BEACH_PATTERNS_EN.search(user_q) or _BEACH_PATTERNS_AR.search(user_q)):
+        wins, _ = beach_windows_today(city)
+        if want_ar:
+            title = f"أفضل أوقات الشاطئ اليوم في **{city.split(',')[0]}**:"
+            wtxt  = format_windows(wins, "Arabic")
+            extra = local_recommendations(city, "beach", "Arabic", wins)
+            if wtxt == "—":
+                wtxt = "- الصباح الباكر قبل ٨:٣٠\n- بعد الغروب"
+            tip = "نصيحة: خذ منشفة تبريد وماء بارد، وابقَ في الظل قدر الإمكان."
+            return f"{title}\n{wtxt}\n\n{extra}\n\n{tip}"
+        else:
+            title = f"Best beach windows today in **{city.split(',')[0]}**:"
+            wtxt  = format_windows(wins, "English")
+            extra = local_recommendations(city, "beach", "English", wins)
+            if wtxt == "—":
+                wtxt = "- Early morning before 8:30\n- After sunset"
+            tip = "Tip: bring a cooling towel and cold water; stick to shade."
+            return f"{title}\n{wtxt}\n\n{extra}\n\n{tip}"
+
+    # 2) “Where should I go” general recs
+    if (_WHERE_GO_EN.search(user_q) or _WHERE_GO_AR.search(user_q)):
+        # Indoor (safer at heat); add windows for short outdoor strolls
+        wins, _ = beach_windows_today(city, max_feels_like=34.0, max_humidity=65)
+        if want_ar:
+            head = f"خيارات مناسبة لـ MS في **{city.split(',')[0]}**:"
+            indoor = local_recommendations(city, "indoor", "Arabic", wins)
+            stroll = "نوافذ للمشي القصير اليوم:\n" + (format_windows(wins, "Arabic") if wins else "- قبل ٩ صباحًا أو بعد الغروب")
+            return f"{head}\n\n{indoor}\n\n{stroll}"
+        else:
+            head = f"MS-friendly picks in **{city.split(',')[0]}**:"
+            indoor = local_recommendations(city, "indoor", "English", wins)
+            stroll = "Short-stroll windows today:\n" + (format_windows(wins, "English") if wins else "- Before 9:00 or after sunset")
+            return f"{head}\n\n{indoor}\n\n{stroll}"
+
+    return None  # not handled locally
+
 
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
@@ -1773,32 +1738,72 @@ elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
 
     if "user" not in st.session_state:
-        st.warning(T["login_first"])
-        st.stop()
+        st.warning(T["login_first"]); st.stop()
 
-    if not client and not st.session_state.get("last_check"):
-        st.warning(T["ai_unavailable"])
+    # Let user pick a city for advice (defaults help weather routing)
+    st.session_state.setdefault("assistant_city", "Sharjah,AE")
+    st.session_state["assistant_city"] = st.selectbox("📍 City for advice", GCC_CITIES, 
+                                                      index=GCC_CITIES.index(st.session_state["assistant_city"]) if st.session_state["assistant_city"] in GCC_CITIES else 0)
 
-    # Chat history for display only (we do NOT send it to the LLM to keep tokens low)
+    # Display-only history (we never resend to LLM)
     st.session_state.setdefault("companion_history", [])
     for role, content in st.session_state["companion_history"]:
-        with st.chat_message("assistant" if role=="assistant" else "user"):
+        with st.chat_message("assistant" if role == "assistant" else "user"):
             st.markdown(content)
 
+    # Input (one-shot per click)
     user_msg = st.chat_input(T["ask_me_anything"])
     if user_msg:
         st.session_state["companion_history"].append(("user", user_msg))
         with st.chat_message("user"):
             st.markdown(user_msg)
 
-        with st.chat_message("assistant"):
-            with st.spinner(T["thinking"]):
-                answer, mode = ai_response(user_msg, app_language)
-                st.markdown(answer)
+        # 1) Try local deterministic answer first (no API call)
+        local = route_locally(user_msg, st.session_state["assistant_city"], app_language)
+        if local:
+            with st.chat_message("assistant"):
+                st.markdown(local)
+            st.session_state["companion_history"].append(("assistant", local))
+        else:
+            # 2) Fallback to ONE API call with small context
+            ctx = ""
+            if st.session_state.get("last_check"):
+                lc = st.session_state["last_check"]
+                # small, safe context; do NOT include full history
+                if app_language == "Arabic":
+                    ctx = (f"سياق: درجة الجسم {lc.get('body_temp','?')}°م، إحساس حراري {lc.get('feels_like','?')}°م، "
+                           f"رطوبة {lc.get('humidity','?')}%، مدينة {lc.get('city','?')}.")
+                else:
+                    ctx = (f"Context: body {lc.get('body_temp','?')}°C, feels-like {lc.get('feels_like','?')}°C, "
+                           f"humidity {lc.get('humidity','?')}%, city {lc.get('city','?')}.")
 
-        st.session_state["companion_history"].append(("assistant", answer))
+            with st.chat_message("assistant"):
+                with st.spinner(T["thinking"]):
+                    answer, err = ai_response(user_msg, app_language, ctx)
 
-    # Footer
+                    # If rate-limited, provide graceful local fallback
+                    if err == "rate_limit":
+                        fallback = route_locally(user_msg, st.session_state["assistant_city"], app_language)
+                        if fallback:
+                            st.markdown(fallback)
+                            st.session_state["companion_history"].append(("assistant", fallback))
+                        else:
+                            msg = ("تجاوزنا حد الاستخدام المؤقت اليوم. إليك نصيحة عامة سريعة:\n"
+                                   "- اشرب ماءً باردًا\n- اختر أوقات الصباح الباكر/بعد الغروب\n- فترات نشاط قصيرة مع استراحات تبريد")
+                            if app_language == "English":
+                                msg = ("We hit a temporary daily limit. Quick general tips:\n"
+                                       "- Drink cool water\n- Go early morning / after sunset\n- Short activity bursts with cooling breaks")
+                            st.markdown(msg)
+                            st.session_state["companion_history"].append(("assistant", msg))
+                    elif err:
+                        msg = "Sorry, I had trouble answering right now." if app_language=="English" else "عذرًا، واجهت مشكلة في الإجابة الآن."
+                        st.markdown(msg)
+                        st.session_state["companion_history"].append(("assistant", msg))
+                    else:
+                        st.markdown(answer)
+                        st.session_state["companion_history"].append(("assistant", answer))
+
+        # Reset button + disclaimer
     with st.container():
         colA, colB = st.columns(2)
         with colA:
@@ -1806,10 +1811,9 @@ elif page_id == "assistant":
                 st.session_state["companion_history"] = []
                 st.rerun()
         with colB:
-            if app_language == "Arabic":
-                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-            else:
-                st.caption("This chat gives general information and does not replace your medical provider.")
+            st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية."
+                       if app_language == "Arabic"
+                       else "This chat gives general information and does not replace your medical provider.")
 
 #====================================================================================================================================
 
