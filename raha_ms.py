@@ -1623,7 +1623,7 @@ elif page_id == "assistant":
                 
                 # Get AI response
                 response = client.chat.completions.create(
-                    model="gpt-4o-mini",
+                    model="gpt-3.5-turbo",
                     messages=messages_for_api,
                     temperature=0.8,
                     stream=False  # Changed to False for more reliability
