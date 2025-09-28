@@ -1734,20 +1734,23 @@ elif page_id == "assistant":
                         answer = offline_answer(user_msg, _is_arabic(user_msg) or (app_language=="Arabic"), st.session_state.get("last_check"))
                 st.markdown(answer)
 
-    st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
-    st.session_state["_ai_busy"] = False
-        with st.container():
-            colA, colB = st.columns(2)
-            with colA:
-                if st.button(T["reset_chat"]):
-                    base = st.session_state["companion_messages"][0]
-                    st.session_state["companion_messages"] = [base]
-                    st.rerun()
-            with colB:
-                if app_language == "Arabic":
-                    st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-                else:
-                    st.caption("This chat gives general information and does not replace your medical provider.")
+                st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+                st.session_state["_ai_busy"] = False
+                
+            with st.container():
+                colA, colB = st.columns(2)
+                with colA:
+                    if st.button(T["reset_chat"]):
+                        base = st.session_state["companion_messages"][0]
+                        st.session_state["companion_messages"] = [base]
+                        st.rerun()
+                with colB:
+                    if app_language == "Arabic":
+                        st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+                    else:
+                        st.caption("This chat gives general information and does not replace your medical provider.")
+
+#====================================================================================================================================
 
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
