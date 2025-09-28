@@ -26,33 +26,6 @@ try:
 except Exception:
     client = None
 
-_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
-def _is_arabic(s: str) -> bool:
-    return bool(_ARABIC_RE.search(s or ""))
-
-def _retry(fn, *, attempts=4, base=1.2, cap=6.0):
-    """
-    Retry fn() on transient errors (429/5xx) with exponential backoff + jitter.
-    Raises the *last* exception if all retries fail.
-    """
-    last_exc = None
-    for i in range(attempts):
-        try:
-            return fn()
-        except Exception as e:
-            last_exc = e
-            msg = str(e)
-            transient = ("429" in msg or "Rate limit" in msg or "503" in msg or "temporary" in msg.lower())
-            if transient and i < attempts - 1:
-                sleep = min(cap, base * (2 ** i)) + random.random()  # jitter
-                time.sleep(sleep)
-                continue
-            # Non-transient, or out of tries → re-raise THIS exception
-            raise
-    # We fell out of the loop without returning → throw a clear error
-    raise RuntimeError("Max retries exceeded when calling OpenAI") from last_exc
-
-
 # GCC quick picks
 GCC_CITIES = [
     "Abu Dhabi,AE", "Dubai,AE", "Sharjah,AE",
@@ -1584,91 +1557,141 @@ elif page_id == "journal":
                         st.rerun()
 
 elif page_id == "assistant":
+    # ---------- helpers ----------
+    import re, time, random
+    _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+    def _is_arabic(s: str) -> bool:
+        return bool(_ARABIC_RE.search(s or ""))
+
+    def _retry(fn, *, attempts=4, base=1.2, cap=6.0):
+        """
+        Retry fn() on transient OpenAI errors (429/5xx) with exponential backoff + jitter.
+        Raises the last exception (or a clear runtime) if all retries fail.
+        """
+        last_exc = None
+        for i in range(attempts):
+            try:
+                return fn()
+            except Exception as e:
+                last_exc = e
+                msg = str(e)
+                transient = ("429" in msg or "Rate limit" in msg or "503" in msg or "temporar" in msg.lower())
+                if transient and i < attempts - 1:
+                    sleep = min(cap, base * (2 ** i)) + random.random()
+                    time.sleep(sleep)
+                    continue
+                raise
+        raise RuntimeError("Max retries exceeded when calling OpenAI") from last_exc
+
+    # ---------- UI ----------
     st.title("🤝 " + T["assistant_title"])
-    
+
+    # Require login
     if "user" not in st.session_state:
-        st.warning(T["login_first"]); st.stop()
-    
+        st.warning(T["login_first"])
+        st.stop()
+
+    # Ensure client is available
     if not client:
         st.warning(T["ai_unavailable"])
-        st.caption("Tip: set OPENAI_API_KEY in Streamlit Secrets or env.")
         st.stop()
-    
-    # Seed: ONE system message only (merge policy + personal context)
+
+    # Seed ONE system message (merge policy + personal context)
     if "companion_messages" not in st.session_state:
-        personal_context = build_personal_context(app_language)  # your function
+        personal_context = build_personal_context(app_language)  # your existing fn
         core_system = (
-            "You are Raha MS Companion. Audience: people living with MS in the Gulf (GCC). "
-            "Tone: warm, calm, encouraging. Write short paragraphs (2–3 sentences). "
-            "Avoid bullet points unless the user explicitly asks for tips or a plan. "
+            "You are Raha MS Companion for people living with MS in the Gulf (GCC). "
+            "Be warm, calm, encouraging, and practical. Write short paragraphs (2–3 sentences). "
+            "Use bullets ONLY if the user explicitly asks for tips/plan. "
             "Focus on heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-            "Avoid diagnosis; this is general information only. "
-            "Always reply in the same language the user wrote in (Arabic if Arabic script is present, otherwise English). "
-            "If a medical concern sounds urgent, gently suggest contacting their clinician or local emergency services.\n\n"
-            f"Personal context:\n{personal_context}\n\n"
-            "Style examples:\n"
-            "User: I feel wiped after 10 minutes in the sun.\n"
-            "You: It sounds frustrating. Try shorter outdoor blocks (5–7 min) with a cool-down in AC, and drink small sips of cool water. "
-            "If a prayer time is near, cool your body beforehand (fan, damp cloth) so you start cooler.\n"
+            "Avoid medical diagnosis; this is general information only. "
+            "Always reply in the same language the user wrote in (Arabic if any Arabic script is present, otherwise English). "
+            "If something sounds urgent, gently suggest contacting their clinician or local emergency services.\n\n"
+            f"Background (do not repeat verbatim to the user):\n{personal_context}"
         )
-        st.session_state["companion_messages"] = [{"role":"system","content": core_system}]
-    
-    # Render history (skip system)
+        st.session_state["companion_messages"] = [{"role": "system", "content": core_system}]
+
+    # Render chat history (skip system)
     for m in st.session_state["companion_messages"]:
-        if m["role"] == "system": continue
-        with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
+        if m["role"] == "system":
+            continue
+        with st.chat_message("assistant" if m["role"] == "assistant" else "user"):
             st.markdown(m["content"])
-    
+
     user_msg = st.chat_input(T["ask_me_anything"])
     if user_msg:
-        st.session_state["companion_messages"].append({"role":"user","content": user_msg})
-        with st.chat_message("user"): st.markdown(user_msg)
-    
-        # Build a trimmed window: system + last 6 turns max
-        msgs = [st.session_state["companion_messages"][0]]
-        tail = [m for m in st.session_state["companion_messages"][1:]][-6:]
-        msgs.extend(tail)
-    
-        def _call():
-            # Keep using chat.completions if you prefer, OR switch to Responses API (below).
-            return client.chat.completions.create(
-                model="gpt-4o-mini",    # or a snapshot if you want stability
-                messages=msgs,
-                temperature=0.45,
-                max_tokens=320,
-                presence_penalty=0.0,
-                frequency_penalty=0.15,
-            )
-    
+        st.session_state["companion_messages"].append({"role": "user", "content": user_msg})
+        with st.chat_message("user"):
+            st.markdown(user_msg)
+
+        want_ar = _is_arabic(user_msg)
+        turn_lang_cue = "Please answer ONLY in Arabic." if want_ar else "Please answer ONLY in English."
+
+        # Build a trimmed window to reduce tokens (system + last 6 turns + per-turn cue + user)
+        history = [m for m in st.session_state["companion_messages"] if m["role"] != "system"]
+        tail = history[-6:]
+        msgs = [
+            st.session_state["companion_messages"][0],                # merged system
+            {"role": "system", "content": turn_lang_cue},             # per-turn language lock
+            *tail                                                     # recent conversation
+        ]
+
         with st.chat_message("assistant"):
             with st.spinner(T["thinking"]):
                 try:
+                    # Primary call
+                    def _call():
+                        return client.chat.completions.create(
+                            model="gpt-4o-mini",        # you can pin a snapshot if you prefer
+                            messages=msgs,
+                            temperature=0.45,           # less listy, more natural
+                            max_tokens=320,
+                            presence_penalty=0.0,
+                            frequency_penalty=0.15,     # reduce bullet-y repetition
+                        )
                     resp = _retry(_call)
                     answer = (resp.choices[0].message.content or "").strip()
-    
-                    # One gentle nudge if it drifted into bullets without being asked
-                    if "-" in answer[:80] and not any(k in user_msg.lower() for k in ["tips","plan","خطوات","نصائح"]):
-                        # Ask for a rewrite in-paragraph
-                        msgs2 = msgs + [{"role":"system","content":"Rewrite in 2 short paragraphs. No bullets."}]
+
+                    # If language drifted or it dumped bullets without being asked, nudge once
+                    drift = (_is_arabic(answer) != want_ar)
+                    listed = "-" in answer[:80] or answer.strip().startswith(("*", "•", "-"))
+                    explicitly_wants_bullets = any(k in user_msg.lower() for k in ["tips", "plan", "steps", "نصائح", "خطة", "خطوات"])
+                    if drift or (listed and not explicitly_wants_bullets):
+                        nudge = []
+                        if drift:
+                            nudge.append(turn_lang_cue)
+                        if listed and not explicitly_wants_bullets:
+                            nudge.append("Rewrite as two short paragraphs. No bullet points.")
+                        nudged_user = ("\n\n".join(nudge) + "\n\n" + user_msg).strip()
+                        msgs2 = [
+                            st.session_state["companion_messages"][0],
+                            {"role": "system", "content": turn_lang_cue},
+                            {"role": "user", "content": nudged_user},
+                        ]
                         resp2 = client.chat.completions.create(
                             model="gpt-4o-mini",
                             messages=msgs2,
                             temperature=0.4,
-                            max_tokens=260,
+                            max_tokens=300,
                         )
                         alt = (resp2.choices[0].message.content or "").strip()
-                        if alt: answer = alt
-    
+                        if alt:
+                            answer = alt
+
                 except Exception as e:
+                    # Show cause in UI, keep user-facing message friendly & localized
                     st.error("The assistant hit an error when calling OpenAI.")
                     st.caption(f"{e.__class__.__name__}: {str(e)[:300]}")
-                    answer = "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى." if _is_arabic(user_msg) \
-                             else "Sorry, I had trouble answering right now. Please try again."
-    
+                    answer = (
+                        "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
+                        if want_ar else
+                        "Sorry, I had trouble answering right now. Please try again."
+                    )
+
             st.markdown(answer)
-        st.session_state["companion_messages"].append({"role":"assistant","content": answer})
-    
-    # Footer
+        st.session_state["companion_messages"].append({"role": "assistant", "content": answer})
+
+    # Footer: Reset + disclaimer
     with st.container():
         colA, colB = st.columns(2)
         with colA:
@@ -1677,7 +1700,10 @@ elif page_id == "assistant":
                 st.session_state["companion_messages"] = [base]
                 st.rerun()
         with colB:
-            st.caption("هذه المحادثة معلومات عامة وليست بديلاً عن مقدم الرعاية الصحية.")
+            if app_language == "Arabic":
+                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+            else:
+                st.caption("This chat gives general information and does not replace your medical provider.")
         # ---------------- end AI Companion (diagnostic) ----------------
     
 elif page_id == "exports":
