@@ -660,7 +660,7 @@ def ai_response(prompt, lang):
         return None, "no_key"
     try:
         response = client.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="deepseek-chat",
             messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
             temperature=0.8,  # Increased for more natural responses
         )
@@ -1623,7 +1623,7 @@ elif page_id == "assistant":
                 
                 # Get AI response
                 response = client.chat.completions.create(
-                    model="gpt-3.5-turbo",
+                    model="deepseek-chat",
                     messages=messages_for_api,
                     temperature=0.8,
                     stream=False  # Changed to False for more reliability
