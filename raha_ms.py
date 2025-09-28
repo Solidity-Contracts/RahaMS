@@ -1,5 +1,4 @@
 import streamlit as st
-import os
 import sqlite3, json, requests, random, time, zipfile, io
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -9,8 +8,6 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
-import re, time, random
-from openai import OpenAI
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -22,6 +19,7 @@ OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHER_API_KEY", "")
 
 # OpenAI (optional)
 try:
+    from openai import OpenAI
     client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
 except Exception:
     client = None
@@ -647,6 +645,26 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     next_p = prev_periph + (target - prev_periph) * 0.3 + ambient_push + noise
     return max(32.0, min(40.0, round(next_p, 2)))
 
+# ================== AI ==================
+def ai_response(prompt, lang):
+    sys_prompt = (
+        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
+        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
+        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
+        "This is general education, not medical care."
+    )
+    sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
+    if not client:
+        return None, "no_key"
+    try:
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
+            temperature=0.7,
+        )
+        return response.choices[0].message.content, None
+    except Exception:
+        return None, "err"
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1557,155 +1575,66 @@ elif page_id == "journal":
                         st.rerun()
 
 elif page_id == "assistant":
-    # ---------- helpers ----------
-    import re, time, random
-    _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
-    def _is_arabic(s: str) -> bool:
-        return bool(_ARABIC_RE.search(s or ""))
-
-    def _retry(fn, *, attempts=4, base=1.2, cap=6.0):
-        """
-        Retry fn() on transient OpenAI errors (429/5xx) with exponential backoff + jitter.
-        Raises the last exception (or a clear runtime) if all retries fail.
-        """
-        last_exc = None
-        for i in range(attempts):
-            try:
-                return fn()
-            except Exception as e:
-                last_exc = e
-                msg = str(e)
-                transient = ("429" in msg or "Rate limit" in msg or "503" in msg or "temporar" in msg.lower())
-                if transient and i < attempts - 1:
-                    sleep = min(cap, base * (2 ** i)) + random.random()
-                    time.sleep(sleep)
-                    continue
-                raise
-        raise RuntimeError("Max retries exceeded when calling OpenAI") from last_exc
-
-    # ---------- UI ----------
     st.title("🤝 " + T["assistant_title"])
 
-    # Require login
+    # Require login first (matches other pages)
     if "user" not in st.session_state:
         st.warning(T["login_first"])
-        st.stop()
+        st.stop()  # IMPORTANT: prevents the rest of the assistant UI from rendering
 
-    # Ensure client is available
     if not client:
         st.warning(T["ai_unavailable"])
-        st.stop()
+    else:
+        if "companion_messages" not in st.session_state:
+            st.session_state["companion_messages"] = [{
+                "role":"system",
+                "content": (
+                    "You are Raha MS Companion: warm, concise, and practical. "
+                    "Audience: people living with MS in the Gulf (GCC). "
+                    "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
+                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
+                    "Avoid medical diagnosis; remind this is general info. " +
+                    ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
+                )
+            }]
 
-    # Seed ONE system message (merge policy + personal context)
-    if "companion_messages" not in st.session_state:
-        personal_context = build_personal_context(app_language)  # your existing fn
-        core_system = (
-            "You are Raha MS Companion for people living with MS in the Gulf (GCC). "
-            "Be warm, calm, encouraging, and practical. Write short paragraphs (2–3 sentences). "
-            "Use bullets ONLY if the user explicitly asks for tips/plan. "
-            "Focus on heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-            "Avoid medical diagnosis; this is general information only. "
-            "Always reply in the same language the user wrote in (Arabic if any Arabic script is present, otherwise English). "
-            "If something sounds urgent, gently suggest contacting their clinician or local emergency services.\n\n"
-            f"Background (do not repeat verbatim to the user):\n{personal_context}"
-        )
-        st.session_state["companion_messages"] = [{"role": "system", "content": core_system}]
+        personal_context = build_personal_context(app_language)
 
-    # Render chat history (skip system)
-    for m in st.session_state["companion_messages"]:
-        if m["role"] == "system":
-            continue
-        with st.chat_message("assistant" if m["role"] == "assistant" else "user"):
-            st.markdown(m["content"])
+        for m in st.session_state["companion_messages"]:
+            if m["role"] == "system": continue
+            with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
+                st.markdown(m["content"])
 
-    user_msg = st.chat_input(T["ask_me_anything"])
-    if user_msg:
-        st.session_state["companion_messages"].append({"role": "user", "content": user_msg})
-        with st.chat_message("user"):
-            st.markdown(user_msg)
+        user_msg = st.chat_input(T["ask_me_anything"])
+        if user_msg:
+            st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
+            with st.chat_message("user"):
+                st.markdown(user_msg)
+            with st.chat_message("assistant"):
+                with st.spinner(T["thinking"]):
+                    try:
+                        msgs = st.session_state["companion_messages"].copy()
+                        msgs = msgs[:-1] + [{"role":"user","content": personal_context + "\n\nUser question:\n" + user_msg}]
+                        resp = client.chat.completions.create(model="gpt-4o-mini", messages=msgs, temperature=0.6)
+                        answer = resp.choices[0].message.content
+                    except Exception as e:
+                        answer = "Sorry, I had trouble answering right now. Please try again." if app_language == "English" else "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
+                    st.markdown(answer)
+            st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
 
-        want_ar = _is_arabic(user_msg)
-        turn_lang_cue = "Please answer ONLY in Arabic." if want_ar else "Please answer ONLY in English."
+        with st.container():
+            colA, colB = st.columns(2)
+            with colA:
+                if st.button(T["reset_chat"]):
+                    base = st.session_state["companion_messages"][0]
+                    st.session_state["companion_messages"] = [base]
+                    st.rerun()
+            with colB:
+                if app_language == "Arabic":
+                    st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+                else:
+                    st.caption("This chat gives general information and does not replace your medical provider.")
 
-        # Build a trimmed window to reduce tokens (system + last 6 turns + per-turn cue + user)
-        history = [m for m in st.session_state["companion_messages"] if m["role"] != "system"]
-        tail = history[-6:]
-        msgs = [
-            st.session_state["companion_messages"][0],                # merged system
-            {"role": "system", "content": turn_lang_cue},             # per-turn language lock
-            *tail                                                     # recent conversation
-        ]
-
-        with st.chat_message("assistant"):
-            with st.spinner(T["thinking"]):
-                try:
-                    # Primary call
-                    def _call():
-                        return client.chat.completions.create(
-                            model="gpt-4o-mini",        # you can pin a snapshot if you prefer
-                            messages=msgs,
-                            temperature=0.45,           # less listy, more natural
-                            max_tokens=320,
-                            presence_penalty=0.0,
-                            frequency_penalty=0.15,     # reduce bullet-y repetition
-                        )
-                    resp = _retry(_call)
-                    answer = (resp.choices[0].message.content or "").strip()
-
-                    # If language drifted or it dumped bullets without being asked, nudge once
-                    drift = (_is_arabic(answer) != want_ar)
-                    listed = "-" in answer[:80] or answer.strip().startswith(("*", "•", "-"))
-                    explicitly_wants_bullets = any(k in user_msg.lower() for k in ["tips", "plan", "steps", "نصائح", "خطة", "خطوات"])
-                    if drift or (listed and not explicitly_wants_bullets):
-                        nudge = []
-                        if drift:
-                            nudge.append(turn_lang_cue)
-                        if listed and not explicitly_wants_bullets:
-                            nudge.append("Rewrite as two short paragraphs. No bullet points.")
-                        nudged_user = ("\n\n".join(nudge) + "\n\n" + user_msg).strip()
-                        msgs2 = [
-                            st.session_state["companion_messages"][0],
-                            {"role": "system", "content": turn_lang_cue},
-                            {"role": "user", "content": nudged_user},
-                        ]
-                        resp2 = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=msgs2,
-                            temperature=0.4,
-                            max_tokens=300,
-                        )
-                        alt = (resp2.choices[0].message.content or "").strip()
-                        if alt:
-                            answer = alt
-
-                except Exception as e:
-                    # Show cause in UI, keep user-facing message friendly & localized
-                    st.error("The assistant hit an error when calling OpenAI.")
-                    st.caption(f"{e.__class__.__name__}: {str(e)[:300]}")
-                    answer = (
-                        "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
-                        if want_ar else
-                        "Sorry, I had trouble answering right now. Please try again."
-                    )
-
-            st.markdown(answer)
-        st.session_state["companion_messages"].append({"role": "assistant", "content": answer})
-
-    # Footer: Reset + disclaimer
-    with st.container():
-        colA, colB = st.columns(2)
-        with colA:
-            if st.button(T["reset_chat"]):
-                base = st.session_state["companion_messages"][0]
-                st.session_state["companion_messages"] = [base]
-                st.rerun()
-        with colB:
-            if app_language == "Arabic":
-                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-            else:
-                st.caption("This chat gives general information and does not replace your medical provider.")
-        # ---------------- end AI Companion (diagnostic) ----------------
-    
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
     if "user" not in st.session_state:
