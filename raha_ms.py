@@ -18,11 +18,11 @@ OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
 OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHER_API_KEY", "")
 
 # OpenAI (optional)
-try:
-    from openai import OpenAI
-    client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-except Exception:
-    client = None
+#try:
+#    from openai import OpenAI
+#    client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
+#except Exception:
+#    client = None
 
 # GCC quick picks
 GCC_CITIES = [
@@ -644,30 +644,46 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
+# ================== AI - DEEPSEEK ONLY ==================
 def ai_response(prompt, lang):
+    if not OPENAI_API_KEY:
+        return None, "no_api_key"
+    
     sys_prompt = (
-        "You are Raha MS AI Companion, a warm, supportive assistant for people with Multiple Sclerosis in the Gulf region. "
-        "Provide culturally relevant, practical advice for MS heat safety. "
-        "Be empathetic, understanding, and personal in your responses. "
-        "Use a conversational tone - be like a caring friend who understands MS challenges. "
-        "Focus on practical tips for cooling, pacing, hydration, and managing symptoms in hot climates. "
-        "Consider cultural aspects like fasting, prayer times, and local lifestyle. "
-        "Keep responses concise but warm and personal. "
+        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
+        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
+        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
         "This is general education, not medical care."
     )
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
-    if not client:
-        return None, "no_key"
+    
     try:
-        response = client.chat.completions.create(
-            model="deepseek-chat",
-            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.8,  # Increased for more natural responses
-        )
-        return response.choices[0].message.content, None
+        import requests
+        url = "https://api.deepseek.com/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "model": "deepseek-chat",
+            "messages": [
+                {"role": "system", "content": sys_prompt},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 1000,
+            "stream": False
+        }
+        
+        response = requests.post(url, headers=headers, json=data, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        return result['choices'][0]['message']['content'], None
+        
     except Exception as e:
         return None, str(e)
-
+        
 # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
     if lang == "Arabic":
@@ -1570,29 +1586,14 @@ elif page_id == "assistant":
         st.warning(T["login_first"])
         st.stop()
 
-    if not client:
-        st.warning(T["ai_unavailable"])
+    # Check if DeepSeek is available
+    if not OPENAI_API_KEY:
+        st.warning("DeepSeek API key not configured. Please add DEEPSEEK_API_KEY to secrets.")
         st.stop()
 
-    # Initialize chat history with better structure
+    # Initialize chat history
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
-    
-    if "ai_system_prompt" not in st.session_state:
-        st.session_state.ai_system_prompt = {
-            "role": "system",
-            "content": (
-                "You are Raha MS Companion: warm, supportive, and practical assistant for people with Multiple Sclerosis in the Gulf region. "
-                "Be empathetic, understanding, and personal in your responses. "
-                "Use a conversational tone - be like a caring friend who understands MS challenges. "
-                "Focus on practical tips for cooling, pacing, hydration, and managing symptoms in hot climates. "
-                "Consider cultural aspects like fasting, prayer times, and local lifestyle. "
-                "Keep responses concise but warm and personal. "
-                "Provide actionable advice. "
-                "This is general education, not medical care. "
-                + ("Respond only in Arabic." if app_language == "Arabic" else "Respond only in English.")
-            )
-        }
 
     # Display chat messages from history
     for message in st.session_state.chat_history:
@@ -1614,27 +1615,21 @@ elif page_id == "assistant":
             full_response = ""
             
             try:
-                # Prepare messages for API (system prompt + conversation history)
-                messages_for_api = [st.session_state.ai_system_prompt] + st.session_state.chat_history
+                # Show thinking indicator
+                message_placeholder.markdown("💭 " + T["thinking"])
                 
-                # Limit history to last 10 messages to avoid token limits
-                if len(messages_for_api) > 11:  # system + 10 messages
-                    messages_for_api = [st.session_state.ai_system_prompt] + st.session_state.chat_history[-10:]
+                # Get AI response using DeepSeek
+                full_response, error = ai_response(prompt, app_language)
                 
-                # Get AI response
-                response = client.chat.completions.create(
-                    model="deepseek-chat",
-                    messages=messages_for_api,
-                    temperature=0.8,
-                    stream=False  # Changed to False for more reliability
-                )
-                
-                full_response = response.choices[0].message.content
+                if error:
+                    full_response = f"Sorry, I'm having trouble responding right now. Error: {error}"
+                    if app_language == "Arabic":
+                        full_response = f"عذرًا، أواجه مشكلة في الرد الآن. الخطأ: {error}"
                 
             except Exception as e:
-                error_msg = f"Error: {str(e)}"
-                st.error(f"API Error: {error_msg}")
-                full_response = "I apologize, but I'm having trouble connecting right now. Please try again in a moment." if app_language == "English" else "أعتذر، لكنني أواجه مشكلة في الاتصال الآن. يرجى المحاولة مرة أخرى بعد قليل."
+                full_response = "Sorry, I encountered an unexpected error. Please try again."
+                if app_language == "Arabic":
+                    full_response = "عذرًا، واجهت خطأ غير متوقع. يرجى المحاولة مرة أخرى."
             
             # Display the response
             message_placeholder.markdown(full_response)
