@@ -31,18 +31,26 @@ def _is_arabic(s: str) -> bool:
     return bool(_ARABIC_RE.search(s or ""))
 
 def _retry(fn, *, attempts=4, base=1.2, cap=6.0):
+    """
+    Retry fn() on transient errors (429/5xx) with exponential backoff + jitter.
+    Raises the *last* exception if all retries fail.
+    """
+    last_exc = None
     for i in range(attempts):
         try:
             return fn()
         except Exception as e:
+            last_exc = e
             msg = str(e)
-            # Back off on 429s (or transient 5xx)
-            if "Rate limit" in msg or "429" in msg or "503" in msg:
-                sleep = min(cap, base * (2 ** i)) + random.random()
+            transient = ("429" in msg or "Rate limit" in msg or "503" in msg or "temporary" in msg.lower())
+            if transient and i < attempts - 1:
+                sleep = min(cap, base * (2 ** i)) + random.random()  # jitter
                 time.sleep(sleep)
                 continue
+            # Non-transient, or out of tries → re-raise THIS exception
             raise
-    raise
+    # We fell out of the loop without returning → throw a clear error
+    raise RuntimeError("Max retries exceeded when calling OpenAI") from last_exc
 
 
 # GCC quick picks
