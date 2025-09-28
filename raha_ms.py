@@ -1560,90 +1560,102 @@ elif page_id == "journal":
                         st.session_state["journal_offset"] += page_size
                         st.rerun()
 
+# Replace just the AI Companion section (page_id == "assistant") with this improved version:
+
 elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
 
-    # Require login first (matches other pages)
+    # Require login first
     if "user" not in st.session_state:
         st.warning(T["login_first"])
-        st.stop()  # IMPORTANT: prevents the rest of the assistant UI from rendering
+        st.stop()
 
     if not client:
         st.warning(T["ai_unavailable"])
-    else:
-        if "companion_messages" not in st.session_state:
-            st.session_state["companion_messages"] = [{
-                "role": "system",
-                "content": (
-                    "You are Raha MS Companion: warm, concise, and practical. "
-                    "Audience: people living with MS in the Gulf (GCC). "
-                    "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
-                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-                    "Avoid medical diagnosis; remind this is general info. "
-                    "Be empathetic and understanding - respond like a caring friend who understands MS challenges. "
-                    "Use natural, conversational language. "
-                    + ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
+        st.stop()
+
+    # Initialize chat history with better structure
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    
+    if "ai_system_prompt" not in st.session_state:
+        st.session_state.ai_system_prompt = {
+            "role": "system",
+            "content": (
+                "You are Raha MS Companion: warm, supportive, and practical assistant for people with Multiple Sclerosis in the Gulf region. "
+                "Be empathetic, understanding, and personal in your responses. "
+                "Use a conversational tone - be like a caring friend who understands MS challenges. "
+                "Focus on practical tips for cooling, pacing, hydration, and managing symptoms in hot climates. "
+                "Consider cultural aspects like fasting, prayer times, and local lifestyle. "
+                "Keep responses concise but warm and personal. "
+                "Provide actionable advice. "
+                "This is general education, not medical care. "
+                + ("Respond only in Arabic." if app_language == "Arabic" else "Respond only in English.")
+            )
+        }
+
+    # Display chat messages from history
+    for message in st.session_state.chat_history:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
+
+    # React to user input
+    if prompt := st.chat_input(T["ask_me_anything"]):
+        # Display user message in chat message container
+        with st.chat_message("user"):
+            st.markdown(prompt)
+        
+        # Add user message to chat history
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+
+        # Display assistant response in chat message container
+        with st.chat_message("assistant"):
+            message_placeholder = st.empty()
+            full_response = ""
+            
+            try:
+                # Prepare messages for API (system prompt + conversation history)
+                messages_for_api = [st.session_state.ai_system_prompt] + st.session_state.chat_history
+                
+                # Limit history to last 10 messages to avoid token limits
+                if len(messages_for_api) > 11:  # system + 10 messages
+                    messages_for_api = [st.session_state.ai_system_prompt] + st.session_state.chat_history[-10:]
+                
+                # Get AI response
+                response = client.chat.completions.create(
+                    model="gpt-4o-mini",
+                    messages=messages_for_api,
+                    temperature=0.8,
+                    stream=False  # Changed to False for more reliability
                 )
-            }]
-
-        # Display chat messages
-        for message in st.session_state["companion_messages"]:
-            if message["role"] == "system":
-                continue
-            with st.chat_message("assistant" if message["role"] == "assistant" else "user"):
-                st.markdown(message["content"])
-
-        # Chat input
-        if prompt := st.chat_input(T["ask_me_anything"]):
-            # Add user message to chat history
-            st.session_state["companion_messages"].append({"role": "user", "content": prompt})
+                
+                full_response = response.choices[0].message.content
+                
+            except Exception as e:
+                error_msg = f"Error: {str(e)}"
+                st.error(f"API Error: {error_msg}")
+                full_response = "I apologize, but I'm having trouble connecting right now. Please try again in a moment." if app_language == "English" else "أعتذر، لكنني أواجه مشكلة في الاتصال الآن. يرجى المحاولة مرة أخرى بعد قليل."
             
-            # Display user message
-            with st.chat_message("user"):
-                st.markdown(prompt)
+            # Display the response
+            message_placeholder.markdown(full_response)
 
-            # Generate AI response
-            with st.chat_message("assistant"):
-                with st.spinner(T["thinking"]):
-                    try:
-                        # Prepare messages for API (include system message and conversation history)
-                        messages_for_api = [
-                            {"role": "system", "content": st.session_state["companion_messages"][0]["content"]}
-                        ] + [
-                            msg for msg in st.session_state["companion_messages"][1:] 
-                            if msg["role"] in ["user", "assistant"]
-                        ]
-                        
-                        response = client.chat.completions.create(
-                            model="gpt-4o-mini",
-                            messages=messages_for_api,
-                            temperature=0.7,
-                        )
-                        full_response = response.choices[0].message.content
-                    except Exception as e:
-                        full_response = "I'm having trouble responding right now. Please try again." if app_language == "English" else "أواجه مشكلة في الرد الآن. يرجى المحاولة مرة أخرى."
-                    
-                    # Display AI response
-                    st.markdown(full_response)
-            
-            # Add assistant response to chat history
-            st.session_state["companion_messages"].append({"role": "assistant", "content": full_response})
+        # Add assistant response to chat history
+        st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
-        # Reset chat button
-        col1, col2 = st.columns([1, 4])
-        with col1:
-            if st.button(T["reset_chat"]):
-                # Keep only the system message
-                system_msg = st.session_state["companion_messages"][0]
-                st.session_state["companion_messages"] = [system_msg]
-                st.rerun()
+    # Reset chat button - placed at the bottom to avoid rerun issues
+    st.markdown("---")
+    col1, col2 = st.columns([1, 5])
+    
+    with col1:
+        if st.button(T["reset_chat"], key="reset_chat_btn"):
+            st.session_state.chat_history = []
+            st.rerun()
+    
+    with col2:
+        disclaimer = "This chat provides general wellness information only. Always consult your healthcare provider for medical advice." if app_language == "English" else "هذه المحادثة تقدم معلومات عامة عن الصحة فقط. استشر مقدم الرعاية الصحية الخاص بك دائمًا للحصول على المشورة الطبية."
+        st.caption(disclaimer)
 
-        with col2:
-            if app_language == "Arabic":
-                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-            else:
-                st.caption("This chat gives general information and does not replace your medical provider.")
-
+# =====================================
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
     if "user" not in st.session_state:
