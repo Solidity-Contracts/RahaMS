@@ -14,15 +14,9 @@ st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
 TZ_DUBAI = ZoneInfo("Asia/Dubai")
 
 # Secrets (fail gracefully if missing)
-OPENAI_API_KEY = st.secrets.get("OPENAI_API_KEY", "")
+DEEPSEEK_API_KEY = st.secrets.get("DEEPSEEK_API_KEY", "")
 OPENWEATHER_API_KEY = st.secrets.get("OPENWEATHER_API_KEY", "")
 
-# OpenAI (optional)
-#try:
-#    from openai import OpenAI
-#    client = OpenAI(api_key=OPENAI_API_KEY) if OPENAI_API_KEY else None
-#except Exception:
-#    client = None
 
 # GCC quick picks
 GCC_CITIES = [
@@ -109,7 +103,6 @@ TEXTS = {
         "watch_for": "Watch for",
         "trigger": "Trigger",
         "symptom":"Symptom",
-        # NEW ADDITIONS
         "start_monitoring": "▶️ Start monitoring",
         "pause": "⏸️ Pause",
         "refresh_weather": "🔄 Refresh weather now",
@@ -201,7 +194,6 @@ TEXTS = {
         "watch_for": "انتبه إلى",
         "trigger": "محفز",
         "symptom":"الأعراض",
-        # NEW ARABIC ADDITIONS
         "start_monitoring": "▶️ بدء المراقبة",
         "pause": "⏸️ إيقاف مؤقت",
         "refresh_weather": "🔄 تحديث الطقس الآن",
@@ -643,10 +635,10 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     next_p = prev_periph + (target - prev_periph) * 0.3 + ambient_push + noise
     return max(32.0, min(40.0, round(next_p, 2)))
 
-# ================== AI ==================
-# ================== AI - DEEPSEEK ONLY ==================
+
+# ================== AI - DEEPSEEK ==================
 def ai_response(prompt, lang):
-    if not OPENAI_API_KEY:
+    if not DEEPSEEK_API_KEY:
         return None, "no_api_key"
     
     sys_prompt = (
@@ -661,7 +653,7 @@ def ai_response(prompt, lang):
         import requests
         url = "https://api.deepseek.com/chat/completions"
         headers = {
-            "Authorization": f"Bearer {OPENAI_API_KEY}",
+            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
             "Content-Type": "application/json"
         }
         
