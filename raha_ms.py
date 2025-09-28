@@ -637,16 +637,23 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
 
 
 # ================== AI - DEEPSEEK ==================
-def ai_response(prompt, lang):
+def ai_response(prompt, lang, journal_context=""):
     if not DEEPSEEK_API_KEY:
         return None, "no_api_key"
     
+    # Base system prompt
     sys_prompt = (
-        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
-        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
-        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
-        "This is general education, not medical care."
+        "You are Raha MS AI Companion - a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf region. "
+        "Provide culturally relevant, practical advice for heat management, fatigue, pacing, and daily living with MS. "
+        "Be supportive and understanding. Focus on actionable tips for cooling, hydration, and managing symptoms. "
+        "Consider Gulf climate, prayer times, fasting, and local lifestyle. "
+        "Use a conversational, caring tone. This is general wellness advice, not medical care."
     )
+    
+    # Add journal context if provided
+    if journal_context:
+        sys_prompt += f"\n\nUser's recent journal context (use this to personalize your response):\n{journal_context}"
+    
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     
     try:
@@ -663,8 +670,8 @@ def ai_response(prompt, lang):
                 {"role": "system", "content": sys_prompt},
                 {"role": "user", "content": prompt}
             ],
-            "temperature": 0.7,
-            "max_tokens": 1000,
+            "temperature": 0.8,
+            "max_tokens": 800,
             "stream": False
         }
         
@@ -674,7 +681,148 @@ def ai_response(prompt, lang):
         return result['choices'][0]['message']['content'], None
         
     except Exception as e:
-        return None, str(e)
+        error_msg = str(e)
+        if "rate limit" in error_msg.lower():
+            return None, "rate_limit_exceeded"
+        elif "timeout" in error_msg.lower():
+            return None, "timeout_error"
+        else:
+            return None, f"api_error: {error_msg}"
+
+
+def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
+    """Get recent journal entries as context for AI"""
+    try:
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, entry FROM journal 
+            WHERE username=? 
+            ORDER BY date DESC 
+            LIMIT ?
+        """, (username, max_entries))
+        rows = c.fetchall()
+        
+        if not rows:
+            return "No journal entries found."
+        
+        context_lines = []
+        for date_str, entry_json in rows:
+            try:
+                entry_data = json.loads(entry_json)
+                entry_type = entry_data.get('type', 'NOTE')
+                
+                if entry_type == 'DAILY':
+                    mood = entry_data.get('mood', 'Unknown')
+                    hydration = entry_data.get('hydration_glasses', 'Unknown')
+                    sleep = entry_data.get('sleep_hours', 'Unknown')
+                    fatigue = entry_data.get('fatigue', 'Unknown')
+                    triggers = entry_data.get('triggers', [])
+                    symptoms = entry_data.get('symptoms', [])
+                    
+                    context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
+                    if triggers:
+                        context_lines.append(f"  Triggers: {', '.join(triggers)}")
+                    if symptoms:
+                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        
+                elif entry_type == 'ALERT':
+                    body_temp = entry_data.get('body_temp')
+                    baseline = entry_data.get('baseline')
+                    reasons = entry_data.get('reasons', [])
+                    symptoms = entry_data.get('symptoms', [])
+                    
+                    context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
+                    if reasons:
+                        context_lines.append(f"  Reasons: {', '.join(reasons)}")
+                    if symptoms:
+                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        
+                elif entry_type == 'PLAN':
+                    activity = entry_data.get('activity', 'Unknown')
+                    location = entry_data.get('city', 'Unknown')
+                    feels_like = entry_data.get('feels_like')
+                    
+                    context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
+                    
+                elif entry_type == 'NOTE':
+                    note_text = entry_data.get('text') or entry_data.get('note', '')
+                    if note_text and len(note_text) > 10:  # Only include substantial notes
+                        context_lines.append(f"Note: {note_text[:100]}...")
+                        
+            except Exception as e:
+                # If JSON parsing fails, include raw text
+                context_lines.append(f"Entry: {str(entry_json)[:100]}...")
+        
+        return "\n".join(context_lines) if context_lines else "No recent journal entries."
+        
+    except Exception as e:
+        return f"Error reading journal: {str(e)}"def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
+    """Get recent journal entries as context for AI"""
+    try:
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, entry FROM journal 
+            WHERE username=? 
+            ORDER BY date DESC 
+            LIMIT ?
+        """, (username, max_entries))
+        rows = c.fetchall()
+        
+        if not rows:
+            return "No journal entries found."
+        
+        context_lines = []
+        for date_str, entry_json in rows:
+            try:
+                entry_data = json.loads(entry_json)
+                entry_type = entry_data.get('type', 'NOTE')
+                
+                if entry_type == 'DAILY':
+                    mood = entry_data.get('mood', 'Unknown')
+                    hydration = entry_data.get('hydration_glasses', 'Unknown')
+                    sleep = entry_data.get('sleep_hours', 'Unknown')
+                    fatigue = entry_data.get('fatigue', 'Unknown')
+                    triggers = entry_data.get('triggers', [])
+                    symptoms = entry_data.get('symptoms', [])
+                    
+                    context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
+                    if triggers:
+                        context_lines.append(f"  Triggers: {', '.join(triggers)}")
+                    if symptoms:
+                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        
+                elif entry_type == 'ALERT':
+                    body_temp = entry_data.get('body_temp')
+                    baseline = entry_data.get('baseline')
+                    reasons = entry_data.get('reasons', [])
+                    symptoms = entry_data.get('symptoms', [])
+                    
+                    context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
+                    if reasons:
+                        context_lines.append(f"  Reasons: {', '.join(reasons)}")
+                    if symptoms:
+                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        
+                elif entry_type == 'PLAN':
+                    activity = entry_data.get('activity', 'Unknown')
+                    location = entry_data.get('city', 'Unknown')
+                    feels_like = entry_data.get('feels_like')
+                    
+                    context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
+                    
+                elif entry_type == 'NOTE':
+                    note_text = entry_data.get('text') or entry_data.get('note', '')
+                    if note_text and len(note_text) > 10:  # Only include substantial notes
+                        context_lines.append(f"Note: {note_text[:100]}...")
+                        
+            except Exception as e:
+                # If JSON parsing fails, include raw text
+                context_lines.append(f"Entry: {str(entry_json)[:100]}...")
+        
+        return "\n".join(context_lines) if context_lines else "No recent journal entries."
+        
+    except Exception as e:
+        return f"Error reading journal: {str(e)}"
         
 # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1578,11 +1726,6 @@ elif page_id == "assistant":
         st.warning(T["login_first"])
         st.stop()
 
-    # Check if DeepSeek is available
-    if not DEEPSEEK_API_KEY:
-        st.warning("DeepSeek API key not configured. Please add DEEPSEEK_API_KEY to secrets.")
-        st.stop()
-
     # Initialize chat history
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
@@ -1594,40 +1737,52 @@ elif page_id == "assistant":
 
     # React to user input
     if prompt := st.chat_input(T["ask_me_anything"]):
-        # Display user message in chat message container
+        # Display user message
         with st.chat_message("user"):
             st.markdown(prompt)
         
         # Add user message to chat history
         st.session_state.chat_history.append({"role": "user", "content": prompt})
 
-        # Display assistant response in chat message container
+        # Display assistant response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            full_response = ""
             
-            try:
-                # Show thinking indicator
-                message_placeholder.markdown("💭 " + T["thinking"])
-                
-                # Get AI response using DeepSeek
-                full_response, error = ai_response(prompt, app_language)
-                
-                if error:
-                    full_response = f"Sorry, I'm having trouble responding right now. Error: {error}"
+            # Show thinking indicator immediately
+            message_placeholder.markdown("💭 " + T["thinking"])
+            
+            # Get journal context for personalized responses
+            journal_context = ""
+            if any(keyword in prompt.lower() for keyword in ['journal', 'entry', 'log', 'previous', 'last', 'اليوميات', 'المذكرات', 'السجل', 'السابق']):
+                journal_context = get_recent_journal_context(st.session_state["user"])
+                # Debug: show what context we're sending (optional)
+                with st.expander("🔍 Journal Context Sent", expanded=False):
+                    st.text(journal_context)
+            
+            # Get AI response with journal context
+            full_response, error = ai_response(prompt, app_language, journal_context)
+            
+            # Handle errors gracefully
+            if error:
+                if error == "no_api_key":
+                    full_response = "DeepSeek API key not configured. Please check your settings."
                     if app_language == "Arabic":
-                        full_response = f"عذرًا، أواجه مشكلة في الرد الآن. الخطأ: {error}"
-                
-            except Exception as e:
-                full_response = "Sorry, I encountered an unexpected error. Please try again."
-                if app_language == "Arabic":
-                    full_response = "عذرًا، واجهت خطأ غير متوقع. يرجى المحاولة مرة أخرى."
+                        full_response = "مفتاح DeepSeek API غير مضبوط. يرجى التحقق من الإعدادات."
+                elif "rate_limit" in error:
+                    full_response = "⏳ Rate limit reached. Please wait a moment and try again."
+                    if app_language == "Arabic":
+                        full_response = "⏳ تم الوصول إلى الحد الأقصى للمعدل. يرجى الانتظار لحظة والمحاولة مرة أخرى."
+                else:
+                    full_response = "I'm having trouble responding right now. Please try again."
+                    if app_language == "Arabic":
+                        full_response = "أواجه مشكلة في الرد الآن. يرجى المحاولة مرة أخرى."
             
             # Display the response
             message_placeholder.markdown(full_response)
 
         # Add assistant response to chat history
-        st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+        if full_response:  # Only add if we got a response
+            st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
     # Reset chat button - placed at the bottom to avoid rerun issues
     st.markdown("---")
