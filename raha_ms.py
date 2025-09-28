@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from collections import defaultdict
 from datetime import datetime as _dt
 import json
+import re, hashlib
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -646,25 +647,130 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-def ai_response(prompt, lang):
-    sys_prompt = (
-        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
-        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
-        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
-        "This is general education, not medical care."
+# --- Language detector (Arabic script = True) ---
+_ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
+def _is_arabic(s: str) -> bool:
+    return bool(_ARABIC_RE.search(s or ""))
+
+# --- Per-user daily budget (prevents org-wide RPD) ---
+from datetime import date
+MAX_CALLS_PER_USER_PER_DAY = 40  # adjust for demos
+
+def _quota_key():
+    return f"quota_{st.session_state.get('user','guest')}_{date.today().isoformat()}"
+
+st.session_state.setdefault(_quota_key(), 0)
+def _inc_quota(n=1): st.session_state[_quota_key()] += n
+def _calls_today():   return st.session_state[_quota_key()]
+
+# --- Simple org cooldown when RPD is hit once (avoid hammering) ---
+st.session_state.setdefault("_org_cooldown_until", 0.0)
+
+def _rpd_cooldown_active() -> bool:
+    return time.time() < float(st.session_state.get("_org_cooldown_until", 0.0))
+
+def _start_rpd_cooldown(seconds: int = 600):  # 10 min default
+    st.session_state["_org_cooldown_until"] = time.time() + seconds
+
+# --- 24h cache for identical prompts (big RPD saver) ---
+st.session_state.setdefault("_ai_cache", {})  # { key: (ts, answer) }
+CACHE_TTL = 24*3600
+
+def _cache_key(user_id: str, sys_prompt: str, prompt: str):
+    raw = json.dumps({"u": user_id, "sys": sys_prompt, "p": prompt}, ensure_ascii=False, sort_keys=True)
+    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+
+def _cache_get(ckey: str):
+    rec = st.session_state["_ai_cache"].get(ckey)
+    if not rec: return None
+    ts, answer = rec
+    if time.time() - ts > CACHE_TTL:
+        return None
+    return answer
+
+def _cache_put(ckey: str, answer: str):
+    st.session_state["_ai_cache"][ckey] = (time.time(), answer)
+
+# --- Offline fallback (no API) using your tailored_tips + last_check ---
+def offline_answer(user_msg: str, want_ar: bool, last_check: dict | None):
+    feels = (last_check or {}).get("feels_like", 0)
+    hum   = (last_check or {}).get("humidity", 0)
+    delta = 0.0
+    if last_check and (last_check.get("body_temp") is not None) and (last_check.get("baseline") is not None):
+        delta = float(last_check["body_temp"]) - float(last_check["baseline"])
+    do_now, plan_later, watch_for = tailored_tips([], feels, hum, delta, "Arabic" if want_ar else "English")
+    if want_ar:
+        head = "أفهم قصدك. دعنا نطبّق خطوات بسيطة الآن ثم نخطط لما بعده."
+        out = [head]
+        if do_now: out += ["\n**افعل الآن:**", "- " + "\n- ".join(do_now)]
+        if plan_later: out += ["\n**خطط لاحقًا:**", "- " + "\n- ".join(plan_later)]
+        if watch_for: out += ["\n**انتبه إلى:**", "- " + "\n- ".join(watch_for)]
+        return "\n".join(out)
+    else:
+        head = "I hear you. Let’s use a few simple steps now, then plan what’s next."
+        out = [head]
+        if do_now: out += ["\n**Do now:**", "- " + "\n- ".join(do_now)]
+        if plan_later: out += ["\n**Plan later:**", "- " + "\n- ".join(plan_later)]
+        if watch_for: out += ["\n**Watch for:**", "- " + "\n- ".join(watch_for)]
+        return "\n".join(out)
+
+# --- Human tone system prompt builder (warmer, concise, bilingual-safe) ---
+def build_system_prompt(want_ar: bool) -> str:
+    base = (
+        "You are Raha MS Companion: warm, concise, and practical.\n"
+        "Audience: people living with MS in the Gulf (GCC).\n"
+        "Tone: calm, friendly, encouraging. Prefer 2–3 short sentences per paragraph.\n"
+        "Use at most 3 bullets only when the user explicitly asks for tips or a plan.\n"
+        "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments.\n"
+        "Avoid medical diagnosis; this is general information only.\n"
     )
-    sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
-    if not client:
-        return None, "no_key"
+    lang_line = "Reply ONLY in Arabic (Modern Standard Arabic)." if want_ar else "Reply ONLY in English."
+    return base + lang_line
+
+# --- Single-call, resilient LLM request with quota+cache+RPD handling ---
+def ask_companion(user_msg: str, ui_lang: str, personal_context: str) -> str:
+    # Decide language: Arabic if message contains Arabic or UI is Arabic
+    want_ar = _is_arabic(user_msg) or (ui_lang == "Arabic")
+
+    # Budget / cooldown gates
+    if _rpd_cooldown_active() or _calls_today() >= MAX_CALLS_PER_USER_PER_DAY or (client is None):
+        # Don’t call the API — give a helpful offline answer instead.
+        return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
+
+    sys_prompt = build_system_prompt(want_ar)
+
+    # Compose one compact user payload (history kept in DB/UI already)
+    prompt = personal_context + "\n\nUser question:\n" + user_msg
+
+    # Cache check
+    ckey = _cache_key(st.session_state.get("user","guest"), sys_prompt, prompt)
+    hit = _cache_get(ckey)
+    if hit:
+        return hit
+
+    # One attempt only (don’t retry on RPD); short max_tokens keeps latency low
     try:
-        response = client.chat.completions.create(
+        resp = client.chat.completions.create(
             model="gpt-4o-mini",
-            messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7,
+            messages=[{"role":"system","content": sys_prompt},
+                      {"role":"user","content": prompt}],
+            temperature=0.5,
+            max_tokens=380,
+            presence_penalty=0.0,
+            frequency_penalty=0.2,
         )
-        return response.choices[0].message.content, None
-    except Exception:
-        return None, "err"
+        answer = (resp.choices[0].message.content or "").strip()
+        _cache_put(ckey, answer)
+        _inc_quota(1)
+        return answer
+    except Exception as e:
+        msg = str(e).lower()
+        # If it's RPD (requests per day), start a local cooldown and go offline
+        if ("requests per day" in msg) or (" rpd" in msg):
+            _start_rpd_cooldown(8*60)  # parse if you like; here ~8 minutes
+            return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
+        # Any other error → friendly offline fallback
+        return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1576,6 +1682,7 @@ elif page_id == "journal":
 
 elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
+    st.session_state.setdefault("_ai_busy", False)
 
     # Require login first (matches other pages)
     if "user" not in st.session_state:
@@ -1607,21 +1714,28 @@ elif page_id == "assistant":
 
         user_msg = st.chat_input(T["ask_me_anything"])
         if user_msg:
+            # Debounce: avoid double-sends on Streamlit re-runs
+            if st.session_state["_ai_busy"]:
+                st.info("…"); st.stop()
+            st.session_state["_ai_busy"] = True
+        
             st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
             with st.chat_message("user"):
                 st.markdown(user_msg)
+        
             with st.chat_message("assistant"):
                 with st.spinner(T["thinking"]):
                     try:
-                        msgs = st.session_state["companion_messages"].copy()
-                        msgs = msgs[:-1] + [{"role":"user","content": personal_context + "\n\nUser question:\n" + user_msg}]
-                        resp = client.chat.completions.create(model="gpt-4o-mini", messages=msgs, temperature=0.6)
-                        answer = resp.choices[0].message.content
-                    except Exception as e:
-                        answer = "Sorry, I had trouble answering right now. Please try again." if app_language == "English" else "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
-                    st.markdown(answer)
-            st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+                        # Keep your existing personal context
+                        personal_context = build_personal_context(app_language)
+                        answer = ask_companion(user_msg, app_language, personal_context)
+                    except Exception:
+                        # Any unexpected error → offline fallback
+                        answer = offline_answer(user_msg, _is_arabic(user_msg) or (app_language=="Arabic"), st.session_state.get("last_check"))
+                st.markdown(answer)
 
+    st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+    st.session_state["_ai_busy"] = False
         with st.container():
             colA, colB = st.columns(2)
             with colA:
