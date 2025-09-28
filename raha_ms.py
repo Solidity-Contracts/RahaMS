@@ -647,130 +647,219 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
     return max(32.0, min(40.0, round(next_p, 2)))
 
 # ================== AI ==================
-# --- Language detector (Arabic script = True) ---
+# ======== LLM limits / models ========
+PRIMARY_MODEL = st.secrets.get("OPENAI_PRIMARY_MODEL", "gpt-4o-mini")
+BACKUP_MODEL  = st.secrets.get("OPENAI_BACKUP_MODEL",  "gpt-4o")  # different bucket, helps when PRIMARY hits 429
+MAX_CALLS_PER_USER_PER_DAY = int(st.secrets.get("LLM_MAX_CALLS_PER_USER", 40))
+RPD_COOLDOWN_SEC = int(st.secrets.get("LLM_RPD_COOLDOWN_SEC", 600))  # 10 min default
+
+# Arabic detector
+import re
 _ARABIC_RE = re.compile(r"[\u0600-\u06FF]")
 def _is_arabic(s: str) -> bool:
     return bool(_ARABIC_RE.search(s or ""))
 
-# --- Per-user daily budget (prevents org-wide RPD) ---
-from datetime import date
-MAX_CALLS_PER_USER_PER_DAY = 40  # adjust for demos
+# Simple per-session accounting & cooldown
+def _calls_today() -> int:
+    return int(st.session_state.get("_llm_calls_today", 0))
 
-def _quota_key():
-    return f"quota_{st.session_state.get('user','guest')}_{date.today().isoformat()}"
+def _bump_calls(n=1):
+    st.session_state["_llm_calls_today"] = _calls_today() + n
 
-st.session_state.setdefault(_quota_key(), 0)
-def _inc_quota(n=1): st.session_state[_quota_key()] += n
-def _calls_today():   return st.session_state[_quota_key()]
-
-# --- Simple org cooldown when RPD is hit once (avoid hammering) ---
-st.session_state.setdefault("_org_cooldown_until", 0.0)
+def _set_rpd_cooldown():
+    st.session_state["_rpd_until"] = time.time() + RPD_COOLDOWN_SEC
 
 def _rpd_cooldown_active() -> bool:
-    return time.time() < float(st.session_state.get("_org_cooldown_until", 0.0))
+    return time.time() < float(st.session_state.get("_rpd_until", 0))
 
-def _start_rpd_cooldown(seconds: int = 600):  # 10 min default
-    st.session_state["_org_cooldown_until"] = time.time() + seconds
+# Tiny context compressor for last_check (keeps tokens low)
+def _compress_last_check(last):
+    if not last: return ""
+    try:
+        return (
+            f"City: {last.get('city','?')}. "
+            f"Feels-like: {round(last.get('feels_like',0),1)}°C. "
+            f"Humidity: {int(last.get('humidity',0))}%. "
+            f"Core: {round(last.get('body_temp',0),1)}°C vs baseline {round(last.get('baseline',0),1)}°C. "
+            f"Status: {last.get('status','?')}."
+        )
+    except Exception:
+        return ""
 
-# --- 24h cache for identical prompts (big RPD saver) ---
-st.session_state.setdefault("_ai_cache", {})  # { key: (ts, answer) }
-CACHE_TTL = 24*3600
+# ---------- Local Place Recommender (offline) ----------
+CITY_ALIASES = {
+    "sharjah":"Sharjah","الشارقة":"Sharjah",
+    "dubai":"Dubai","دبي":"Dubai",
+    "abu dhabi":"Abu Dhabi","أبوظبي":"Abu Dhabi","ابوظبي":"Abu Dhabi",
+    "doha":"Doha","الدوحة":"Doha",
+    "riyadh":"Riyadh","الرياض":"Riyadh",
+    "jeddah":"Jeddah","جدة":"Jeddah",
+}
 
-def _cache_key(user_id: str, sys_prompt: str, prompt: str):
-    raw = json.dumps({"u": user_id, "sys": sys_prompt, "p": prompt}, ensure_ascii=False, sort_keys=True)
-    return hashlib.sha256(raw.encode("utf-8")).hexdigest()
+PLACE_DB = {
+    "Sharjah": [
+        {"name":"Al Majaz Waterfront","indoor":False,
+         "en":"Shaded paths, cafés; better after sunset.","ar":"ممرات مظللة ومقاهٍ؛ الأفضل بعد الغروب."},
+        {"name":"Al Noor Island (Butterfly House)","indoor":True,
+         "en":"AC indoor butterfly house; gentle walking.","ar":"بيت فراشات مكيّف؛ مشي لطيف."},
+        {"name":"Sharjah Art Museum","indoor":True,
+         "en":"Large AC galleries; easy pacing.","ar":"صالات مكيفة واسعة؛ إيقاع مريح."},
+        {"name":"Museum of Islamic Civilization","indoor":True,
+         "en":"Calm AC environment; short sections with breaks.","ar":"بيئة مكيفة هادئة؛ أقسام قصيرة مع استراحات."},
+        {"name":"Al Qasba Canal","indoor":False,
+         "en":"Promenade + cafés; go at dusk.","ar":"ممشى ومقاهٍ؛ الأفضل وقت الغروب."},
+        {"name":"Sahara Centre (Mall)","indoor":True,
+         "en":"AC mall walking; easy hydration & seating.","ar":"مول مكيّف للمشي؛ يسهل الترطيب والجلوس."},
+        {"name":"Wasit Wetland Centre","indoor":False,
+         "en":"Nature viewing; choose early or late evening.","ar":"مشاهدة طبيعة؛ صباح مبكر أو مساء متأخر."},
+    ],
+    "Dubai": [
+        {"name":"Dubai Mall (Zabeel link)","indoor":True,
+         "en":"Long shaded/AC route with many benches.","ar":"مسار مظلل/مكيّف طويل مع مقاعد كثيرة."},
+        {"name":"Alserkal Avenue","indoor":True,
+         "en":"AC galleries; keep visits short.","ar":"صالات مكيّفة؛ زيارات قصيرة."},
+        {"name":"JBR Walk (evening)","indoor":False
+         ,"en":"Sea breeze helps; best after sunset.","ar":"نسيم البحر يساعد؛ الأفضل بعد الغروب."},
+    ],
+    # add more cities later if you like
+}
 
-def _cache_get(ckey: str):
-    rec = st.session_state["_ai_cache"].get(ckey)
-    if not rec: return None
-    ts, answer = rec
-    if time.time() - ts > CACHE_TTL:
-        return None
-    return answer
+PLACE_INTENT_RE = re.compile(
+    r"(where\s+.*go|recommend.*(place|go)|places?|visit|mall|beach|park|go\s+in\s+|go\s+to\s+)"
+    r"|(?:أين.*(أذهب|أروح)|وين.*(أروح|أذهب)|أماكن|زيارة|مول|شاطئ|حديقة)",
+    re.IGNORECASE
+)
 
-def _cache_put(ckey: str, answer: str):
-    st.session_state["_ai_cache"][ckey] = (time.time(), answer)
+def _extract_city_from_text(text: str) -> str | None:
+    t = (text or "").lower()
+    for k, v in CITY_ALIASES.items():
+        if k in t: return v
+    return None
 
-# --- Offline fallback (no API) using your tailored_tips + last_check ---
-def offline_answer(user_msg: str, want_ar: bool, last_check: dict | None):
-    feels = (last_check or {}).get("feels_like", 0)
-    hum   = (last_check or {}).get("humidity", 0)
-    delta = 0.0
-    if last_check and (last_check.get("body_temp") is not None) and (last_check.get("baseline") is not None):
-        delta = float(last_check["body_temp"]) - float(last_check["baseline"])
-    do_now, plan_later, watch_for = tailored_tips([], feels, hum, delta, "Arabic" if want_ar else "English")
-    if want_ar:
-        head = "أفهم قصدك. دعنا نطبّق خطوات بسيطة الآن ثم نخطط لما بعده."
-        out = [head]
-        if do_now: out += ["\n**افعل الآن:**", "- " + "\n- ".join(do_now)]
-        if plan_later: out += ["\n**خطط لاحقًا:**", "- " + "\n- ".join(plan_later)]
-        if watch_for: out += ["\n**انتبه إلى:**", "- " + "\n- ".join(watch_for)]
-        return "\n".join(out)
-    else:
-        head = "I hear you. Let’s use a few simple steps now, then plan what’s next."
-        out = [head]
-        if do_now: out += ["\n**Do now:**", "- " + "\n- ".join(do_now)]
-        if plan_later: out += ["\n**Plan later:**", "- " + "\n- ".join(plan_later)]
-        if watch_for: out += ["\n**Watch for:**", "- " + "\n- ".join(watch_for)]
-        return "\n".join(out)
+def _city_from_context_or_default(user_text: str) -> str:
+    c = _extract_city_from_text(user_text)
+    if c: return c
+    lc = (st.session_state.get("last_check") or {}).get("city")
+    if isinstance(lc, str) and lc:
+        return lc.split(",")[0].strip()
+    return "Sharjah"
 
-# --- Human tone system prompt builder (warmer, concise, bilingual-safe) ---
-def build_system_prompt(want_ar: bool) -> str:
-    base = (
-        "You are Raha MS Companion: warm, concise, and practical.\n"
-        "Audience: people living with MS in the Gulf (GCC).\n"
-        "Tone: calm, friendly, encouraging. Prefer 2–3 short sentences per paragraph.\n"
-        "Use at most 3 bullets only when the user explicitly asks for tips or a plan.\n"
-        "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments.\n"
-        "Avoid medical diagnosis; this is general information only.\n"
-    )
-    lang_line = "Reply ONLY in Arabic (Modern Standard Arabic)." if want_ar else "Reply ONLY in English."
-    return base + lang_line
+def is_place_intent(text: str) -> bool:
+    return bool(PLACE_INTENT_RE.search(text or ""))
 
-# --- Single-call, resilient LLM request with quota+cache+RPD handling ---
-def ask_companion(user_msg: str, ui_lang: str, personal_context: str) -> str:
-    # Decide language: Arabic if message contains Arabic or UI is Arabic
+def suggest_places(user_text: str, want_ar: bool, last_check: dict | None) -> str:
+    city = _city_from_context_or_default(user_text)
+    items = PLACE_DB.get(city, [])
+    if not items:
+        return ("أخبرني باسم مدينة (مثل الشارقة/دبي/أبوظبي) لأقترح أماكن مناسبة."
+                if want_ar else
+                "Tell me a city (e.g., Sharjah/Dubai/Abu Dhabi) and I’ll suggest MS-friendly places.")
+    feels = (last_check or {}).get("feels_like", 0.0)
+    hum   = (last_check or {}).get("humidity", 0.0)
+    hot = (feels >= 36) or (hum >= 60)
+    indoor = [p for p in items if p["indoor"]]
+    outdoor = [p for p in items if not p["indoor"]]
+    picks = (indoor[:5] + outdoor[:3]) if hot else (indoor[:3] + outdoor[:4])
+    picks = picks[:7]
+
+    head = (f"اقتراحات مناسبة في **{city}** الآن (الإحساس الحراري ≈ {round(feels,1)}°م، الرطوبة {int(hum)}%)."
+            if want_ar else
+            f"MS-friendly picks in **{city}** (feels-like ≈ {round(feels,1)}°C, humidity {int(hum)}%).")
+    lines = []
+    for p in picks:
+        tip = p["ar"] if want_ar else p["en"]
+        lines.append(f"- **{p['name']}** — {tip}")
+    tail = ("نصيحة: فضّل المكيّف وقت الذروة وخذ استراحات قصيرة مع ماء بارد."
+            if want_ar else
+            "Tip: prefer AC at midday and take short, cool-water breaks.")
+    return head + "\n\n" + "\n".join(lines) + "\n\n" + tail
+    
+# ================== AI ==================
+def ai_response(user_msg: str, ui_lang: str):
     want_ar = _is_arabic(user_msg) or (ui_lang == "Arabic")
 
-    # Budget / cooldown gates
-    if _rpd_cooldown_active() or _calls_today() >= MAX_CALLS_PER_USER_PER_DAY or (client is None):
-        # Don’t call the API — give a helpful offline answer instead.
-        return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
+    # 0) If user asks for places, always use offline recommender (no API use)
+    if is_place_intent(user_msg):
+        return suggest_places(user_msg, want_ar, st.session_state.get("last_check")), None
 
-    sys_prompt = build_system_prompt(want_ar)
+    # 1) RPD guard, missing client, or budget reached -> offline fallback
+    if (client is None) or _rpd_cooldown_active() or (_calls_today() >= MAX_CALLS_PER_USER_PER_DAY):
+        return offline_answer(user_msg, want_ar), "offline"
 
-    # Compose one compact user payload (history kept in DB/UI already)
-    prompt = personal_context + "\n\nUser question:\n" + user_msg
+    # 2) Compose a SHORT prompt (no long history)
+    style = (
+        "Write like a warm companion. Use 2–3 short sentences. "
+        "Only use bullets (max 3) if the user asks for tips/plan. "
+        "This is general information, not medical advice. "
+        + ("Answer ONLY in Arabic." if want_ar else "Answer ONLY in English.")
+    )
+    ctx = _compress_last_check(st.session_state.get("last_check"))
+    user_content = (f"Context: {ctx}\n\nUser: {user_msg}").strip()
 
-    # Cache check
-    ckey = _cache_key(st.session_state.get("user","guest"), sys_prompt, prompt)
-    hit = _cache_get(ckey)
-    if hit:
-        return hit
+    messages = [
+        {"role": "system", "content": style},
+        {"role": "user", "content": user_content}
+    ]
 
-    # One attempt only (don’t retry on RPD); short max_tokens keeps latency low
-    try:
-        resp = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[{"role":"system","content": sys_prompt},
-                      {"role":"user","content": prompt}],
-            temperature=0.5,
-            max_tokens=380,
+    # 3) Call primary, then backup on 429; otherwise offline
+    def _call(model_name):
+        return client.chat.completions.create(
+            model=model_name,
+            messages=messages,
+            temperature=0.4,
+            max_tokens=280,
             presence_penalty=0.0,
             frequency_penalty=0.2,
         )
-        answer = (resp.choices[0].message.content or "").strip()
-        _cache_put(ckey, answer)
-        _inc_quota(1)
-        return answer
+
+    try:
+        out = _call(PRIMARY_MODEL)
+        _bump_calls()
+        ans = (out.choices[0].message.content or "").strip()
+        # one-shot nudge if language drifted
+        if (_is_arabic(ans) != want_ar):
+            nudged = _call(PRIMARY_MODEL)
+            _bump_calls()
+            ans2 = (nudged.choices[0].message.content or "").strip()
+            if ans2: ans = ans2
+        return ans, None
     except Exception as e:
-        msg = str(e).lower()
-        # If it's RPD (requests per day), start a local cooldown and go offline
-        if ("requests per day" in msg) or (" rpd" in msg):
-            _start_rpd_cooldown(8*60)  # parse if you like; here ~8 minutes
-            return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
-        # Any other error → friendly offline fallback
-        return offline_answer(user_msg, want_ar, st.session_state.get("last_check"))
+        msg = str(e)
+        if "Rate limit" in msg or "429" in msg:
+            try:
+                out = _call(BACKUP_MODEL)
+                _bump_calls()
+                ans = (out.choices[0].message.content or "").strip()
+                return ans, None
+            except Exception:
+                _set_rpd_cooldown()
+                return offline_answer(user_msg, want_ar), "rpd"
+        # other errors -> offline
+        return offline_answer(user_msg, want_ar), "err"
+
+def offline_answer(user_msg: str, want_ar: bool) -> str:
+    # Heat-aware generic fallback (short, still helpful)
+    last = st.session_state.get("last_check") or {}
+    feels = last.get("feels_like", 0.0); hum = last.get("humidity", 0.0)
+    delta = 0.0
+    if last and (last.get("body_temp") is not None) and (last.get("baseline") is not None):
+        try:
+            delta = float(last["body_temp"]) - float(last["baseline"])
+        except Exception:
+            delta = 0.0
+    do_now, plan_later, watch_for = tailored_tips([], feels, hum, delta, "Arabic" if want_ar else "English")
+
+    if want_ar:
+        parts = ["أفهمك. إليك خطوات بسيطة الآن:"]
+        if do_now: parts += ["- " + "\n- ".join(do_now[:3])]
+        if plan_later: parts += ["\nثم خطة قصيرة:", "- " + "\n- ".join(plan_later[:3])]
+        return "\n".join(parts)
+    else:
+        parts = ["I’ve got you. Here are simple steps now:"]
+        if do_now: parts += ["- " + "\n- ".join(do_now[:3])]
+        if plan_later: parts += ["\nThen a short plan:", "- " + "\n- ".join(plan_later[:3])]
+        return "\n".join(parts)
+
 
 # # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1682,73 +1771,45 @@ elif page_id == "journal":
 
 elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
-    st.session_state.setdefault("_ai_busy", False)
 
-    # Require login first (matches other pages)
     if "user" not in st.session_state:
         st.warning(T["login_first"])
-        st.stop()  # IMPORTANT: prevents the rest of the assistant UI from rendering
+        st.stop()
 
-    if not client:
+    if not client and not st.session_state.get("last_check"):
         st.warning(T["ai_unavailable"])
-    else:
-        if "companion_messages" not in st.session_state:
-            st.session_state["companion_messages"] = [{
-                "role":"system",
-                "content": (
-                    "You are Raha MS Companion: warm, concise, and practical. "
-                    "Audience: people living with MS in the Gulf (GCC). "
-                    "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
-                    "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-                    "Avoid medical diagnosis; remind this is general info. " +
-                    ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
-                )
-            }]
 
-        personal_context = build_personal_context(app_language)
+    # Chat history for display only (we do NOT send it to the LLM to keep tokens low)
+    st.session_state.setdefault("companion_history", [])
+    for role, content in st.session_state["companion_history"]:
+        with st.chat_message("assistant" if role=="assistant" else "user"):
+            st.markdown(content)
 
-        for m in st.session_state["companion_messages"]:
-            if m["role"] == "system": continue
-            with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
-                st.markdown(m["content"])
+    user_msg = st.chat_input(T["ask_me_anything"])
+    if user_msg:
+        st.session_state["companion_history"].append(("user", user_msg))
+        with st.chat_message("user"):
+            st.markdown(user_msg)
 
-        user_msg = st.chat_input(T["ask_me_anything"])
-        if user_msg:
-            # Debounce: avoid double-sends on Streamlit re-runs
-            if st.session_state["_ai_busy"]:
-                st.info("…"); st.stop()
-            st.session_state["_ai_busy"] = True
-        
-            st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
-            with st.chat_message("user"):
-                st.markdown(user_msg)
-        
-            with st.chat_message("assistant"):
-                with st.spinner(T["thinking"]):
-                    try:
-                        # Keep your existing personal context
-                        personal_context = build_personal_context(app_language)
-                        answer = ask_companion(user_msg, app_language, personal_context)
-                    except Exception:
-                        # Any unexpected error → offline fallback
-                        answer = offline_answer(user_msg, _is_arabic(user_msg) or (app_language=="Arabic"), st.session_state.get("last_check"))
+        with st.chat_message("assistant"):
+            with st.spinner(T["thinking"]):
+                answer, mode = ai_response(user_msg, app_language)
                 st.markdown(answer)
 
-                st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
-                st.session_state["_ai_busy"] = False
-                
-            with st.container():
-                colA, colB = st.columns(2)
-                with colA:
-                    if st.button(T["reset_chat"]):
-                        base = st.session_state["companion_messages"][0]
-                        st.session_state["companion_messages"] = [base]
-                        st.rerun()
-                with colB:
-                    if app_language == "Arabic":
-                        st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-                    else:
-                        st.caption("This chat gives general information and does not replace your medical provider.")
+        st.session_state["companion_history"].append(("assistant", answer))
+
+    # Footer
+    with st.container():
+        colA, colB = st.columns(2)
+        with colA:
+            if st.button(T["reset_chat"]):
+                st.session_state["companion_history"] = []
+                st.rerun()
+        with colB:
+            if app_language == "Arabic":
+                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+            else:
+                st.caption("This chat gives general information and does not replace your medical provider.")
 
 #====================================================================================================================================
 
