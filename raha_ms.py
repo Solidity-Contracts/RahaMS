@@ -690,139 +690,139 @@ def ai_response(prompt, lang, journal_context=""):
             return None, f"api_error: {error_msg}"
 
 
-def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
-    """Get recent journal entries as context for AI"""
-    try:
-        c = get_conn().cursor()
-        c.execute("""
-            SELECT date, entry FROM journal 
-            WHERE username=? 
-            ORDER BY date DESC 
-            LIMIT ?
-        """, (username, max_entries))
-        rows = c.fetchall()
-        
-        if not rows:
-            return "No journal entries found."
-        
-        context_lines = []
-        for date_str, entry_json in rows:
-            try:
-                entry_data = json.loads(entry_json)
-                entry_type = entry_data.get('type', 'NOTE')
-                
-                if entry_type == 'DAILY':
-                    mood = entry_data.get('mood', 'Unknown')
-                    hydration = entry_data.get('hydration_glasses', 'Unknown')
-                    sleep = entry_data.get('sleep_hours', 'Unknown')
-                    fatigue = entry_data.get('fatigue', 'Unknown')
-                    triggers = entry_data.get('triggers', [])
-                    symptoms = entry_data.get('symptoms', [])
+    def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
+        """Get recent journal entries as context for AI"""
+        try:
+            c = get_conn().cursor()
+            c.execute("""
+                SELECT date, entry FROM journal 
+                WHERE username=? 
+                ORDER BY date DESC 
+                LIMIT ?
+            """, (username, max_entries))
+            rows = c.fetchall()
+            
+            if not rows:
+                return "No journal entries found."
+            
+            context_lines = []
+            for date_str, entry_json in rows:
+                try:
+                    entry_data = json.loads(entry_json)
+                    entry_type = entry_data.get('type', 'NOTE')
                     
-                    context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
-                    if triggers:
-                        context_lines.append(f"  Triggers: {', '.join(triggers)}")
-                    if symptoms:
-                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                    if entry_type == 'DAILY':
+                        mood = entry_data.get('mood', 'Unknown')
+                        hydration = entry_data.get('hydration_glasses', 'Unknown')
+                        sleep = entry_data.get('sleep_hours', 'Unknown')
+                        fatigue = entry_data.get('fatigue', 'Unknown')
+                        triggers = entry_data.get('triggers', [])
+                        symptoms = entry_data.get('symptoms', [])
                         
-                elif entry_type == 'ALERT':
-                    body_temp = entry_data.get('body_temp')
-                    baseline = entry_data.get('baseline')
-                    reasons = entry_data.get('reasons', [])
-                    symptoms = entry_data.get('symptoms', [])
-                    
-                    context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
-                    if reasons:
-                        context_lines.append(f"  Reasons: {', '.join(reasons)}")
-                    if symptoms:
-                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
+                        if triggers:
+                            context_lines.append(f"  Triggers: {', '.join(triggers)}")
+                        if symptoms:
+                            context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                            
+                    elif entry_type == 'ALERT':
+                        body_temp = entry_data.get('body_temp')
+                        baseline = entry_data.get('baseline')
+                        reasons = entry_data.get('reasons', [])
+                        symptoms = entry_data.get('symptoms', [])
                         
-                elif entry_type == 'PLAN':
-                    activity = entry_data.get('activity', 'Unknown')
-                    location = entry_data.get('city', 'Unknown')
-                    feels_like = entry_data.get('feels_like')
-                    
-                    context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
-                    
-                elif entry_type == 'NOTE':
-                    note_text = entry_data.get('text') or entry_data.get('note', '')
-                    if note_text and len(note_text) > 10:  # Only include substantial notes
-                        context_lines.append(f"Note: {note_text[:100]}...")
+                        context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
+                        if reasons:
+                            context_lines.append(f"  Reasons: {', '.join(reasons)}")
+                        if symptoms:
+                            context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                            
+                    elif entry_type == 'PLAN':
+                        activity = entry_data.get('activity', 'Unknown')
+                        location = entry_data.get('city', 'Unknown')
+                        feels_like = entry_data.get('feels_like')
                         
-            except Exception as e:
-                # If JSON parsing fails, include raw text
-                context_lines.append(f"Entry: {str(entry_json)[:100]}...")
-        
-        return "\n".join(context_lines) if context_lines else "No recent journal entries."
-        
-    except Exception as e:
-        return f"Error reading journal: {str(e)}"def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
-    """Get recent journal entries as context for AI"""
-    try:
-        c = get_conn().cursor()
-        c.execute("""
-            SELECT date, entry FROM journal 
-            WHERE username=? 
-            ORDER BY date DESC 
-            LIMIT ?
-        """, (username, max_entries))
-        rows = c.fetchall()
-        
-        if not rows:
-            return "No journal entries found."
-        
-        context_lines = []
-        for date_str, entry_json in rows:
-            try:
-                entry_data = json.loads(entry_json)
-                entry_type = entry_data.get('type', 'NOTE')
-                
-                if entry_type == 'DAILY':
-                    mood = entry_data.get('mood', 'Unknown')
-                    hydration = entry_data.get('hydration_glasses', 'Unknown')
-                    sleep = entry_data.get('sleep_hours', 'Unknown')
-                    fatigue = entry_data.get('fatigue', 'Unknown')
-                    triggers = entry_data.get('triggers', [])
-                    symptoms = entry_data.get('symptoms', [])
-                    
-                    context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
-                    if triggers:
-                        context_lines.append(f"  Triggers: {', '.join(triggers)}")
-                    if symptoms:
-                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                        context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
                         
-                elif entry_type == 'ALERT':
-                    body_temp = entry_data.get('body_temp')
-                    baseline = entry_data.get('baseline')
-                    reasons = entry_data.get('reasons', [])
-                    symptoms = entry_data.get('symptoms', [])
+                    elif entry_type == 'NOTE':
+                        note_text = entry_data.get('text') or entry_data.get('note', '')
+                        if note_text and len(note_text) > 10:  # Only include substantial notes
+                            context_lines.append(f"Note: {note_text[:100]}...")
+                            
+                except Exception as e:
+                    # If JSON parsing fails, include raw text
+                    context_lines.append(f"Entry: {str(entry_json)[:100]}...")
+            
+            return "\n".join(context_lines) if context_lines else "No recent journal entries."
+            
+        except Exception as e:
+            return f"Error reading journal: {str(e)}"def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
+        """Get recent journal entries as context for AI"""
+        try:
+            c = get_conn().cursor()
+            c.execute("""
+                SELECT date, entry FROM journal 
+                WHERE username=? 
+                ORDER BY date DESC 
+                LIMIT ?
+            """, (username, max_entries))
+            rows = c.fetchall()
+            
+            if not rows:
+                return "No journal entries found."
+            
+            context_lines = []
+            for date_str, entry_json in rows:
+                try:
+                    entry_data = json.loads(entry_json)
+                    entry_type = entry_data.get('type', 'NOTE')
                     
-                    context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
-                    if reasons:
-                        context_lines.append(f"  Reasons: {', '.join(reasons)}")
-                    if symptoms:
-                        context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                    if entry_type == 'DAILY':
+                        mood = entry_data.get('mood', 'Unknown')
+                        hydration = entry_data.get('hydration_glasses', 'Unknown')
+                        sleep = entry_data.get('sleep_hours', 'Unknown')
+                        fatigue = entry_data.get('fatigue', 'Unknown')
+                        triggers = entry_data.get('triggers', [])
+                        symptoms = entry_data.get('symptoms', [])
                         
-                elif entry_type == 'PLAN':
-                    activity = entry_data.get('activity', 'Unknown')
-                    location = entry_data.get('city', 'Unknown')
-                    feels_like = entry_data.get('feels_like')
-                    
-                    context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
-                    
-                elif entry_type == 'NOTE':
-                    note_text = entry_data.get('text') or entry_data.get('note', '')
-                    if note_text and len(note_text) > 10:  # Only include substantial notes
-                        context_lines.append(f"Note: {note_text[:100]}...")
+                        context_lines.append(f"Daily Log: Mood={mood}, Hydration={hydration} glasses, Sleep={sleep} hrs, Fatigue={fatigue}")
+                        if triggers:
+                            context_lines.append(f"  Triggers: {', '.join(triggers)}")
+                        if symptoms:
+                            context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                            
+                    elif entry_type == 'ALERT':
+                        body_temp = entry_data.get('body_temp')
+                        baseline = entry_data.get('baseline')
+                        reasons = entry_data.get('reasons', [])
+                        symptoms = entry_data.get('symptoms', [])
                         
-            except Exception as e:
-                # If JSON parsing fails, include raw text
-                context_lines.append(f"Entry: {str(entry_json)[:100]}...")
-        
-        return "\n".join(context_lines) if context_lines else "No recent journal entries."
-        
-    except Exception as e:
-        return f"Error reading journal: {str(e)}"
+                        context_lines.append(f"Alert: Body temp={body_temp}°C, Baseline={baseline}°C")
+                        if reasons:
+                            context_lines.append(f"  Reasons: {', '.join(reasons)}")
+                        if symptoms:
+                            context_lines.append(f"  Symptoms: {', '.join(symptoms)}")
+                            
+                    elif entry_type == 'PLAN':
+                        activity = entry_data.get('activity', 'Unknown')
+                        location = entry_data.get('city', 'Unknown')
+                        feels_like = entry_data.get('feels_like')
+                        
+                        context_lines.append(f"Plan: {activity} in {location}, Feels-like={feels_like}°C")
+                        
+                    elif entry_type == 'NOTE':
+                        note_text = entry_data.get('text') or entry_data.get('note', '')
+                        if note_text and len(note_text) > 10:  # Only include substantial notes
+                            context_lines.append(f"Note: {note_text[:100]}...")
+                            
+                except Exception as e:
+                    # If JSON parsing fails, include raw text
+                    context_lines.append(f"Entry: {str(entry_json)[:100]}...")
+            
+            return "\n".join(context_lines) if context_lines else "No recent journal entries."
+            
+        except Exception as e:
+            return f"Error reading journal: {str(e)}"
         
 # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
