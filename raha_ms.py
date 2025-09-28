@@ -349,8 +349,6 @@ SAFE_RTL_CSS = """
 """
 st.markdown(SAFE_RTL_CSS, unsafe_allow_html=True)
 
-
-
 # ================== DB ==================
 @st.cache_resource
 def get_conn():
@@ -648,9 +646,13 @@ def simulate_peripheral_next(prev_core, prev_periph, feels_like):
 # ================== AI ==================
 def ai_response(prompt, lang):
     sys_prompt = (
-        "You are Raha MS AI Companion. Answer as a warm, supportive companion. "
-        "Provide culturally relevant, practical MS heat safety advice for Gulf (GCC) users. "
-        "Use short bullets when listing actions. Consider fasting, prayer times, home AC, cooling garments, pacing. "
+        "You are Raha MS AI Companion, a warm, supportive assistant for people with Multiple Sclerosis in the Gulf region. "
+        "Provide culturally relevant, practical advice for MS heat safety. "
+        "Be empathetic, understanding, and personal in your responses. "
+        "Use a conversational tone - be like a caring friend who understands MS challenges. "
+        "Focus on practical tips for cooling, pacing, hydration, and managing symptoms in hot climates. "
+        "Consider cultural aspects like fasting, prayer times, and local lifestyle. "
+        "Keep responses concise but warm and personal. "
         "This is general education, not medical care."
     )
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
@@ -660,13 +662,13 @@ def ai_response(prompt, lang):
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[{"role": "system", "content": sys_prompt}, {"role": "user", "content": prompt}],
-            temperature=0.7,
+            temperature=0.8,  # Increased for more natural responses
         )
         return response.choices[0].message.content, None
-    except Exception:
-        return None, "err"
+    except Exception as e:
+        return None, str(e)
 
-# # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
+# ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
     if lang == "Arabic":
         st.title("🧠 مرحبًا بك في راحة إم إس")
@@ -712,7 +714,7 @@ def render_about_page(lang: str = "English"):
         with tab1:
             st.markdown("""
 - For people with **Multiple Sclerosis (MS)**, Gulf heat can trigger symptoms.
-- A rise as small as **+0.5°C** can bring on fatigue, blurred vision, or weakness (**Uhthoff’s phenomenon**).
+- A rise as small as **+0.5°C** can bring on fatigue, blurred vision, or weakness (**Uhthoff's phenomenon**).
 - That tiny rise is **hard to feel** until symptoms already disrupt your day.
 
 👉 **Raha MS turns that invisible 0.5°C into an _early warning system_.**
@@ -722,7 +724,7 @@ def render_about_page(lang: str = "English"):
             st.markdown("""
 - **Personal early alerts**: watches your rise above **your baseline** and warns you *before you notice*.
 - **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
-- **Place check**: compare your city with a specific spot (beach, mall, park) to see where it’s safer **right now**.
+- **Place check**: compare your city with a specific spot (beach, mall, park) to see where it's safer **right now**.
 - **Journal + exports**: record symptoms, triggers, and notes — download as **Excel/CSV** to share with your clinician or caregiver.
 - **Designed for Gulf life**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
 - **First of its kind in the GCC**: no other app focuses on MS heat sensitivity like this.
@@ -731,13 +733,248 @@ def render_about_page(lang: str = "English"):
         with tab3:
             st.markdown("""
 - **Catch risks early**: cool down or pause *before* symptoms escalate.
-- **Plan confidently**: know exactly when and where it’s safer to go out.
+- **Plan confidently**: know exactly when and where it's safer to go out.
 - **Understand your triggers**: connect weather, body temperature, and symptoms over time.
 - **Share evidence**: give your doctor clear, organized records to support better care.
 
 🔒 **Privacy**: Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver.
             """)
+
 # ================== PLANNER HELPERS ==================
+def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
+    slots = []
+    for it in forecast[:16]:
+        t = it["time"]
+        hour = int(t[11:13])
+        if avoid_hours[0] <= hour < avoid_hours[1]:
+            continue
+        if it["feels_like"] <= max_feels_like and it["humidity"] <= max_humidity:
+            slots.append(it)
+    cand = []
+    for i in range(len(slots)):
+        group = [slots[i]]
+        if i+1 < len(slots):
+            t1, t2 = slots[i]["time"], slots[i+1]["time"]
+            if t1[:10] == t2[:10] and (int(t2[11:13]) - int(t1[11:13]) == 3):
+                group.append(slots[i+1])
+        avg_feels = round(sum(g["feels_like"] for g in group)/len(group), 1)
+        avg_hum = int(sum(g["humidity"] for g in group)/len(group))
+        start_dt = _dt.strptime(group[0]["time"][:16], "%Y-%m-%d %H:%M")
+        end_dt = (_dt.strptime(group[-1]["time"][:16], "%Y-%m-%d %H:%M") + timedelta(hours=3)) if len(group)>1 else (start_dt + timedelta(hours=3))
+        cand.append({ "start_dt": start_dt, "end_dt": end_dt, "avg_feels": avg_feels, "avg_hum": avg_hum })
+    cand.sort(key=lambda x: x["start_dt"])
+    return cand[:top_k]
+
+def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
+    do_now, plan_later, watch_for = [], [], []
+    if delta >= 0.5:
+        do_now += ["Cool down (AC/cool shower)", "Sip cool water", "Rest 15–20 min"] if lang == "English" else ["تبرد (مكيف/دش بارد)", "اشرب ماءً باردًا", "ارتح 15-20 دقيقة"]
+    if feels_like >= 36:
+        do_now += ["Use cooling scarf/pack", "Stay in shade/indoors"] if lang == "English" else ["استخدم وشاح/حزمة تبريد", "ابق في الظل/داخل المباني"]
+        plan_later += ["Shift activity to a cooler window"] if lang == "English" else ["انقل النشاط إلى نافذة أكثر برودة"]
+    if humidity >= 60:
+        plan_later += ["Prefer AC over fan", "Add electrolytes if sweating"] if lang == "English" else ["افضل التكييف على المروحة", "أضف إلكتروليتات إذا كنت تتعرق"]
+    for r in reasons:
+        rl = r.lower()
+        if "exercise" in rl or "رياضة" in rl:
+            do_now += ["Stop/pause activity", "Pre-cool next time 15 min"] if lang == "English" else ["أوقف/أجل النشاط", "تبرد مسبقًا المرة القادمة 15 دقيقة"]
+            plan_later += ["Shorter intervals, more breaks"] if lang == "English" else ["فترات أقصر، فترات راحة أكثر"]
+        if "sun" in rl or "شمس" in rl:
+            do_now += ["Move to shade/indoors"] if lang == "English" else ["انتقل إلى الظل/داخل المباني"]
+        if "sauna" in rl or "hot bath" in rl or "ساونا" in rl:
+            do_now += ["Cool shower afterwards", "Avoid for now"] if lang == "English" else ["دش بارد بعد ذلك", "تجنب الآن"]
+        if "car" in rl or "سيارة" in rl:
+            do_now += ["Pre-cool car 5–10 min"] if lang == "English" else ["تبريد السيارة مسبقًا 5-10 دقائق"]
+        if "kitchen" in rl or "cooking" in rl or "مطبخ" in rl:
+            plan_later += ["Ventilate kitchen, cook earlier"] if lang == "English" else ["تهوية المطبخ، طهي مبكر"]
+        if "fever" in rl or "illness" in rl or "حمّى" in rl:
+            watch_for += ["Persistent high temp", "New neurological symptoms"] if lang == "English" else ["ارتفاع درجة الحرارة المستمر", "أعراض عصبية جديدة"]
+    do_now = list(dict.fromkeys(do_now))[:6]
+    plan_later = list(dict.fromkeys(plan_later))[:6]
+    watch_for = list(dict.fromkeys(watch_for))[:6]
+    return do_now, plan_later, watch_for
+
+def get_recent_journal_context(username: str, max_items: int = 3) -> list[dict]:
+    try:
+        c = get_conn().cursor()
+        c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC LIMIT ?", (username, max_items))
+        rows = c.fetchall()
+    except Exception:
+        rows = []
+    bullets = []
+    for dt_raw, raw_json in rows:
+        try:
+            obj = json.loads(raw_json)
+        except Exception:
+            obj = {"type":"NOTE","text":str(raw_json)}
+        t = obj.get("type","NOTE")
+        if t == "PLAN":
+            bullets.append(f"PLAN {obj.get('activity','')} {obj.get('start','')}→{obj.get('end','')} @ {obj.get('city','')}")
+        elif t in ("ALERT","ALERT_AUTO"):
+            core = obj.get("core_temp") or obj.get("body_temp")
+            base = obj.get("baseline")
+            d = f"+{round(core-base,1)}°C" if (core is not None and base is not None) else ""
+            bullets.append(f"ALERT core {core}°C {d}")
+        elif t == "DAILY":
+            bullets.append(f"DAILY mood {obj.get('mood','-')} hydration {obj.get('hydration_glasses','-')} sleep {obj.get('sleep_hours','-')}h")
+        else:
+            bullets.append(f"NOTE {obj.get('text','').strip()[:60]}")
+    return bullets
+
+def build_personal_context(app_language: str) -> str:
+    hc = st.session_state.get("last_check", {})
+    hc_line = ""
+    if hc:
+        hc_line = (
+            f"HeatCheck: body {hc.get('body_temp','?')}°C (baseline {hc.get('baseline','?')}°C), "
+            f"feels-like {hc.get('feels_like','?')}°C, humidity {hc.get('humidity','?')}%, "
+            f"status {hc.get('status','?')} in {hc.get('city','?')}."
+        )
+    bullets = []
+    if "user" in st.session_state:
+        bullets = get_recent_journal_context(st.session_state["user"], max_items=3)
+
+    if app_language == "Arabic":
+        header = "استخدم هذه الخلفية لتخصيص النصيحة (لا تكررها للمستخدم):"
+        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
+        return f"{header}\n{hc_line}\nالسجل:\n{items}"
+    else:
+        header = "Use this background to personalize advice (do not repeat verbatim):"
+        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
+        return f"{header}\n{hc_line}\nJournal:\n{items}"
+
+TYPE_ICONS_EN = {"PLAN":"🗓️","ALERT":"🚨","ALERT_AUTO":"🚨","DAILY":"🧩","NOTE":"📝"}
+TYPE_ICONS_AR = TYPE_ICONS_EN
+
+def _to_dubai_label(iso_str: str) -> str:
+    try:
+        dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+    except Exception:
+        try:
+            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
+        except Exception:
+            dt = datetime.now(timezone.utc)
+    return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+def _as_list(v):
+    if v is None: return []
+    if isinstance(v, list): return [str(x) for x in v]
+    if isinstance(v, str):
+        s = v.strip()
+        if (s.startswith("[") and s.endswith("]")) or (s.startswith("(") and s.endswith(")")):
+            try:
+                parsed = json.loads(s.replace("(", "[").replace(")", "]"))
+                if isinstance(parsed, list): return [str(x) for x in parsed]
+            except Exception:
+                pass
+        return [v]
+    return [str(v)]
+
+def pretty_plan(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    city = entry.get("city", "—")
+    act = entry.get("activity", "—")
+    start = entry.get("start", "—")
+    end = entry.get("end", "—")
+    fl = entry.get("feels_like", None)
+    hum = entry.get("humidity", None)
+    meta = f"Feels-like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
+    if lang == "Arabic":
+        header = f"**{when}** — **خطة** ({city})"
+        body = f"**النشاط:** {act}\n\n**الوقت:** {start} → {end}\n\n{meta}"
+    else:
+        header = f"**{when}** — **Plan** ({city})"
+        body = f"**Activity:** {act}\n\n**Time:** {start} → {end}\n\n{meta}"
+    return header, body
+
+def pretty_alert(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    core = entry.get("core_temp") or entry.get("body_temp")
+    periph = entry.get("peripheral_temp")
+    base = entry.get("baseline")
+    delta = (core - base) if (core is not None and base is not None) else None
+    reasons = _as_list(entry.get("reasons"))
+    symptoms = _as_list(entry.get("symptoms"))
+    note = entry.get("note", "")
+    if lang == "Arabic":
+        header = f"**{when}** — **تنبيه حراري**"
+        lines = []
+        if core is not None: lines.append(f"**الأساسية:** {core}°م")
+        if periph is not None: lines.append(f"**الطرفية:** {periph}°م")
+        if base is not None: lines.append(f"**الأساس:** {base}°م")
+        if delta is not None: lines.append(f"**الفرق عن الأساس:** +{round(delta,1)}°م")
+        if reasons: lines.append(f"**الأسباب:** " + ", ".join(reasons))
+        if symptoms: lines.append(f"**الأعراض:** " + ", ".join(symptoms))
+        if note: lines.append(f"**ملاحظة:** {note}")
+        body = "\n\n".join(lines)
+    else:
+        header = f"**{when}** — **Heat alert**"
+        lines = []
+        if core is not None: lines.append(f"**Core:** {core}°C")
+        if periph is not None: lines.append(f"**Peripheral:** {periph}°C")
+        if base is not None: lines.append(f"**Baseline:** {base}°C")
+        if delta is not None: lines.append(f"**Δ from baseline:** +{round(delta,1)}°C")
+        if reasons: lines.append(f"**Reasons:** " + ", ".join(reasons))
+        if symptoms: lines.append(f"**Symptoms:** " + ", ".join(symptoms))
+        if note: lines.append(f"**Note:** {note}")
+        body = "\n\n".join(lines)
+    return header, body
+
+def pretty_daily(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    mood = entry.get("mood", "—")
+    hyd = entry.get("hydration_glasses", "—")
+    sleep = entry.get("sleep_hours", "—")
+    fatigue = entry.get("fatigue", "—")
+    triggers = _as_list(entry.get("triggers"))
+    symptoms = _as_list(entry.get("symptoms"))
+    note = entry.get("note", "")
+    if lang == "Arabic":
+        header = f"**{when}** — **مُسجّل يومي**"
+        lines = [f"**المزاج:** {mood}", f"**الترطيب (أكواب):** {hyd}", f"**النوم (ساعات):** {sleep}", f"**التعب:** {fatigue}"]
+        if triggers: lines.append(f"**المحفزات:** " + ", ".join(triggers))
+        if symptoms: lines.append(f"**الأعراض:** " + ", ".join(symptoms))
+        if note: lines.append(f"**ملاحظة:** {note}")
+        body = "\n\n".join(lines)
+    else:
+        header = f"**{when}** — **Daily log**"
+        lines = [f"**Mood:** {mood}", f"**Hydration (glasses):** {hyd}", f"**Sleep (hrs):** {sleep}", f"**Fatigue:** {fatigue}"]
+        if triggers: lines.append(f"**Triggers:** " + ", ".join(triggers))
+        if symptoms: lines.append(f"**Symptoms:** " + ", ".join(symptoms))
+        if note: lines.append(f"**Note:** {note}")
+        body = "\n\n".join(lines)
+    return header, body
+
+def pretty_note(entry, lang="English"):
+    when = _to_dubai_label(entry.get("at", utc_iso_now()))
+    text = entry.get("text") or entry.get("note") or "—"
+    if lang == "Arabic":
+        header = f"**{when}** — **ملاحظة**"
+        body = text
+    else:
+        header = f"**{when}** — **Note**"
+        body = text
+    return header, body
+
+def render_entry_card(raw_entry_json, lang="English"):
+    try:
+        obj = json.loads(raw_entry_json)
+    except Exception:
+        obj = {"type":"NOTE", "at": utc_iso_now(), "text": str(raw_entry_json)}
+    t = obj.get("type", "NOTE")
+    icon = (TYPE_ICONS_AR if lang=="Arabic" else TYPE_ICONS_EN).get(t, "📝")
+    if t == "PLAN":
+        header, body = pretty_plan(obj, lang)
+    elif t in ("ALERT","ALERT_AUTO"):
+        header, body = pretty_alert(obj, lang)
+    elif t == "DAILY":
+        header, body = pretty_daily(obj, lang)
+    else:
+        header, body = pretty_note(obj, lang)
+    return header, body, icon, t, obj
+
 def render_planner():
     st.title("🗺️ " + T["planner"])
     if "user" not in st.session_state:
@@ -905,251 +1142,6 @@ def render_planner():
             else:
                 st.warning("Couldn't fetch that place's weather." if app_language == "English" else "تعذر جلب طقس هذا المكان.")
         st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather.get('peak_hours', [])) if weather.get('peak_hours') else "—"))
-
-def best_windows_from_forecast(
-    forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)
-):
-    slots = []
-    for it in forecast[:16]:
-        t = it["time"]
-        hour = int(t[11:13])
-        if avoid_hours[0] <= hour < avoid_hours[1]:
-            continue
-        if it["feels_like"] <= max_feels_like and it["humidity"] <= max_humidity:
-            slots.append(it)
-    cand = []
-    for i in range(len(slots)):
-        group = [slots[i]]
-        if i+1 < len(slots):
-            t1, t2 = slots[i]["time"], slots[i+1]["time"]
-            if t1[:10] == t2[:10] and (int(t2[11:13]) - int(t1[11:13]) == 3):
-                group.append(slots[i+1])
-        avg_feels = round(sum(g["feels_like"] for g in group)/len(group), 1)
-        avg_hum = int(sum(g["humidity"] for g in group)/len(group))
-        start_dt = _dt.strptime(group[0]["time"][:16], "%Y-%m-%d %H:%M")
-        end_dt = (_dt.strptime(group[-1]["time"][:16], "%Y-%m-%d %H:%M") + timedelta(hours=3)) if len(group)>1 else (start_dt + timedelta(hours=3))
-        cand.append({ "start_dt": start_dt, "end_dt": end_dt, "avg_feels": avg_feels, "avg_hum": avg_hum })
-    cand.sort(key=lambda x: x["start_dt"])
-    return cand[:top_k]
-
-def tailored_tips(reasons, feels_like, humidity, delta, lang="English"):
-    do_now, plan_later, watch_for = [], [], []
-    if delta >= 0.5:
-        do_now += ["Cool down (AC/cool shower)", "Sip cool water", "Rest 15–20 min"] if lang == "English" else ["تبرد (مكيف/دش بارد)", "اشرب ماءً باردًا", "ارتح 15-20 دقيقة"]
-    if feels_like >= 36:
-        do_now += ["Use cooling scarf/pack", "Stay in shade/indoors"] if lang == "English" else ["استخدم وشاح/حزمة تبريد", "ابق في الظل/داخل المباني"]
-        plan_later += ["Shift activity to a cooler window"] if lang == "English" else ["انقل النشاط إلى نافذة أكثر برودة"]
-    if humidity >= 60:
-        plan_later += ["Prefer AC over fan", "Add electrolytes if sweating"] if lang == "English" else ["افضل التكييف على المروحة", "أضف إلكتروليتات إذا كنت تتعرق"]
-    for r in reasons:
-        rl = r.lower()
-        if "exercise" in rl or "رياضة" in rl:
-            do_now += ["Stop/pause activity", "Pre-cool next time 15 min"] if lang == "English" else ["أوقف/أجل النشاط", "تبرد مسبقًا المرة القادمة 15 دقيقة"]
-            plan_later += ["Shorter intervals, more breaks"] if lang == "English" else ["فترات أقصر، فترات راحة أكثر"]
-        if "sun" in rl or "شمس" in rl:
-            do_now += ["Move to shade/indoors"] if lang == "English" else ["انتقل إلى الظل/داخل المباني"]
-        if "sauna" in rl or "hot bath" in rl or "ساونا" in rl:
-            do_now += ["Cool shower afterwards", "Avoid for now"] if lang == "English" else ["دش بارد بعد ذلك", "تجنب الآن"]
-        if "car" in rl or "سيارة" in rl:
-            do_now += ["Pre-cool car 5–10 min"] if lang == "English" else ["تبريد السيارة مسبقًا 5-10 دقائق"]
-        if "kitchen" in rl or "cooking" in rl or "مطبخ" in rl:
-            plan_later += ["Ventilate kitchen, cook earlier"] if lang == "English" else ["تهوية المطبخ، طهي مبكر"]
-        if "fever" in rl or "illness" in rl or "حمّى" in rl:
-            watch_for += ["Persistent high temp", "New neurological symptoms"] if lang == "English" else ["ارتفاع درجة الحرارة المستمر", "أعراض عصبية جديدة"]
-    do_now = list(dict.fromkeys(do_now))[:6]
-    plan_later = list(dict.fromkeys(plan_later))[:6]
-    watch_for = list(dict.fromkeys(watch_for))[:6]
-    return do_now, plan_later, watch_for
-
-def get_recent_journal_context(username: str, max_items: int = 3) -> list[dict]:
-    try:
-        c = get_conn().cursor()
-        c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC LIMIT ?", (username, max_items))
-        rows = c.fetchall()
-    except Exception:
-        rows = []
-    bullets = []
-    for dt_raw, raw_json in rows:
-        try:
-            obj = json.loads(raw_json)
-        except Exception:
-            obj = {"type":"NOTE","text":str(raw_json)}
-        t = obj.get("type","NOTE")
-        if t == "PLAN":
-            bullets.append(f"PLAN {obj.get('activity','')} {obj.get('start','')}→{obj.get('end','')} @ {obj.get('city','')}")
-        elif t in ("ALERT","ALERT_AUTO"):
-            core = obj.get("core_temp") or obj.get("body_temp")
-            base = obj.get("baseline")
-            d = f"+{round(core-base,1)}°C" if (core is not None and base is not None) else ""
-            bullets.append(f"ALERT core {core}°C {d}")
-        elif t == "DAILY":
-            bullets.append(f"DAILY mood {obj.get('mood','-')} hydration {obj.get('hydration_glasses','-')} sleep {obj.get('sleep_hours','-')}h")
-        else:
-            bullets.append(f"NOTE {obj.get('text','').strip()[:60]}")
-    return bullets
-
-def build_personal_context(app_language: str) -> str:
-    hc = st.session_state.get("last_check", {})
-    hc_line = ""
-    if hc:
-        hc_line = (
-            f"HeatCheck: body {hc.get('body_temp','?')}°C (baseline {hc.get('baseline','?')}°C), "
-            f"feels-like {hc.get('feels_like','?')}°C, humidity {hc.get('humidity','?')}%, "
-            f"status {hc.get('status','?')} in {hc.get('city','?')}."
-        )
-    bullets = []
-    if "user" in st.session_state:
-        bullets = get_recent_journal_context(st.session_state["user"], max_items=3)
-
-    if app_language == "Arabic":
-        header = "استخدم هذه الخلفية لتخصيص النصيحة (لا تكررها للمستخدم):"
-        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
-        return f"{header}\n{hc_line}\nالسجل:\n{items}"
-    else:
-        header = "Use this background to personalize advice (do not repeat verbatim):"
-        items = "\n".join([f"- {b}" for b in bullets]) if bullets else "- —"
-        return f"{header}\n{hc_line}\nJournal:\n{items}"
-
-TYPE_ICONS_EN = {"PLAN":"🗓️","ALERT":"🚨","ALERT_AUTO":"🚨","DAILY":"🧩","NOTE":"📝"}
-TYPE_ICONS_AR = TYPE_ICONS_EN
-
-def utc_iso_now():
-    return datetime.now(timezone.utc).isoformat()
-
-def _to_dubai_label(iso_str: str) -> str:
-    try:
-        dt = datetime.fromisoformat(iso_str.replace("Z","+00:00"))
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-    except Exception:
-        try:
-            dt = datetime.strptime(iso_str, "%Y-%m-%d %H:%M").replace(tzinfo=timezone.utc)
-        except Exception:
-            dt = datetime.now(timezone.utc)
-    return dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
-
-def _as_list(v):
-    if v is None: return []
-    if isinstance(v, list): return [str(x) for x in v]
-    if isinstance(v, str):
-        s = v.strip()
-        if (s.startswith("[") and s.endswith("]")) or (s.startswith("(") and s.endswith(")")):
-            try:
-                parsed = json.loads(s.replace("(", "[").replace(")", "]"))
-                if isinstance(parsed, list): return [str(x) for x in parsed]
-            except Exception:
-                pass
-        return [v]
-    return [str(v)]
-
-def pretty_plan(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    city = entry.get("city", "—")
-    act = entry.get("activity", "—")
-    start = entry.get("start", "—")
-    end = entry.get("end", "—")
-    fl = entry.get("feels_like", None)
-    hum = entry.get("humidity", None)
-    meta = f"Feels-like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
-    if lang == "Arabic":
-        header = f"**{when}** — **خطة** ({city})"
-        body = f"**النشاط:** {act}\n\n**الوقت:** {start} → {end}\n\n{meta}"
-    else:
-        header = f"**{when}** — **Plan** ({city})"
-        body = f"**Activity:** {act}\n\n**Time:** {start} → {end}\n\n{meta}"
-    return header, body
-
-def pretty_alert(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    core = entry.get("core_temp") or entry.get("body_temp")
-    periph = entry.get("peripheral_temp")
-    base = entry.get("baseline")
-    delta = (core - base) if (core is not None and base is not None) else None
-    reasons = _as_list(entry.get("reasons"))
-    symptoms = _as_list(entry.get("symptoms"))
-    note = entry.get("note", "")
-    if lang == "Arabic":
-        header = f"**{when}** — **تنبيه حراري**"
-        lines = []
-        if core is not None: lines.append(f"**الأساسية:** {core}°م")
-        if periph is not None: lines.append(f"**الطرفية:** {periph}°م")
-        if base is not None: lines.append(f"**الأساس:** {base}°م")
-        if delta is not None: lines.append(f"**الفرق عن الأساس:** +{round(delta,1)}°م")
-        if reasons: lines.append(f"**الأسباب:** " + ", ".join(reasons))
-        if symptoms: lines.append(f"**الأعراض:** " + ", ".join(symptoms))
-        if note: lines.append(f"**ملاحظة:** {note}")
-        body = "\n\n".join(lines)
-    else:
-        header = f"**{when}** — **Heat alert**"
-        lines = []
-        if core is not None: lines.append(f"**Core:** {core}°C")
-        if periph is not None: lines.append(f"**Peripheral:** {periph}°C")
-        if base is not None: lines.append(f"**Baseline:** {base}°C")
-        if delta is not None: lines.append(f"**Δ from baseline:** +{round(delta,1)}°C")
-        if reasons: lines.append(f"**Reasons:** " + ", ".join(reasons))
-        if symptoms: lines.append(f"**Symptoms:** " + ", ".join(symptoms))
-        if note: lines.append(f"**Note:** {note}")
-        body = "\n\n".join(lines)
-    return header, body
-
-def pretty_daily(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    mood = entry.get("mood", "—")
-    hyd = entry.get("hydration_glasses", "—")
-    sleep = entry.get("sleep_hours", "—")
-    fatigue = entry.get("fatigue", "—")
-    triggers = _as_list(entry.get("triggers"))
-    symptoms = _as_list(entry.get("symptoms"))
-    note = entry.get("note", "")
-    if lang == "Arabic":
-        header = f"**{when}** — **مُسجّل يومي**"
-        lines = [f"**المزاج:** {mood}", f"**الترطيب (أكواب):** {hyd}", f"**النوم (ساعات):** {sleep}", f"**التعب:** {fatigue}"]
-        if triggers: lines.append(f"**المحفزات:** " + ", ".join(triggers))
-        if symptoms: lines.append(f"**الأعراض:** " + ", ".join(symptoms))
-        if note: lines.append(f"**ملاحظة:** {note}")
-        body = "\n\n".join(lines)
-    else:
-        header = f"**{when}** — **Daily log**"
-        lines = [f"**Mood:** {mood}", f"**Hydration (glasses):** {hyd}", f"**Sleep (hrs):** {sleep}", f"**Fatigue:** {fatigue}"]
-        if triggers: lines.append(f"**Triggers:** " + ", ".join(triggers))
-        if symptoms: lines.append(f"**Symptoms:** " + ", ".join(symptoms))
-        if note: lines.append(f"**Note:** {note}")
-        body = "\n\n".join(lines)
-    return header, body
-
-def pretty_note(entry, lang="English"):
-    when = _to_dubai_label(entry.get("at", utc_iso_now()))
-    text = entry.get("text") or entry.get("note") or "—"
-    if lang == "Arabic":
-        header = f"**{when}** — **ملاحظة**"
-        body = text
-    else:
-        header = f"**{when}** — **Note**"
-        body = text
-    return header, body
-
-def render_entry_card(raw_entry_json, lang="English"):
-    try:
-        obj = json.loads(raw_entry_json)
-    except Exception:
-        obj = {"type":"NOTE", "at": utc_iso_now(), "text": str(raw_entry_json)}
-    t = obj.get("type", "NOTE")
-    icon = (TYPE_ICONS_AR if lang=="Arabic" else TYPE_ICONS_EN).get(t, "📝")
-    if t == "PLAN":
-        header, body = pretty_plan(obj, lang)
-    elif t in ("ALERT","ALERT_AUTO"):
-        header, body = pretty_alert(obj, lang)
-    elif t == "DAILY":
-        header, body = pretty_daily(obj, lang)
-    else:
-        header, body = pretty_note(obj, lang)
-    return header, body, icon, t, obj
-
-def slider_with_icon(label, min_value, max_value, value, step=1, icon="📊"):
-    st.markdown(f"""<div class="slider-with-icon"><span class="slider-icon">{icon}</span><div style="flex-grow:1;">""", unsafe_allow_html=True)
-    result = st.slider(label, min_value, max_value, value, step)
-    st.markdown("</div></div>", unsafe_allow_html=True)
-    return result
 
 # ================== SIDEBAR ==================
 logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.png"
@@ -1479,18 +1471,12 @@ elif page_id == "journal":
             mood_options = ["🙂 Okay", "😌 Calm", "😕 Low", "😣 Stressed", "😴 Tired"] if app_language == "English" else ["🙂 بخير", "😌 هادئ", "😕 منخفض", "😣 متوتر", "😴 متعب"]
             mood = st.selectbox(T["mood"], mood_options)
         with col2:
-            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>💧</span>", unsafe_allow_html=True)
             hydration = st.slider(T["hydration"], 0, 12, 6, key="hydration_slider")
-            st.markdown("</div>", unsafe_allow_html=True)
         with col3:
-            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>🛏️</span>", unsafe_allow_html=True)
             sleep = st.slider(T["sleep"], 0, 12, 7, key="sleep_slider")
-            st.markdown("</div>", unsafe_allow_html=True)
         with col4:
-            st.markdown(f"<div class='slider-with-icon'><span class='slider-icon'>😫</span>", unsafe_allow_html=True)
             fatigue_options = [f"{i}/10" for i in range(0, 11)]
             fatigue = st.selectbox(T["fatigue"], fatigue_options, index=4)
-            st.markdown("</div>", unsafe_allow_html=True)
 
         trigger_options = TRIGGERS_EN if app_language == "English" else TRIGGERS_AR
         symptom_options = SYMPTOMS_EN if app_language == "English" else SYMPTOMS_AR
@@ -1587,53 +1573,76 @@ elif page_id == "assistant":
     else:
         if "companion_messages" not in st.session_state:
             st.session_state["companion_messages"] = [{
-                "role":"system",
+                "role": "system",
                 "content": (
                     "You are Raha MS Companion: warm, concise, and practical. "
                     "Audience: people living with MS in the Gulf (GCC). "
                     "Tone: calm, friendly, encouraging; short paragraphs or bullets. "
                     "Focus: heat safety, pacing, hydration, prayer/fasting context, AC/home tips, cooling garments. "
-                    "Avoid medical diagnosis; remind this is general info. " +
-                    ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
+                    "Avoid medical diagnosis; remind this is general info. "
+                    "Be empathetic and understanding - respond like a caring friend who understands MS challenges. "
+                    "Use natural, conversational language. "
+                    + ("Respond only in Arabic." if app_language=="Arabic" else "Respond only in English.")
                 )
             }]
 
-        personal_context = build_personal_context(app_language)
+        # Display chat messages
+        for message in st.session_state["companion_messages"]:
+            if message["role"] == "system":
+                continue
+            with st.chat_message("assistant" if message["role"] == "assistant" else "user"):
+                st.markdown(message["content"])
 
-        for m in st.session_state["companion_messages"]:
-            if m["role"] == "system": continue
-            with st.chat_message("assistant" if m["role"]=="assistant" else "user"):
-                st.markdown(m["content"])
-
-        user_msg = st.chat_input(T["ask_me_anything"])
-        if user_msg:
-            st.session_state["companion_messages"].append({"role":"user", "content": user_msg})
+        # Chat input
+        if prompt := st.chat_input(T["ask_me_anything"]):
+            # Add user message to chat history
+            st.session_state["companion_messages"].append({"role": "user", "content": prompt})
+            
+            # Display user message
             with st.chat_message("user"):
-                st.markdown(user_msg)
+                st.markdown(prompt)
+
+            # Generate AI response
             with st.chat_message("assistant"):
                 with st.spinner(T["thinking"]):
                     try:
-                        msgs = st.session_state["companion_messages"].copy()
-                        msgs = msgs[:-1] + [{"role":"user","content": personal_context + "\n\nUser question:\n" + user_msg}]
-                        resp = client.chat.completions.create(model="gpt-4o-mini", messages=msgs, temperature=0.6)
-                        answer = resp.choices[0].message.content
+                        # Prepare messages for API (include system message and conversation history)
+                        messages_for_api = [
+                            {"role": "system", "content": st.session_state["companion_messages"][0]["content"]}
+                        ] + [
+                            msg for msg in st.session_state["companion_messages"][1:] 
+                            if msg["role"] in ["user", "assistant"]
+                        ]
+                        
+                        response = client.chat.completions.create(
+                            model="gpt-4o-mini",
+                            messages=messages_for_api,
+                            temperature=0.7,
+                        )
+                        full_response = response.choices[0].message.content
                     except Exception as e:
-                        answer = "Sorry, I had trouble answering right now. Please try again." if app_language == "English" else "عذرًا، واجهت مشكلة في الإجابة الآن. يرجى المحاولة مرة أخرى."
-                    st.markdown(answer)
-            st.session_state["companion_messages"].append({"role":"assistant", "content": answer})
+                        full_response = "I'm having trouble responding right now. Please try again." if app_language == "English" else "أواجه مشكلة في الرد الآن. يرجى المحاولة مرة أخرى."
+                    
+                    # Display AI response
+                    st.markdown(full_response)
+            
+            # Add assistant response to chat history
+            st.session_state["companion_messages"].append({"role": "assistant", "content": full_response})
 
-        with st.container():
-            colA, colB = st.columns(2)
-            with colA:
-                if st.button(T["reset_chat"]):
-                    base = st.session_state["companion_messages"][0]
-                    st.session_state["companion_messages"] = [base]
-                    st.rerun()
-            with colB:
-                if app_language == "Arabic":
-                    st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
-                else:
-                    st.caption("This chat gives general information and does not replace your medical provider.")
+        # Reset chat button
+        col1, col2 = st.columns([1, 4])
+        with col1:
+            if st.button(T["reset_chat"]):
+                # Keep only the system message
+                system_msg = st.session_state["companion_messages"][0]
+                st.session_state["companion_messages"] = [system_msg]
+                st.rerun()
+
+        with col2:
+            if app_language == "Arabic":
+                st.caption("هذه المحادثة تقدم معلومات عامة ولا تحل محل مقدم الرعاية الصحية الخاص بك.")
+            else:
+                st.caption("This chat gives general information and does not replace your medical provider.")
 
 elif page_id == "exports":
     st.title("📦 " + T["export_title"])
@@ -1692,33 +1701,6 @@ elif page_id == "settings":
             st.session_state.pop("user", None)
             st.success(T["logged_out"])
             st.rerun()
-
-# ---- Global defaults / RTL tweaks ----
-st.session_state.setdefault("baseline", 37.0)
-st.session_state.setdefault("use_temp_baseline", True)
-if "temp_baseline" not in st.session_state:
-    st.session_state["temp_baseline"] = st.session_state["baseline"]
-
-if app_language == "Arabic":
-    st.markdown("""
-    <style>
-    body, .block-container { direction: rtl; text-align: right; }
-    [data-testid="stSidebar"] { direction: rtl; text-align: right; }
-    .stSlider > div:first-child { direction: ltr; }
-    .stSlider label { text-align: right; direction: rtl; display: block; }
-    .stSelectbox label, .stTextInput label, .stTextArea label { text-align: right; direction: rtl; }
-    .stRadio > label { direction: rtl; text-align: right; }
-    .stMultiSelect label { text-align: right; direction: rtl; }
-    .stSlider > div > div > div { direction: ltr; }
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    st.markdown("""
-    <style>
-    body, .block-container { direction: ltr; text-align: left; }
-    [data-testid="stSidebar"] { direction: ltr; text-align: left; }
-    </style>
-    """, unsafe_allow_html=True)
 
 # Emergency in sidebar (click-to-call)
 with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
