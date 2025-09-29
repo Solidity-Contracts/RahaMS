@@ -345,7 +345,9 @@ st.markdown(SAFE_RTL_CSS, unsafe_allow_html=True)
 # ================== DB ==================
 @st.cache_resource
 def get_conn():
-    return sqlite3.connect("raha_ms.db", check_same_thread=False)
+    conn = sqlite3.connect("raha_ms.db", check_same_thread=False)
+    conn.execute("PRAGMA foreign_keys = ON;")
+    return conn
 
 def init_db():
     conn = get_conn()
@@ -417,26 +419,38 @@ def utc_iso_now():
     return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
 
 def save_emergency_contacts(username, primary_phone, secondary_phone):
-    """Insert or update a single row per user."""
+    """Insert or update a single row per user. Returns (ok: bool, err: str|None)."""
     conn = get_conn()
     c = conn.cursor()
     try:
         p1 = normalize_phone(primary_phone)
         p2 = normalize_phone(secondary_phone)
+        now = utc_iso_now()
 
-        c.execute("""
-            INSERT INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
-            VALUES (?, ?, ?, ?)
-            ON CONFLICT(username) DO UPDATE SET
-                primary_phone=excluded.primary_phone,
-                secondary_phone=excluded.secondary_phone,
-                updated_at=excluded.updated_at
-        """, (username, p1, p2, utc_iso_now()))
+        # Try modern UPSERT
+        try:
+            c.execute("""
+                INSERT INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(username) DO UPDATE SET
+                    primary_phone=excluded.primary_phone,
+                    secondary_phone=excluded.secondary_phone,
+                    updated_at=excluded.updated_at
+            """, (username, p1, p2, now))
+        except sqlite3.OperationalError as oe:
+            # Fallback for older SQLite that doesn't support DO UPDATE
+            if "ON CONFLICT" in str(oe):
+                c.execute("""
+                    INSERT OR REPLACE INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
+                    VALUES (?, ?, ?, ?)
+                """, (username, p1, p2, now))
+            else:
+                raise
+
         conn.commit()
-        return True
+        return True, None
     except Exception as e:
-        print(f"❌ Error saving emergency contacts: {e}")
-        return False
+        return False, str(e)
         
 def load_emergency_contacts(username):
     """Return (primary, secondary) or ('','')."""
@@ -541,8 +555,6 @@ def build_export_excel_or_zip(user) -> tuple[bytes, str]:
     memzip.seek(0)
     return memzip.read(), "application/zip"
 
-def utc_iso_now():
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 def dubai_now_str():
     return datetime.now(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
@@ -1975,13 +1987,14 @@ elif page_id == "settings":
             p1 = st.session_state["primary_phone"] = (p1 or "").strip()
             p2 = st.session_state["secondary_phone"] = (p2 or "").strip()
         
-            if save_emergency_contacts(st.session_state["user"], p1, p2):
+            ok, err = save_emergency_contacts(st.session_state["user"], p1, p2)
+            if ok:
                 st.success("✅ " + T["saved"])
                 st.rerun()
             else:
-                st.error("Failed to save contacts to database")
-        
-        st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+                st.error(f"Failed to save contacts to database: {err}")
+                
+                st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
 
         st.markdown("---")
         if st.button(T["logout"], type="secondary", key="settings_logout"):
