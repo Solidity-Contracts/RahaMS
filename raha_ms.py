@@ -359,6 +359,15 @@ def init_db():
     c.execute("""CREATE TABLE IF NOT EXISTS journal(
         username TEXT, date TEXT, entry TEXT
     )""")
+    
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS emergency_contacts(
+            username TEXT PRIMARY KEY,
+            primary_phone TEXT,
+            secondary_phone TEXT,
+            updated_at TEXT
+        )
+    """)
     conn.commit()
 
 def save_emergency_contacts(username, primary_phone, secondary_phone):
