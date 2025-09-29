@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import datetime as _dt
 import json
 import re
+pip install arabic-reshaper python-bidi
 
 # ---- Arabic text shaping for Matplotlib (safe fallback if libs missing)
 try:
