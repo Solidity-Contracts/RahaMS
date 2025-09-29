@@ -127,6 +127,7 @@ TEXTS = {
         "best_windows": "Best windows",
         "what_if": "What-if",
         "places": "Places",
+        "baseline_caption": "ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).",
     },
     "Arabic": {
         "about_title": "عن تطبيق راحة إم إس",
@@ -218,6 +219,7 @@ TEXTS = {
         "best_windows": "أفضل الأوقات",
         "what_if": "ماذا لو",
         "places": "الأماكن",
+        "baseline_caption": "ℹ️ تُستخدم القيمة الأساسية بواسطة مراقب السلامة الحرارية لتحديد وقت التنبيه (≥ ‎0.5°م فوق خطك الأساسي).",
     }
 }
 
@@ -2003,7 +2005,7 @@ elif page_id == "settings":
             else:
                 st.error(f"Failed to save contacts to database: {err}")
                 
-            st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+            st.caption(T["baseline_caption"])
 
         st.markdown("---")
         if st.button(T["logout"], type="secondary", key="settings_logout"):
