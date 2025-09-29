@@ -375,17 +375,29 @@ def save_emergency_contacts(username, primary_phone, secondary_phone):
     conn = get_conn()
     c = conn.cursor()
     try:
+        # First, ensure the table exists
+        c.execute("""
+            CREATE TABLE IF NOT EXISTS emergency_contacts(
+                username TEXT PRIMARY KEY,
+                primary_phone TEXT,
+                secondary_phone TEXT,
+                updated_at TEXT
+            )
+        """)
+        
+        # Then insert or update
         c.execute("""
             INSERT OR REPLACE INTO emergency_contacts 
             (username, primary_phone, secondary_phone, updated_at) 
             VALUES (?, ?, ?, ?)
         """, (username, primary_phone, secondary_phone, utc_iso_now()))
+        
         conn.commit()
         return True
     except Exception as e:
-        print(f"Error saving emergency contacts: {e}")
+        # Print detailed error for debugging
+        print(f"❌ Error saving emergency contacts: {e}")
         return False
-
 def load_emergency_contacts(username):
     """Load emergency contacts from database"""
     conn = get_conn()
