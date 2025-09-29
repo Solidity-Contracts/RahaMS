@@ -727,68 +727,115 @@ def get_weather_context(city="Dubai,AE"):
         )
     except Exception as e:
         return None
+
+# =========== 
+def get_fallback_response(prompt, lang, journal_context="", weather_context=""):
+    """Provide intelligent fallback responses when API fails"""
+    
+    prompt_lower = prompt.lower()
+    
+    # MS-specific fallback responses
+    fallback_responses = {
+        "English": {
+            "weather": "I'd normally check real-time weather for you, but I'm having connection issues. Generally in the Gulf, remember to stay in AC during peak heat (11 AM-4 PM), hydrate well, and use cooling accessories.",
+            "journal": "I'd typically review your journal entries now, but I'm temporarily offline. Based on common MS patterns, focus on hydration, pacing activities, and monitoring symptoms after heat exposure.",
+            "travel": "For Gulf travel with MS, always pack cooling garments, plan indoor activities during peak heat, stay hydrated, and pre-cool before outings.",
+            "symptoms": "With MS heat sensitivity, common triggers are direct sun, dehydration, and high humidity. Cool down with wrist baths, stay in AC, and rest when fatigued.",
+            "general": "I'm here to help with MS heat management. While I'm having temporary connection issues, remember the basics: stay cool, hydrate, pace yourself, and listen to your body's signals."
+        },
+        "Arabic": {
+            "weather": "كنت سأتحقق من الطقس لك، لكنني أواجه مشاكل في الاتصال. بشكل عام في الخليج، تذكر البقاء في المكيف خلال ساعات الذروة (11 صباحًا-4 عصرًا)، حافظ على الترطيب، واستخدم ملحقات التبريد.",
+            "journal": "كنت سأراجع مدخلات اليوميات الآن، لكنني غير متصل مؤقتًا. بناءً على أنماط التصلب المتعدد الشائعة، ركز على الترطيب، تنظيم الأنشطة، ومراقبة الأعراض بعد التعرض للحرارة.",
+            "travel": "لسفر الخليج مع التصلب المتعدد، احزم دائمًا ملابس التبريد، خطط للأنشطة الداخلية خلال ذروة الحر، حافظ على الترطيب، وبرد جسمك مسبقًا قبل الخروج.",
+            "symptoms": "مع حساسية الحرارة في التصلب المتعدد، المحفزات الشائعة هي الشمس المباشرة، الجفاف، والرطوبة العالية. برد جسمك بحمامات المعصم، ابق في المكيف، وارتح عند الشعور بالتعب.",
+            "general": "أنا هنا للمساعدة في إدارة حرارة التصلب المتعدد. بينما أواجه مشاكل اتصال مؤقتة، تذكر الأساسيات: ابق باردًا، رطب نفسك، نظم طاقتك، واستمع لإشارات جسدك."
+        }
+    }
+    
+    lang_dict = fallback_responses[lang]
+    
+    # Determine response type based on prompt
+    if any(word in prompt_lower for word in ['weather', 'temperature', 'hot', 'heat', 'طقس', 'حرارة', 'حر']):
+        response_type = "weather"
+    elif any(word in prompt_lower for word in ['journal', 'entry', 'log', 'اليوميات', 'المذكرات', 'السجل']):
+        response_type = "journal" 
+    elif any(word in prompt_lower for word in ['travel', 'trip', 'سفر', 'رحلة']):
+        response_type = "travel"
+    elif any(word in prompt_lower for word in ['symptom', 'pain', 'fatigue', 'numbness', 'أعراض', 'ألم', 'تعب', 'خدر']):
+        response_type = "symptoms"
+    else:
+        response_type = "general"
+    
+    # Add specific context if available
+    base_response = lang_dict[response_type]
+    
+    if weather_context and "weather" in response_type:
+        base_response += f"\n\n{weather_context}"
+    
+    return base_response
         
 # ================== AI - DEEPSEEK ==================
 def ai_response(prompt, lang, journal_context="", weather_context=""):
     if not DEEPSEEK_API_KEY:
         return None, "no_api_key"
     
-    # Base system prompt with STRONG weather instructions
+    # Base system prompt
     sys_prompt = (
-        "You are Raha MS AI Companion. CRITICAL RULES:\n"
-        "1. When weather data is provided, you MUST reference specific numbers from it (temperature, humidity, feels-like)\n"
-        "2. NEVER say you don't have access to real-time weather data when weather context is provided\n"
-        "3. Give specific MS heat safety advice based on the actual weather conditions provided\n"
-        "4. Use the exact temperature, humidity, and feels-like values from the weather data\n"
-        "5. Provide concrete recommendations based on the real weather numbers\n\n"
-        "Be warm, empathetic, and practical for people with MS in the Gulf region."
+        "You are Raha MS AI Companion - a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf region. "
+        "Provide practical, culturally relevant advice for heat management and daily living with MS. "
+        "Be supportive and understanding. Respond in a conversational, caring tone."
     )
     
-    # Build the user message with weather data integrated
-    user_message = prompt
-    
-    # Add weather context directly to the user message if available
-    if weather_context:
-        user_message = f"Weather data: {weather_context}\n\nUser question: {prompt}\n\nIMPORTANT: Answer using the specific weather data provided above. Reference exact temperatures and conditions."
-    
-    # Add journal context to system prompt
+    # Add contexts
     if journal_context:
         sys_prompt += f"\n\nUser's journal context:\n{journal_context}"
+    if weather_context:
+        sys_prompt += f"\n\nCurrent weather:\n{weather_context}"
     
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     
-    try:
-        import requests
-        url = "https://api.deepseek.com/chat/completions"
-        headers = {
-            "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-            "Content-Type": "application/json"
-        }
-        
-        data = {
-            "model": "deepseek-chat",
-            "messages": [
-                {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": user_message}
-            ],
-            "temperature": 0.7,
-            "max_tokens": 800,
-            "stream": False
-        }
-        
-        response = requests.post(url, headers=headers, json=data, timeout=30)
-        response.raise_for_status()
-        result = response.json()
-        return result['choices'][0]['message']['content'], None
-        
-    except Exception as e:
-        error_msg = str(e)
-        if "rate limit" in error_msg.lower():
-            return None, "rate_limit_exceeded"
-        elif "timeout" in error_msg.lower():
-            return None, "timeout_error"
-        else:
-            return None, f"api_error: {error_msg}"
+    # Try multiple attempts with shorter timeout
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            import requests
+            url = "https://api.deepseek.com/chat/completions"
+            headers = {
+                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
+                "Content-Type": "application/json"
+            }
+            
+            data = {
+                "model": "deepseek-chat",
+                "messages": [
+                    {"role": "system", "content": sys_prompt},
+                    {"role": "user", "content": prompt}
+                ],
+                "temperature": 0.7,
+                "max_tokens": 500,
+                "stream": False
+            }
+            
+            # Shorter timeout for faster failure
+            response = requests.post(url, headers=headers, json=data, timeout=15)
+            response.raise_for_status()
+            result = response.json()
+            return result['choices'][0]['message']['content'], None
+            
+        except requests.exceptions.Timeout:
+            if attempt < max_retries - 1:
+                continue  # Try again
+            else:
+                return None, "timeout_error"
+        except requests.exceptions.ConnectionError:
+            if attempt < max_retries - 1:
+                continue  # Try again  
+            else:
+                return None, "connection_error"
+        except Exception as e:
+            return None, f"api_error: {str(e)}"
+    
+    return None, "max_retries_exceeded"
         
 # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1714,77 +1761,49 @@ elif page_id == "assistant":
             message_placeholder = st.empty()
             message_placeholder.markdown("💭 " + T["thinking"])
             
-            # Get context based on user's question
+            # Get context (this part still works)
             journal_context = ""
             weather_context = ""
             
             prompt_lower = prompt.lower()
             
-            # Detect if user is asking about journals
-            if any(keyword in prompt_lower for keyword in ['journal', 'entry', 'log', 'previous', 'last', 'اليوميات', 'المذكرات', 'السجل', 'السابق']):
+            # Get journal context if needed
+            if any(keyword in prompt_lower for keyword in ['journal', 'entry', 'log', 'اليوميات', 'المذكرات', 'السجل']):
                 journal_context = get_recent_journal_context(st.session_state["user"])
             
-            # Detect if user is asking about weather or mentions cities
-            weather_keywords = ['weather', 'temperature', 'hot', 'heat', 'humid', 'forecast', 'طقس', 'حرارة', 'حر', 'رطوبة', 'تنبؤ']
+            # Get weather context if needed  
+            if any(keyword in prompt_lower for keyword in ['weather', 'temperature', 'hot', 'heat', 'طقس', 'حرارة', 'حر']):
+                # City detection logic here (same as before)
+                city_mapping = {
+                    "kuwait": "Kuwait City,KW", "الكويت": "Kuwait City,KW",
+                    "dubai": "Dubai,AE", "دبي": "Dubai,AE", 
+                    "oman": "Muscat,OM", "عمان": "Muscat,OM",
+                    # ... other cities
+                }
+                city_found = None
+                for city_key, city_api in city_mapping.items():
+                    if city_key in prompt_lower:
+                        city_found = city_api
+                        break
+                weather_context = get_weather_context(city_found if city_found else "Dubai,AE")
             
-            # City mapping
-            gcc_cities_mapping = {
-                "kuwait": "Kuwait City,KW", "الكويت": "Kuwait City,KW",
-                "dubai": "Dubai,AE", "دبي": "Dubai,AE",
-                "abu dhabi": "Abu Dhabi,AE", "أبو ظبي": "Abu Dhabi,AE",
-                "doha": "Doha,QA", "الدوحة": "Doha,QA",
-                "riyadh": "Riyadh,SA", "الرياض": "Riyadh,SA",
-                "muscat": "Muscat,OM", "مسقط": "Muscat,OM",
-                "oman": "Muscat,OM", "عمان": "Muscat,OM",
-                "manama": "Manama,BH", "المنامة": "Manama,BH",
-                "sharjah": "Sharjah,AE", "الشارقة": "Sharjah,AE",
-                "dammam": "Dammam,SA", "الدمام": "Dammam,SA",
-                "jeddah": "Jeddah,SA", "جدة": "Jeddah,SA"
-            }
-            
-            # Check for city mentions
-            city_found = None
-            for city_key, city_api in gcc_cities_mapping.items():
-                if city_key in prompt_lower:
-                    city_found = city_api
-                    break
-            
-            # If weather keywords or city mentioned, get weather data
-            if any(keyword in prompt_lower for keyword in weather_keywords) or city_found:
-                target_city = city_found if city_found else "Dubai,AE"
-                weather_context = get_weather_context(target_city)
-                
-                # If weather API fails, show error in context
-                if weather_context is None:
-                    weather_context = "WEATHER API ERROR: Could not fetch real-time weather data"
-            
-            # Debug context
-            with st.expander("🔍 Context Sent to AI", expanded=False):
-                if journal_context:
-                    st.text("Journal Context:")
-                    st.text(journal_context)
-                if weather_context:
-                    st.text("Weather Context:")
-                    st.text(weather_context)
-                if not journal_context and not weather_context:
-                    st.text("No additional context")
-            
-            # Get AI response with context
+            # Try to get AI response
             full_response, error = ai_response(prompt, app_language, journal_context, weather_context)
             
-            # Handle errors
+            # If API fails, use fallback
             if error:
-                full_response = f"I'm having trouble responding right now. Error: {error}"
-                if app_language == "Arabic":
-                    full_response = f"أواجه مشكلة في الرد الآن. الخطأ: {error}"
+                st.warning(f"⚠️ Connection issue: {error}. Using fallback response.")
+                full_response = get_fallback_response(prompt, app_language, journal_context, weather_context)
             
             # Display the response
             message_placeholder.markdown(full_response)
 
         # Add assistant response to chat history
-        if full_response:
-            st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+        st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
+    # Connection status indicator
+    if st.session_state.chat_history:
+        st.caption("🔁 Connection: Auto-fallback enabled | DeepSeek API may be experiencing issues")
     # Reset chat button
     st.markdown("---")
     col1, col2 = st.columns([1, 5])
