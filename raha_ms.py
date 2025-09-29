@@ -349,69 +349,111 @@ def get_conn():
 def init_db():
     conn = get_conn()
     c = conn.cursor()
-    c.execute("""CREATE TABLE IF NOT EXISTS users(
-        username TEXT PRIMARY KEY, password TEXT
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS temps(
-        username TEXT, date TEXT, body_temp REAL, peripheral_temp REAL,
-        weather_temp REAL, feels_like REAL, humidity REAL, status TEXT
-    )""")
-    c.execute("""CREATE TABLE IF NOT EXISTS journal(
-        username TEXT, date TEXT, entry TEXT
-    )""")
-    
+
+    # Safety: ensure foreign keys are enforced
+    c.execute("PRAGMA foreign_keys = ON;")
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users(
+            username TEXT PRIMARY KEY,
+            password TEXT
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS temps(
+            username TEXT,
+            date TEXT,
+            body_temp REAL,
+            peripheral_temp REAL,
+            weather_temp REAL,
+            feels_like REAL,
+            humidity REAL,
+            status TEXT
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS journal(
+            username TEXT,
+            date TEXT,
+            entry TEXT
+        )
+    """)
+
+    # Emergency contacts, one row per user (extendable later)
     c.execute("""
         CREATE TABLE IF NOT EXISTS emergency_contacts(
             username TEXT PRIMARY KEY,
             primary_phone TEXT,
             secondary_phone TEXT,
-            updated_at TEXT
+            updated_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now')),
+            FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
         )
     """)
+
     conn.commit()
 
+def normalize_phone(s: str) -> str:
+    """Keep digits and leading +; collapse spaces/dashes."""
+    if not s:
+        return ""
+    s = s.strip()
+    # allow one leading +, then digits
+    s = re.sub(r"[^\d+]", "", s)
+    # if multiple + signs slipped in, keep only the first and digits
+    if s.count("+") > 1:
+        s = "+" + re.sub(r"\D", "", s)
+    # If no + and looks like local UAE 05..., you may optionally add +971 logic here.
+    return s
+
+def tel_href(s: str) -> str:
+    """Safe value for tel: link (already normalized)."""
+    return s
+
+def utc_iso_now():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+
 def save_emergency_contacts(username, primary_phone, secondary_phone):
-    """Save emergency contacts to database"""
+    """Insert or update a single row per user."""
     conn = get_conn()
     c = conn.cursor()
     try:
-        # First, ensure the table exists
+        p1 = normalize_phone(primary_phone)
+        p2 = normalize_phone(secondary_phone)
+
         c.execute("""
-            CREATE TABLE IF NOT EXISTS emergency_contacts(
-                username TEXT PRIMARY KEY,
-                primary_phone TEXT,
-                secondary_phone TEXT,
-                updated_at TEXT
-            )
-        """)
-        
-        # Then insert or update
-        c.execute("""
-            INSERT OR REPLACE INTO emergency_contacts 
-            (username, primary_phone, secondary_phone, updated_at) 
+            INSERT INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
             VALUES (?, ?, ?, ?)
-        """, (username, primary_phone, secondary_phone, utc_iso_now()))
-        
+            ON CONFLICT(username) DO UPDATE SET
+                primary_phone=excluded.primary_phone,
+                secondary_phone=excluded.secondary_phone,
+                updated_at=excluded.updated_at
+        """, (username, p1, p2, utc_iso_now()))
         conn.commit()
         return True
     except Exception as e:
-        # Print detailed error for debugging
         print(f"❌ Error saving emergency contacts: {e}")
         return False
+        
 def load_emergency_contacts(username):
-    """Load emergency contacts from database"""
+    """Return (primary, secondary) or ('','')."""
     conn = get_conn()
     c = conn.cursor()
     try:
-        c.execute("SELECT primary_phone, secondary_phone FROM emergency_contacts WHERE username=?", (username,))
-        result = c.fetchone()
-        if result:
-            return result[0], result[1]  # primary, secondary
-        return "", ""  # Return empty if no contacts saved
-    except Exception as e:
-        print(f"Error loading emergency contacts: {e}")
+        c.execute("""
+            SELECT primary_phone, secondary_phone
+            FROM emergency_contacts
+            WHERE username=?
+        """, (username,))
+        row = c.fetchone()
+        if row:
+            return row[0] or "", row[1] or ""
         return "", ""
-
+    except Exception as e:
+        print(f"❌ Error loading emergency contacts: {e}")
+        return "", ""
 def migrate_db():
     conn = get_conn()
     c = conn.cursor()
@@ -1928,12 +1970,13 @@ elif page_id == "settings":
         if st.button(T["save_settings"], key="settings_save_btn"):
             st.session_state["baseline"] = float(base)
             st.session_state["use_temp_baseline"] = bool(useb)
-            st.session_state["primary_phone"] = p1.strip()
-            st.session_state["secondary_phone"] = p2.strip()
-            
-            # SAVE TO DATABASE
-            if save_emergency_contacts(st.session_state["user"], p1.strip(), p2.strip()):
+        
+            p1 = st.session_state["primary_phone"] = (p1 or "").strip()
+            p2 = st.session_state["secondary_phone"] = (p2 or "").strip()
+        
+            if save_emergency_contacts(st.session_state["user"], p1, p2):
                 st.success("✅ " + T["saved"])
+                st.rerun()
             else:
                 st.error("Failed to save contacts to database")
         
@@ -1950,21 +1993,19 @@ elif page_id == "settings":
 
 # Emergency in sidebar (click-to-call)
 with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
-    # Only show emergency contacts if user is logged in AND has saved contacts
     if "user" in st.session_state:
-        # Ensure contacts are loaded (in case of page refresh)
         if "primary_phone" not in st.session_state or "secondary_phone" not in st.session_state:
             primary, secondary = load_emergency_contacts(st.session_state["user"])
-            st.session_state["primary_phone"] = primary
-            st.session_state["secondary_phone"] = secondary
-        
-        # Display contacts if they exist
+            st.session_state["primary_phone"], st.session_state["secondary_phone"] = primary, secondary
+
         if st.session_state["primary_phone"]:
-            st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
+            href = tel_href(st.session_state["primary_phone"])
+            st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{href})")
         if st.session_state["secondary_phone"]:
-            st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
+            href = tel_href(st.session_state["secondary_phone"])
+            st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{href})")
+
         if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
             st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
     else:
-        # User is not logged in
         st.caption("Please log in to see emergency contacts" if app_language == "English" else "يرجى تسجيل الدخول لعرض جهات الاتصال للطوارئ")
