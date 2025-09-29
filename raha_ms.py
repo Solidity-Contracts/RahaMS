@@ -1361,25 +1361,25 @@ def render_planner():
                         pick_idx = rows[options.index(pick_label)]["idx"]
                         chosen = windows_sorted[pick_idx]
 
-            with colB:
-                if app_language == "English":
-                    activities = ["Walk", "Groceries", "Beach", "Errand"]
-                else:
-                    activities = ["مشي", "تسوق", "شاطئ", "مهمة"]
-                act = st.selectbox(T["plan"], activities, key="plan_act")
-                other_act = st.text_input(T["other_activity"], key="plan_act_other")
-                final_act = other_act.strip() if other_act.strip() else act
-                if st.button(T["add_to_journal"], key="btn_add_plan"):
-                    entry = {
-                        "type":"PLAN", "at": utc_iso_now(), "city": city,
-                        "start": chosen["start_dt"].strftime("%Y-%m-%d %H:%M"),
-                        "end": chosen["end_dt"].strftime("%Y-%m-%d %H:%M"),
-                        "activity": final_act,
-                        "feels_like": round(chosen["avg_feels"], 1),
-                        "humidity": int(chosen["avg_hum"])
-                    }
-                    insert_journal(st.session_state["user"], utc_iso_now(), entry)
-                    st.success("Saved to Journal" if app_language == "English" else "تم الحفظ في اليوميات")
+                    with colB:
+                        if app_language == "English":
+                            activities = ["Walk", "Groceries", "Beach", "Errand"]
+                        else:
+                            activities = ["مشي", "تسوق", "شاطئ", "مهمة"]
+                        act = st.selectbox(T["plan"], activities, key="plan_act")
+                        other_act = st.text_input(T["other_activity"], key="plan_act_other")
+                        final_act = other_act.strip() if other_act.strip() else act
+                        if st.button(T["add_to_journal"], key="btn_add_plan"):
+                            entry = {
+                                "type":"PLAN", "at": utc_iso_now(), "city": city,
+                                "start": chosen["start_dt"].strftime("%Y-%m-%d %H:%M"),
+                                "end": chosen["end_dt"].strftime("%Y-%m-%d %H:%M"),
+                                "activity": final_act,
+                                "feels_like": round(chosen["avg_feels"], 1),
+                                "humidity": int(chosen["avg_hum"])
+                            }
+                            insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                            st.success("Saved to Journal" if app_language == "English" else "تم الحفظ في اليوميات")
 
     # TAB 2
     with tabs[1]:
