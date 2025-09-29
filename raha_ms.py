@@ -773,6 +773,17 @@ def get_fallback_response(prompt, lang, journal_context="", weather_context=""):
         base_response += f"\n\n{weather_context}"
     
     return base_response
+
+# =========================
+
+with st.expander("🔧 Connection Diagnostics", expanded=False):
+    if st.button("Test DeepSeek Connection"):
+        try:
+            import requests
+            test_response = requests.get("https://api.deepseek.com", timeout=10)
+            st.success("✅ DeepSeek API is reachable")
+        except Exception as e:
+            st.error(f"❌ DeepSeek API is down: {str(e)}")
         
 # ================== AI - DEEPSEEK ==================
 def ai_response(prompt, lang, journal_context="", weather_context=""):
@@ -1804,6 +1815,7 @@ elif page_id == "assistant":
     # Connection status indicator
     if st.session_state.chat_history:
         st.caption("🔁 Connection: Auto-fallback enabled | DeepSeek API may be experiencing issues")
+        
     # Reset chat button
     st.markdown("---")
     col1, col2 = st.columns([1, 5])
