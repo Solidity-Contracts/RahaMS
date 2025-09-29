@@ -705,9 +705,28 @@ def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
         
     except Exception as e:
         return f"Error reading journal: {str(e)}"
+# ============AI-GET WEATHER CONTEXT============
+
+def get_weather_context(city="Dubai,AE"):
+    """Get current weather data formatted for AI context"""
+    try:
+        weather_data, error = get_weather(city)
+        if weather_data is None:
+            return f"Weather data unavailable: {error}"
+        
+        return (
+            f"Location: {city}\n"
+            f"Temperature: {weather_data['temp']}°C\n"
+            f"Feels like: {weather_data['feels_like']}°C\n"
+            f"Humidity: {weather_data['humidity']}%\n"
+            f"Conditions: {weather_data['desc']}\n"
+            f"Peak heat hours (next 48h): {', '.join(weather_data.get('peak_hours', [])) if weather_data.get('peak_hours') else 'Not available'}"
+        )
+    except Exception as e:
+        return f"Weather data error: {str(e)}"
         
 # ================== AI - DEEPSEEK ==================
-def ai_response(prompt, lang, journal_context=""):
+def ai_response(prompt, lang, journal_context="", weather_context=""):
     if not DEEPSEEK_API_KEY:
         return None, "no_api_key"
     
@@ -721,8 +740,12 @@ def ai_response(prompt, lang, journal_context=""):
     )
     
     # Add journal context if provided
-    if journal_context:
+    if journal_context: 
         sys_prompt += f"\n\nUser's recent journal context (use this to personalize your response):\n{journal_context}"
+    
+    # Add weather context if provided
+    if weather_context:
+        sys_prompt += f"\n\nCurrent weather information (use this for relevant advice):\n{weather_context}"
     
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     
@@ -758,7 +781,6 @@ def ai_response(prompt, lang, journal_context=""):
             return None, "timeout_error"
         else:
             return None, f"api_error: {error_msg}"
-
 
  
         
@@ -1689,16 +1711,51 @@ elif page_id == "assistant":
             # Show thinking indicator immediately
             message_placeholder.markdown("💭 " + T["thinking"])
             
-            # Get journal context for personalized responses
+            # Get context based on user's question
             journal_context = ""
-            if any(keyword in prompt.lower() for keyword in ['journal', 'entry', 'log', 'previous', 'last', 'اليوميات', 'المذكرات', 'السجل', 'السابق']):
-                journal_context = get_recent_journal_context(st.session_state["user"])
-                # Debug: show what context we're sending (optional)
-                with st.expander("🔍 Journal Context Sent", expanded=False):
-                    st.text(journal_context)
+            weather_context = ""
             
-            # Get AI response with journal context
-            full_response, error = ai_response(prompt, app_language, journal_context)
+            prompt_lower = prompt.lower()
+            
+            # Detect if user is asking about journals
+            if any(keyword in prompt_lower for keyword in ['journal', 'entry', 'log', 'previous', 'last', 'اليوميات', 'المذكرات', 'السجل', 'السابق']):
+                journal_context = get_recent_journal_context(st.session_state["user"])
+            
+            # Detect if user is asking about weather
+            weather_keywords = ['weather', 'temperature', 'hot', 'heat', 'humid', 'forecast', 'طقس', 'حرارة', 'حر', 'رطوبة', 'تنبؤ']
+            if any(keyword in prompt_lower for keyword in weather_keywords):
+                # Use default city or let user specify
+                weather_context = get_weather_context("Dubai,AE")  # Default to Dubai
+            
+            # Detect if user mentions specific GCC cities
+            gcc_cities = ["kuwait", "dubai", "abu dhabi", "doha", "riyadh", "muscat", "manama", "الكويت", "دبي", "الدوحة", "الرياض", "مسقط", "المنامة"]
+            for city in gcc_cities:
+                if city in prompt_lower:
+                    if "kuwait" in prompt_lower or "الكويت" in prompt_lower:
+                        weather_context = get_weather_context("Kuwait City,KW")
+                    elif "dubai" in prompt_lower or "دبي" in prompt_lower:
+                        weather_context = get_weather_context("Dubai,AE")
+                    elif "abu dhabi" in prompt_lower:
+                        weather_context = get_weather_context("Abu Dhabi,AE")
+                    elif "doha" in prompt_lower or "الدوحة" in prompt_lower:
+                        weather_context = get_weather_context("Doha,QA")
+                    elif "riyadh" in prompt_lower or "الرياض" in prompt_lower:
+                        weather_context = get_weather_context("Riyadh,SA")
+                    break
+            
+            # Debug: show what context we're sending (optional)
+            with st.expander("🔍 Context Sent to AI", expanded=False):
+                if journal_context:
+                    st.text("Journal Context:")
+                    st.text(journal_context)
+                if weather_context:
+                    st.text("Weather Context:")
+                    st.text(weather_context)
+                if not journal_context and not weather_context:
+                    st.text("No additional context")
+            
+            # Get AI response with context
+            full_response, error = ai_response(prompt, app_language, journal_context, weather_context)
             
             # Handle errors gracefully
             if error:
@@ -1722,10 +1779,10 @@ elif page_id == "assistant":
         if full_response:  # Only add if we got a response
             st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
-    # Reset chat button - placed at the bottom to avoid rerun issues
+    # Reset chat button
     st.markdown("---")
     col1, col2 = st.columns([1, 5])
-    
+      
     with col1:
         if st.button(T["reset_chat"], key="reset_chat_btn"):
             st.session_state.chat_history = []
