@@ -1291,7 +1291,7 @@ def render_planner():
                 insert_journal(st.session_state["user"], utc_iso_now(), entry)
                 st.success(T["planned_saved"])
 
-            if client and st.button(T["ask_ai_tips"], key="what_if_ai"):
+            if DEEPSEEK_API_KEY and st.button(T["ask_ai_tips"], key="what_if_ai"):
                 q = f"My plan: {what_act} for {dur} minutes. Location: {indoor}. Notes: {other_notes}. Current feels-like {round(fl,1)}°C, humidity {int(hum)}%."
                 ans, _ = ai_response(q, app_language)
                 st.info(ans if ans else (T["ai_unavailable"]))
