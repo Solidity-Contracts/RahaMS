@@ -1,5 +1,6 @@
 import streamlit as st
 import sqlite3, json, requests, random, time, zipfile, io
+import matplotlib
 import matplotlib.pyplot as plt
 import pandas as pd
 from io import BytesIO
@@ -9,7 +10,20 @@ from collections import defaultdict
 from datetime import datetime as _dt
 import json
 import re
-matplotlib.rcParams["font.family"] = "DejaVu Sans"  # usually present & supports Arabic glyphs
+
+# Make sure minus signs render with Arabic fonts too
+matplotlib.rcParams["axes.unicode_minus"] = False
+
+# Pick an Arabic-capable font (first available)
+from matplotlib.font_manager import FontProperties
+_ARABIC_FONTS_TRY = ["Noto Naskh Arabic", "Amiri", "DejaVu Sans", "Arial"]
+for _fname in _ARABIC_FONTS_TRY:
+    try:
+        # If font is installed, set it globally and stop
+        matplotlib.rcParams["font.family"] = _fname
+        break
+    except Exception:
+        continue
 
 # ---- Arabic text shaping for Matplotlib (safe fallback if libs missing)
 try:
@@ -18,10 +32,14 @@ try:
     def ar_shape(s: str) -> str:
         # reshape + apply bidi so Arabic displays connected and RTL
         return get_display(arabic_reshaper.reshape(s))
+    _HAS_AR_SHAPER = True
 except Exception:
-    # fallback: return the same string if libs unavailable
     def ar_shape(s: str) -> str:
         return s
+    _HAS_AR_SHAPER = False
+
+# Convenience: font props for titles/legends using whatever we picked
+_AR_FONT = FontProperties(family=matplotlib.rcParams["font.family"])
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
