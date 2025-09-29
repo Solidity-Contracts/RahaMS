@@ -27,6 +27,26 @@ GCC_CITIES = [
     "Muscat,OM"
 ]
 
+# GCC quick picks (display labels by language)
+CITY_LABELS = {
+    "Abu Dhabi,AE": {"en": "Abu Dhabi", "ar": "أبوظبي"},
+    "Dubai,AE": {"en": "Dubai", "ar": "دبي"},
+    "Sharjah,AE": {"en": "Sharjah", "ar": "الشارقة"},
+    "Doha,QA": {"en": "Doha", "ar": "الدوحة"},
+    "Al Rayyan,QA": {"en": "Al Rayyan", "ar": "الريان"},
+    "Kuwait City,KW": {"en": "Kuwait City", "ar": "مدينة الكويت"},
+    "Manama,BH": {"en": "Manama", "ar": "المنامة"},
+    "Riyadh,SA": {"en": "Riyadh", "ar": "الرياض"},
+    "Jeddah,SA": {"en": "Jeddah", "ar": "جدة"},
+    "Dammam,SA": {"en": "Dammam", "ar": "الدمام"},
+    "Muscat,OM": {"en": "Muscat", "ar": "مسقط"},
+}
+
+def city_label(code: str, lang: str) -> str:
+    rec = CITY_LABELS.get(code, {})
+    return rec.get("ar" if lang == "Arabic" else "en", code.split(",")[0])
+
+
 # ===== Live/Alert config =====
 SIM_INTERVAL_SEC = 60  # default sensor/sample update (sec)
 DB_WRITE_EVERY_N = 3
@@ -1266,7 +1286,13 @@ def render_planner():
     if "user" not in st.session_state:
         st.warning(T["login_first"]); return
     
-    city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="planner_city")
+    city = st.selectbox(
+        "📍 " + T["quick_pick"],
+        GCC_CITIES,
+        index=0,
+        key="planner_city",
+        format_func=lambda code: city_label(code, app_language),
+    )
     weather, err = get_weather(city)
     if weather is None:
         st.error(f"{T['weather_fail']}: {err}"); return
@@ -1291,26 +1317,50 @@ def render_planner():
             st.info("No optimal windows found; consider early morning or after sunset."
                     if app_language == "English" else "لم يتم العثور على فترات مثالية؛ فكر في الصباح الباكر أو بعد الغروب.")
         else:
-            rows = [{
-                "idx": i,
-                "Date": w["start_dt"].strftime("%a %d %b"),
-                "Start": w["start_dt"].strftime("%H:%M"),
-                "End": w["end_dt"].strftime("%H:%M"),
-                "Feels-like (°C)": round(w["avg_feels"], 1),
-                "Humidity (%)": int(w["avg_hum"])
-            } for i, w in enumerate(sorted(windows, key=lambda x: x["start_dt"]))]
+                    # Localized headers
+                    if app_language == "Arabic":
+                        COL_DATE = "التاريخ"
+                        COL_START = "البداية"
+                        COL_END = "النهاية"
+                        COL_FEELS = "الإحساس الحراري (°م)"
+                        COL_HUM = "الرطوبة (%)"
+                    else:
+                        COL_DATE = "Date"
+                        COL_START = "Start"
+                        COL_END = "End"
+                        COL_FEELS = "Feels-like (°C)"
+                        COL_HUM = "Humidity (%)"
+                    
+                    windows_sorted = sorted(windows, key=lambda x: x["start_dt"])
+                    rows = [{
+                        "idx": i,
+                        COL_DATE: w["start_dt"].strftime("%a %d %b"),
+                        COL_START: w["start_dt"].strftime("%H:%M"),
+                        COL_END: w["end_dt"].strftime("%H:%M"),
+                        COL_FEELS: round(w["avg_feels"], 1),
+                        COL_HUM: int(w["avg_hum"]),
+                    } for i, w in enumerate(windows_sorted)]
+                    
+                    df = pd.DataFrame(rows)
+                    st.dataframe(df.drop(columns=["idx"]), hide_index=True, use_container_width=True)
+                    
+                    st.markdown("##### " + ( "Add a plan" if app_language == "English" else "أضف خطة"))
+                    
+                    colA, colB = st.columns([2,1])
+                    with colA:
+                        # Localized option labels for the slot picker
+                        def labeler(r):
+                            if app_language == "Arabic":
+                                # Example: "الجمعة 07 حز • 07:00–10:00 (≈35.5°م, 58%)"
+                                return f"{r[COL_DATE]} • {r[COL_START]}–{r[COL_END]} (≈{r[COL_FEELS]}°م, {r[COL_HUM]}%)"
+                            else:
+                                return f"{r[COL_DATE]} • {r[COL_START]}–{r[COL_END]} (≈{r[COL_FEELS]}°C, {r[COL_HUM]}%)"
+                    
+                        options = [labeler(r) for r in rows]
+                        pick_label = st.selectbox(T["choose_slot"], options, index=0, key="plan_pick")
+                        pick_idx = rows[options.index(pick_label)]["idx"]
+                        chosen = windows_sorted[pick_idx]
 
-            df = pd.DataFrame(rows)
-            st.dataframe(df.drop(columns=["idx"]), hide_index=True, use_container_width=True)
-
-            st.markdown("##### " + ("Add a plan" if app_language == "English" else "أضف خطة"))
-            colA, colB = st.columns([2,1])
-            with colA:
-                labeler = lambda r: f"{r['Date']} • {r['Start']}–{r['End']} (≈{r['Feels-like (°C)']}°C, {r['Humidity (%)']}%)"
-                options = [labeler(r) for r in rows]
-                pick_label = st.selectbox(T["choose_slot"], options, index=0, key="plan_pick")
-                pick_idx = rows[options.index(pick_label)]["idx"]
-                chosen = sorted(windows, key=lambda x: x["start_dt"])[pick_idx]
             with colB:
                 if app_language == "English":
                     activities = ["Walk", "Groceries", "Beach", "Errand"]
@@ -1554,7 +1604,13 @@ elif page_id == "monitor":
 
         colA, colB, colC, colD = st.columns([1.2, 1, 1, 1.2])
         with colA:
-            city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0, key="monitor_city")
+            city = st.selectbox(
+                "📍 " + T["quick_pick"],
+                GCC_CITIES,
+                index=0,
+                key="monitor_city",
+                format_func=lambda code: city_label(code, app_language),
+            )
         with colB:
             interval = st.slider("⏱️ " + T["sensor_update"], 30, 300, st.session_state["interval_slider"], 15, key="interval_slider")
         with colC:
