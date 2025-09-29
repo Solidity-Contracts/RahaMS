@@ -375,7 +375,8 @@ def migrate_db():
     conn.commit()
 
 init_db()
-migrate_db()
+
+#migrate_db()
 
 def insert_temp_row(u, dt, body, peripheral, wtemp, feels, hum, status):
     c = get_conn().cursor()
