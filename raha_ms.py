@@ -1986,6 +1986,8 @@ elif page_id == "settings":
         base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="settings_baseline")
         useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb")
 
+        st.caption(T["baseline_caption"])
+
         st.subheader(T["contacts"])
         p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1")
         p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2")
@@ -2005,7 +2007,7 @@ elif page_id == "settings":
             else:
                 st.error(f"Failed to save contacts to database: {err}")
                 
-        st.caption(T["baseline_caption"])
+        
 
         st.markdown("---")
         if st.button(T["logout"], type="secondary", key="settings_logout"):
