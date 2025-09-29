@@ -774,17 +774,6 @@ def get_fallback_response(prompt, lang, journal_context="", weather_context=""):
         base_response += f"\n\n{weather_context}"
     
     return base_response
-
-# =========================
-
-with st.expander("🔧 Connection Diagnostics", expanded=False):
-    if st.button("Test DeepSeek Connection"):
-        try:
-            import requests
-            test_response = requests.get("https://api.deepseek.com", timeout=10)
-            st.success("✅ DeepSeek API is reachable")
-        except Exception as e:
-            st.error(f"❌ DeepSeek API is down: {str(e)}")
         
 # ================== AI - DEEPSEEK ==================
 def ai_response(prompt, lang, journal_context="", weather_context=""):
@@ -1891,8 +1880,16 @@ elif page_id == "settings":
 
 # Emergency in sidebar (click-to-call)
 with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
+    # Load contacts if user is logged in but contacts aren't loaded
+    if "user" in st.session_state and "contacts_loaded" not in st.session_state:
+        primary, secondary = load_emergency_contacts(st.session_state["user"])
+        st.session_state["primary_phone"] = primary
+        st.session_state["secondary_phone"] = secondary
+        st.session_state["contacts_loaded"] = True
+    
     st.session_state.setdefault("primary_phone", "")
     st.session_state.setdefault("secondary_phone", "")
+    
     if st.session_state["primary_phone"]:
         st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
     if st.session_state["secondary_phone"]:
