@@ -10,6 +10,18 @@ from datetime import datetime as _dt
 import json
 import re
 
+# ---- Arabic text shaping for Matplotlib (safe fallback if libs missing)
+try:
+    import arabic_reshaper
+    from bidi.algorithm import get_display
+    def ar_shape(s: str) -> str:
+        # reshape + apply bidi so Arabic displays connected and RTL
+        return get_display(arabic_reshaper.reshape(s))
+except Exception:
+    # fallback: return the same string if libs unavailable
+    def ar_shape(s: str) -> str:
+        return s
+
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
 TZ_DUBAI = ZoneInfo("Asia/Dubai")
@@ -1784,16 +1796,32 @@ elif page_id == "monitor":
                 feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
 
                 fig, ax = plt.subplots(figsize=(10,4))
-                ax.plot(range(len(dates)), core, marker='o', label="Core", linewidth=2)
-                ax.plot(range(len(dates)), periph, marker='o', label="Peripheral", linewidth=1.8)
-                ax.plot(range(len(dates)), feels, marker='s', label="Feels-like", linewidth=1.8)
+                
+                # Localized series labels
+                if app_language == "Arabic":
+                    lbl_core  = ar_shape("الأساسية")
+                    lbl_peri  = ar_shape("الطرفية")
+                    lbl_feels = ar_shape("الإحساس الحراري")
+                else:
+                    lbl_core, lbl_peri, lbl_feels = "Core", "Peripheral", "Feels-like"
+                
+                ax.plot(range(len(dates)), core,   marker='o', label=lbl_core,  linewidth=2)
+                ax.plot(range(len(dates)), periph, marker='o', label=lbl_peri,  linewidth=1.8)
+                ax.plot(range(len(dates)), feels,  marker='s', label=lbl_feels, linewidth=1.8)
+                
                 ax.set_xticks(range(len(dates)))
                 ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
-                ax.set_ylabel("°C")
+                ax.set_ylabel("°C" if app_language == "English" else "°م")
                 ax.legend()
                 ax.grid(True, alpha=0.3)
-                chart_title = "Core vs Peripheral vs Feels-like (one dot = one sample)" if app_language == "English" else "الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)"
-                ax.set_title(chart_title)
+                
+                # Localized, properly-shaped title
+                if app_language == "Arabic":
+                    title_ar = "الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)"
+                    ax.set_title(ar_shape(title_ar), loc="center")
+                else:
+                    ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
+                
                 st.pyplot(fig)
 
                 if app_language == "Arabic":
