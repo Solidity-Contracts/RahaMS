@@ -1417,6 +1417,10 @@ with st.sidebar.expander(exp_title, expanded=True):
                 c.execute("SELECT * FROM users WHERE username=? AND password=?", (username, password))
                 if c.fetchone():
                     st.session_state["user"] = username
+                    # LOAD EMERGENCY CONTACTS WHEN USER LOGS IN
+                    primary, secondary = load_emergency_contacts(username)
+                    st.session_state["primary_phone"] = primary
+                    st.session_state["secondary_phone"] = secondary
                     st.success(T["logged_in"])
                     st.rerun()
                 else:
@@ -1433,7 +1437,10 @@ with st.sidebar.expander(exp_title, expanded=True):
     else:
         st.write(f"**{st.session_state['user']}**")
         if st.button(T["logout"], key="sb_logout_btn"):
+            # CLEAR ALL USER DATA WHEN LOGGING OUT
             st.session_state.pop("user", None)
+            st.session_state.pop("primary_phone", None)
+            st.session_state.pop("secondary_phone", None)
             st.success(T["logged_out"])
             st.rerun()
 
@@ -1881,6 +1888,11 @@ elif page_id == "settings":
     if "user" not in st.session_state:
         st.warning(T["login_first"])
     else:
+        # Load contacts if they're not in session state (page refresh scenario)
+        if "primary_phone" not in st.session_state or "secondary_phone" not in st.session_state:
+            primary, secondary = load_emergency_contacts(st.session_state["user"])
+            st.session_state["primary_phone"] = primary
+            st.session_state["secondary_phone"] = secondary
         
         st.subheader(T["baseline_setting"])
         st.session_state.setdefault("baseline", 37.0)
@@ -1889,8 +1901,6 @@ elif page_id == "settings":
         useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb")
 
         st.subheader(T["contacts"])
-        st.session_state.setdefault("primary_phone", "")
-        st.session_state.setdefault("secondary_phone", "")
         p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1")
         p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2")
 
@@ -1899,30 +1909,41 @@ elif page_id == "settings":
             st.session_state["use_temp_baseline"] = bool(useb)
             st.session_state["primary_phone"] = p1.strip()
             st.session_state["secondary_phone"] = p2.strip()
-            st.success(T["saved"])
+            
+            # SAVE TO DATABASE
+            if save_emergency_contacts(st.session_state["user"], p1.strip(), p2.strip()):
+                st.success("✅ " + T["saved"])
+            else:
+                st.error("Failed to save contacts to database")
+        
         st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
 
         st.markdown("---")
-        if "user" in st.session_state and st.button(T["logout"], type="secondary", key="settings_logout"):
+        if st.button(T["logout"], type="secondary", key="settings_logout"):
+            # Clear all user data when logging out
             st.session_state.pop("user", None)
+            st.session_state.pop("primary_phone", None)
+            st.session_state.pop("secondary_phone", None)
             st.success(T["logged_out"])
             st.rerun()
 
 # Emergency in sidebar (click-to-call)
 with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
-    # Load contacts if user is logged in but contacts aren't loaded
-    if "user" in st.session_state and "contacts_loaded" not in st.session_state:
-        primary, secondary = load_emergency_contacts(st.session_state["user"])
-        st.session_state["primary_phone"] = primary
-        st.session_state["secondary_phone"] = secondary
-        st.session_state["contacts_loaded"] = True
-    
-    st.session_state.setdefault("primary_phone", "")
-    st.session_state.setdefault("secondary_phone", "")
-    
-    if st.session_state["primary_phone"]:
-        st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
-    if st.session_state["secondary_phone"]:
-        st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
-    if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
-        st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
+    # Only show emergency contacts if user is logged in AND has saved contacts
+    if "user" in st.session_state:
+        # Ensure contacts are loaded (in case of page refresh)
+        if "primary_phone" not in st.session_state or "secondary_phone" not in st.session_state:
+            primary, secondary = load_emergency_contacts(st.session_state["user"])
+            st.session_state["primary_phone"] = primary
+            st.session_state["secondary_phone"] = secondary
+        
+        # Display contacts if they exist
+        if st.session_state["primary_phone"]:
+            st.markdown(f"**{'Primary' if app_language == 'English' else 'الهاتف الأساسي'}:** [{st.session_state['primary_phone']}](tel:{st.session_state['primary_phone']})")
+        if st.session_state["secondary_phone"]:
+            st.markdown(f"**{'Secondary' if app_language == 'English' else 'هاتف إضافي'}:** [{st.session_state['secondary_phone']}](tel:{st.session_state['secondary_phone']})")
+        if not (st.session_state["primary_phone"] or st.session_state["secondary_phone"]):
+            st.caption("Set numbers in Settings to enable quick call." if app_language == "English" else "اضبط الأرقام في الإعدادات لتمكين الاتصال السريع.")
+    else:
+        # User is not logged in
+        st.caption("Please log in to see emergency contacts" if app_language == "English" else "يرجى تسجيل الدخول لعرض جهات الاتصال للطوارئ")
