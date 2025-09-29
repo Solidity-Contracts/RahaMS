@@ -1814,9 +1814,9 @@ elif page_id == "monitor":
                 periph = [r[2] for r in rows]
                 feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
 
-                fig, ax = plt.subplots(figsize=(10,4))
+                fig, ax = plt.subplots(figsize=(10, 4))
                 
-                # Localized series labels
+                # Localized labels (use shaped Arabic when needed)
                 if app_language == "Arabic":
                     lbl_core  = ar_shape("الأساسية")
                     lbl_peri  = ar_shape("الطرفية")
@@ -1830,18 +1830,19 @@ elif page_id == "monitor":
                 
                 ax.set_xticks(range(len(dates)))
                 ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
-                ax.set_ylabel("°C" if app_language == "English" else "°م")
-                ax.legend()
+                
+                ax.set_ylabel("°C" if app_language == "English" else "°م", fontproperties=_AR_FONT)
+                leg = ax.legend(prop=_AR_FONT)  # ensure legend uses Arabic-capable font
                 ax.grid(True, alpha=0.3)
                 
-                # Localized, properly-shaped title
                 if app_language == "Arabic":
-                    title_ar = "الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)"
-                    ax.set_title(ar_shape(title_ar), loc="center")
+                    title_ar = ar_shape("الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)")
+                    ax.set_title(title_ar, fontproperties=_AR_FONT, loc="center")
                 else:
                     ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
                 
                 st.pyplot(fig)
+
 
                 if app_language == "Arabic":
                     st.caption(f"فترة أخذ العينات: **{st.session_state['interval_slider']} ثانية** · تحديث الطقس: **كل 15 دقيقة** (أو استخدم زر التحديث).")
