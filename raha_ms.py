@@ -2005,7 +2005,7 @@ elif page_id == "settings":
             else:
                 st.error(f"Failed to save contacts to database: {err}")
                 
-            st.caption(T["baseline_caption"])
+            st.title(T["baseline_caption"])
 
         st.markdown("---")
         if st.button(T["logout"], type="secondary", key="settings_logout"):
