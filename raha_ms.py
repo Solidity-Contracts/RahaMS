@@ -9,6 +9,7 @@ from collections import defaultdict
 from datetime import datetime as _dt
 import json
 import re
+import time
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Raha MS", page_icon="🌡️", layout="wide")
@@ -1998,11 +1999,12 @@ elif page_id == "settings":
             ok, err = save_emergency_contacts(st.session_state["user"], p1, p2)
             if ok:
                 st.success("✅ " + T["saved"])
-                st.rerun()
+                
+                #st.rerun()
             else:
                 st.error(f"Failed to save contacts to database: {err}")
                 
-                st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
+            st.caption("ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).")
 
         st.markdown("---")
         if st.button(T["logout"], type="secondary", key="settings_logout"):
