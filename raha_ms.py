@@ -712,40 +712,48 @@ def get_weather_context(city="Dubai,AE"):
     try:
         weather_data, error = get_weather(city)
         if weather_data is None:
-            return f"Weather data unavailable: {error}"
+            return None  # Return None so we know weather failed
+        
+        # Extract city name for display
+        city_name = city.split(",")[0]
         
         return (
-            f"Location: {city}\n"
-            f"Temperature: {weather_data['temp']}°C\n"
-            f"Feels like: {weather_data['feels_like']}°C\n"
-            f"Humidity: {weather_data['humidity']}%\n"
-            f"Conditions: {weather_data['desc']}\n"
-            f"Peak heat hours (next 48h): {', '.join(weather_data.get('peak_hours', [])) if weather_data.get('peak_hours') else 'Not available'}"
+            f"REAL-TIME WEATHER DATA FOR {city_name.upper()}:\n"
+            f"• Current Temperature: {weather_data['temp']}°C\n"
+            f"• Feels Like: {weather_data['feels_like']}°C\n"
+            f"• Humidity: {weather_data['humidity']}%\n"
+            f"• Conditions: {weather_data['desc']}\n"
+            f"• Peak Heat Times: {', '.join(weather_data.get('peak_hours', []))}"
         )
     except Exception as e:
-        return f"Weather data error: {str(e)}"
+        return None
         
 # ================== AI - DEEPSEEK ==================
 def ai_response(prompt, lang, journal_context="", weather_context=""):
     if not DEEPSEEK_API_KEY:
         return None, "no_api_key"
     
-    # Base system prompt
+    # Base system prompt with STRONG weather instructions
     sys_prompt = (
-        "You are Raha MS AI Companion - a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf region. "
-        "Provide culturally relevant, practical advice for heat management, fatigue, pacing, and daily living with MS. "
-        "Be supportive and understanding. Focus on actionable tips for cooling, hydration, and managing symptoms. "
-        "Consider Gulf climate, prayer times, fasting, and local lifestyle. "
-        "Use a conversational, caring tone. This is general wellness advice, not medical care."
+        "You are Raha MS AI Companion. CRITICAL RULES:\n"
+        "1. When weather data is provided, you MUST reference specific numbers from it (temperature, humidity, feels-like)\n"
+        "2. NEVER say you don't have access to real-time weather data when weather context is provided\n"
+        "3. Give specific MS heat safety advice based on the actual weather conditions provided\n"
+        "4. Use the exact temperature, humidity, and feels-like values from the weather data\n"
+        "5. Provide concrete recommendations based on the real weather numbers\n\n"
+        "Be warm, empathetic, and practical for people with MS in the Gulf region."
     )
     
-    # Add journal context if provided
-    if journal_context: 
-        sys_prompt += f"\n\nUser's recent journal context (use this to personalize your response):\n{journal_context}"
+    # Build the user message with weather data integrated
+    user_message = prompt
     
-    # Add weather context if provided
+    # Add weather context directly to the user message if available
     if weather_context:
-        sys_prompt += f"\n\nCurrent weather information (use this for relevant advice):\n{weather_context}"
+        user_message = f"Weather data: {weather_context}\n\nUser question: {prompt}\n\nIMPORTANT: Answer using the specific weather data provided above. Reference exact temperatures and conditions."
+    
+    # Add journal context to system prompt
+    if journal_context:
+        sys_prompt += f"\n\nUser's journal context:\n{journal_context}"
     
     sys_prompt += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     
@@ -761,9 +769,9 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
             "model": "deepseek-chat",
             "messages": [
                 {"role": "system", "content": sys_prompt},
-                {"role": "user", "content": prompt}
+                {"role": "user", "content": user_message}
             ],
-            "temperature": 0.8,
+            "temperature": 0.7,
             "max_tokens": 800,
             "stream": False
         }
@@ -781,8 +789,6 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
             return None, "timeout_error"
         else:
             return None, f"api_error: {error_msg}"
-
- 
         
 # ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
@@ -1681,7 +1687,6 @@ elif page_id == "journal":
 elif page_id == "assistant":
     st.title("🤝 " + T["assistant_title"])
 
-    # Require login first
     if "user" not in st.session_state:
         st.warning(T["login_first"])
         st.stop()
@@ -1707,8 +1712,6 @@ elif page_id == "assistant":
         # Display assistant response
         with st.chat_message("assistant"):
             message_placeholder = st.empty()
-            
-            # Show thinking indicator immediately
             message_placeholder.markdown("💭 " + T["thinking"])
             
             # Get context based on user's question
@@ -1721,29 +1724,41 @@ elif page_id == "assistant":
             if any(keyword in prompt_lower for keyword in ['journal', 'entry', 'log', 'previous', 'last', 'اليوميات', 'المذكرات', 'السجل', 'السابق']):
                 journal_context = get_recent_journal_context(st.session_state["user"])
             
-            # Detect if user is asking about weather
+            # Detect if user is asking about weather or mentions cities
             weather_keywords = ['weather', 'temperature', 'hot', 'heat', 'humid', 'forecast', 'طقس', 'حرارة', 'حر', 'رطوبة', 'تنبؤ']
-            if any(keyword in prompt_lower for keyword in weather_keywords):
-                # Use default city or let user specify
-                weather_context = get_weather_context("Dubai,AE")  # Default to Dubai
             
-            # Detect if user mentions specific GCC cities
-            gcc_cities = ["kuwait", "dubai", "abu dhabi", "doha", "riyadh", "muscat", "manama", "الكويت", "دبي", "الدوحة", "الرياض", "مسقط", "المنامة"]
-            for city in gcc_cities:
-                if city in prompt_lower:
-                    if "kuwait" in prompt_lower or "الكويت" in prompt_lower:
-                        weather_context = get_weather_context("Kuwait City,KW")
-                    elif "dubai" in prompt_lower or "دبي" in prompt_lower:
-                        weather_context = get_weather_context("Dubai,AE")
-                    elif "abu dhabi" in prompt_lower:
-                        weather_context = get_weather_context("Abu Dhabi,AE")
-                    elif "doha" in prompt_lower or "الدوحة" in prompt_lower:
-                        weather_context = get_weather_context("Doha,QA")
-                    elif "riyadh" in prompt_lower or "الرياض" in prompt_lower:
-                        weather_context = get_weather_context("Riyadh,SA")
+            # City mapping
+            gcc_cities_mapping = {
+                "kuwait": "Kuwait City,KW", "الكويت": "Kuwait City,KW",
+                "dubai": "Dubai,AE", "دبي": "Dubai,AE",
+                "abu dhabi": "Abu Dhabi,AE", "أبو ظبي": "Abu Dhabi,AE",
+                "doha": "Doha,QA", "الدوحة": "Doha,QA",
+                "riyadh": "Riyadh,SA", "الرياض": "Riyadh,SA",
+                "muscat": "Muscat,OM", "مسقط": "Muscat,OM",
+                "oman": "Muscat,OM", "عمان": "Muscat,OM",
+                "manama": "Manama,BH", "المنامة": "Manama,BH",
+                "sharjah": "Sharjah,AE", "الشارقة": "Sharjah,AE",
+                "dammam": "Dammam,SA", "الدمام": "Dammam,SA",
+                "jeddah": "Jeddah,SA", "جدة": "Jeddah,SA"
+            }
+            
+            # Check for city mentions
+            city_found = None
+            for city_key, city_api in gcc_cities_mapping.items():
+                if city_key in prompt_lower:
+                    city_found = city_api
                     break
             
-            # Debug: show what context we're sending (optional)
+            # If weather keywords or city mentioned, get weather data
+            if any(keyword in prompt_lower for keyword in weather_keywords) or city_found:
+                target_city = city_found if city_found else "Dubai,AE"
+                weather_context = get_weather_context(target_city)
+                
+                # If weather API fails, show error in context
+                if weather_context is None:
+                    weather_context = "WEATHER API ERROR: Could not fetch real-time weather data"
+            
+            # Debug context
             with st.expander("🔍 Context Sent to AI", expanded=False):
                 if journal_context:
                     st.text("Journal Context:")
@@ -1757,26 +1772,17 @@ elif page_id == "assistant":
             # Get AI response with context
             full_response, error = ai_response(prompt, app_language, journal_context, weather_context)
             
-            # Handle errors gracefully
+            # Handle errors
             if error:
-                if error == "no_api_key":
-                    full_response = "DeepSeek API key not configured. Please check your settings."
-                    if app_language == "Arabic":
-                        full_response = "مفتاح DeepSeek API غير مضبوط. يرجى التحقق من الإعدادات."
-                elif "rate_limit" in error:
-                    full_response = "⏳ Rate limit reached. Please wait a moment and try again."
-                    if app_language == "Arabic":
-                        full_response = "⏳ تم الوصول إلى الحد الأقصى للمعدل. يرجى الانتظار لحظة والمحاولة مرة أخرى."
-                else:
-                    full_response = "I'm having trouble responding right now. Please try again."
-                    if app_language == "Arabic":
-                        full_response = "أواجه مشكلة في الرد الآن. يرجى المحاولة مرة أخرى."
+                full_response = f"I'm having trouble responding right now. Error: {error}"
+                if app_language == "Arabic":
+                    full_response = f"أواجه مشكلة في الرد الآن. الخطأ: {error}"
             
             # Display the response
             message_placeholder.markdown(full_response)
 
         # Add assistant response to chat history
-        if full_response:  # Only add if we got a response
+        if full_response:
             st.session_state.chat_history.append({"role": "assistant", "content": full_response})
 
     # Reset chat button
