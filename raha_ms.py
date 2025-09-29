@@ -361,6 +361,36 @@ def init_db():
     )""")
     conn.commit()
 
+def save_emergency_contacts(username, primary_phone, secondary_phone):
+    """Save emergency contacts to database"""
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("""
+            INSERT OR REPLACE INTO emergency_contacts 
+            (username, primary_phone, secondary_phone, updated_at) 
+            VALUES (?, ?, ?, ?)
+        """, (username, primary_phone, secondary_phone, utc_iso_now()))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error saving emergency contacts: {e}")
+        return False
+
+def load_emergency_contacts(username):
+    """Load emergency contacts from database"""
+    conn = get_conn()
+    c = conn.cursor()
+    try:
+        c.execute("SELECT primary_phone, secondary_phone FROM emergency_contacts WHERE username=?", (username,))
+        result = c.fetchone()
+        if result:
+            return result[0], result[1]  # primary, secondary
+        return "", ""  # Return empty if no contacts saved
+    except Exception as e:
+        print(f"Error loading emergency contacts: {e}")
+        return "", ""
+
 def migrate_db():
     conn = get_conn()
     c = conn.cursor()
