@@ -349,42 +349,38 @@ def get_conn():
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
+def ensure_emergency_contacts_schema():
+    """Make sure emergency_contacts has all expected columns."""
+    conn = get_conn()
+    c = conn.cursor()
+    c.execute("PRAGMA table_info(emergency_contacts)")
+    cols = [r[1] for r in c.fetchall()]
+
+    # Add missing updated_at column
+    if "updated_at" not in cols:
+        c.execute("ALTER TABLE emergency_contacts ADD COLUMN updated_at TEXT")
+        # backfill existing rows
+        c.execute("UPDATE emergency_contacts SET updated_at = ?", (utc_iso_now(),))
+        conn.commit()
+
 def init_db():
     conn = get_conn()
     c = conn.cursor()
-
-    # Safety: ensure foreign keys are enforced
     c.execute("PRAGMA foreign_keys = ON;")
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS users(
-            username TEXT PRIMARY KEY,
-            password TEXT
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS users(
+        username TEXT PRIMARY KEY, password TEXT
+    )""")
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS temps(
-            username TEXT,
-            date TEXT,
-            body_temp REAL,
-            peripheral_temp REAL,
-            weather_temp REAL,
-            feels_like REAL,
-            humidity REAL,
-            status TEXT
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS temps(
+        username TEXT, date TEXT, body_temp REAL, peripheral_temp REAL,
+        weather_temp REAL, feels_like REAL, humidity REAL, status TEXT
+    )""")
 
-    c.execute("""
-        CREATE TABLE IF NOT EXISTS journal(
-            username TEXT,
-            date TEXT,
-            entry TEXT
-        )
-    """)
+    c.execute("""CREATE TABLE IF NOT EXISTS journal(
+        username TEXT, date TEXT, entry TEXT
+    )""")
 
-    # Emergency contacts, one row per user (extendable later)
     c.execute("""
         CREATE TABLE IF NOT EXISTS emergency_contacts(
             username TEXT PRIMARY KEY,
@@ -396,6 +392,9 @@ def init_db():
     """)
 
     conn.commit()
+
+    # 🔧 Ensure columns exist even if the table was created before updated_at was added
+    ensure_emergency_contacts_schema()
 
 def normalize_phone(s: str) -> str:
     """Keep digits and leading +; collapse spaces/dashes."""
@@ -422,12 +421,11 @@ def save_emergency_contacts(username, primary_phone, secondary_phone):
     """Insert or update a single row per user. Returns (ok: bool, err: str|None)."""
     conn = get_conn()
     c = conn.cursor()
-    try:
-        p1 = normalize_phone(primary_phone)
-        p2 = normalize_phone(secondary_phone)
-        now = utc_iso_now()
+    p1 = normalize_phone(primary_phone)
+    p2 = normalize_phone(secondary_phone)
+    now = utc_iso_now()
 
-        # Try modern UPSERT
+    def _upsert():
         try:
             c.execute("""
                 INSERT INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
@@ -438,7 +436,7 @@ def save_emergency_contacts(username, primary_phone, secondary_phone):
                     updated_at=excluded.updated_at
             """, (username, p1, p2, now))
         except sqlite3.OperationalError as oe:
-            # Fallback for older SQLite that doesn't support DO UPDATE
+            # Fallback for older SQLite without DO UPDATE
             if "ON CONFLICT" in str(oe):
                 c.execute("""
                     INSERT OR REPLACE INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
@@ -447,6 +445,16 @@ def save_emergency_contacts(username, primary_phone, secondary_phone):
             else:
                 raise
 
+    try:
+        try:
+            _upsert()
+        except sqlite3.OperationalError as oe:
+            # If the column doesn't exist yet, migrate and retry once
+            if "no column named updated_at" in str(oe):
+                ensure_emergency_contacts_schema()
+                _upsert()
+            else:
+                raise
         conn.commit()
         return True, None
     except Exception as e:
