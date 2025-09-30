@@ -1063,7 +1063,7 @@ def render_about_page(lang: str = "English"):
 - **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
 - **Place check**: compare your city with a specific spot (beach, mall, park) to see where it's safer **right now**.
 - **Journal + exports**: record symptoms, triggers, and notes — download as **Excel/CSV** to share with your clinician or caregiver.
-- **Designed for Gulf life**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
+- **Designed for Gulf life style and Culture**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
 - **First of its kind in the GCC**: no other app focuses on MS heat sensitivity like this.
             """)
 
