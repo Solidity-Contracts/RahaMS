@@ -230,6 +230,21 @@ def main():
         language = st.radio("Language / اللغة", ["English", "العربية"], horizontal=True)
         lang_code = "en" if language == "English" else "ar"
     
+    # Initialize session state for demo parameters - FIXED: ensure proper types
+    if 'demo_params' not in st.session_state:
+        st.session_state.demo_params = {
+            'core_temp': 36.6,
+            'baseline': 36.6,
+            'environment_temp': 32.0,  # Ensure float
+            'symptoms': [],
+            'history': []
+        }
+    
+    # Ensure all numeric parameters are floats
+    for key in ['core_temp', 'baseline', 'environment_temp']:
+        if key in st.session_state.demo_params:
+            st.session_state.demo_params[key] = float(st.session_state.demo_params[key])
+    
     # Page header with demo mode banner
     st.markdown(f"""
     <div style='background: linear-gradient(45deg, #FF6B6B, #4ECDC4); padding: 20px; border-radius: 10px; text-align: center; color: white;'>
@@ -334,7 +349,7 @@ def render_custom_view(lang_code):
             f"🌡️ {get_text('core_temp', lang_code)} (°C)",
             min_value=36.0,
             max_value=39.5,
-            value=st.session_state.demo_params['core_temp'],
+            value=float(st.session_state.demo_params['core_temp']),
             step=0.1,
             help="Adjust core body temperature" if lang_code == "en" else "اضبط درجة حرارة الجسم"
         )
@@ -344,18 +359,18 @@ def render_custom_view(lang_code):
             f"📊 {get_text('baseline', lang_code)} (°C)",
             min_value=36.0,
             max_value=37.5,
-            value=st.session_state.demo_params['baseline'],
+            value=float(st.session_state.demo_params['baseline']),
             step=0.1,
             help="Your normal baseline temperature" if lang_code == "en" else "درجة حرارتك الطبيعية الأساسية"
         )
     
     with col2:
-        # Environment control
+        # Environment control - FIXED: proper parameter structure
         st.session_state.demo_params['environment_temp'] = st.slider(
             f"🌡️ {get_text('feels_like', lang_code)} (°C)",
             min_value=25.0,
             max_value=50.0,
-            value=st.session_state.demo_params['environment_temp'],
+            value=float(st.session_state.demo_params['environment_temp']),
             step=1.0,
             help="How hot it feels with humidity and sun" if lang_code == "en" else "شدة الحرارة مع الرطوبة والشمس"
         )
@@ -379,7 +394,6 @@ def render_custom_view(lang_code):
     
     # Show risk assessment
     render_risk_assessment(lang_code)
-
 def render_live_demo_view(lang_code):
     """Render the live automated demo view"""
     st.markdown(f"### 🎬 {get_text('live_demo', lang_code)}")
