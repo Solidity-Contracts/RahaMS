@@ -188,14 +188,14 @@ SCENARIOS = {
     "morning_commute": {
         "core_temp": 37.4,
         "environment_temp": 41,
-        "symptoms": ["Blurred vision", "Fatigue"],
+        "symptoms": ["Blurred vision / ضبابية الرؤية", "Fatigue / إرهاق"],
         "description_en": "Hot car, sun exposure, typical commute",
         "description_ar": "سيارة ساخنة، تعرض للشمس، ذهاب نموذجي للعمل"
     },
     "office_ac_failure": {
         "core_temp": 37.8,
         "environment_temp": 35,
-        "symptoms": ["Fatigue", "Weakness"],
+        "symptoms": ["Fatigue / إرهاق", "Weakness / ضعف"],
         "description_en": "AC system failure, indoor heat buildup",
         "description_ar": "عطل في نظام التكييف، تراكم الحرارة داخل المبني"
     },
@@ -209,98 +209,20 @@ SCENARIOS = {
     "ms_flare_up": {
         "core_temp": 38.2,
         "environment_temp": 28,
-        "symptoms": ["Blurred vision", "Weakness", "Balance issues", "Sensory changes"],
+        "symptoms": ["Blurred vision / ضبابية الرؤية", "Weakness / ضعف", "Balance issues / مشاكل توازن", "Sensory changes / تغيرات حسية"],
         "description_en": "MS flare-up with elevated core temperature",
         "description_ar": "نوبة تصلب متعدد مع ارتفاع درجة حرارة الجسم"
     },
     "exercise_humid": {
         "core_temp": 37.9,
         "environment_temp": 39,
-        "symptoms": ["Fatigue", "Weakness"],
+        "symptoms": ["Fatigue / إرهاق", "Weakness / ضعف"],
         "description_en": "Physical activity in high humidity conditions",
         "description_ar": "نشاط بدني في ظروف رطوبة عالية"
     }
 }
 
 # ---------- PAGE RENDER ----------
-def main():
-    # Language selection
-    col1, col2 = st.columns([3, 1])
-    with col2:
-        language = st.radio("Language / اللغة", ["English", "العربية"], horizontal=True)
-        lang_code = "en" if language == "English" else "ar"
-    
-    # Initialize session state for demo parameters - FIXED: ensure proper types
-    if 'demo_params' not in st.session_state:
-        st.session_state.demo_params = {
-            'core_temp': 36.6,
-            'baseline': 36.6,
-            'environment_temp': 32.0,  # Ensure float
-            'symptoms': [],
-            'history': []
-        }
-    
-    # Ensure all numeric parameters are floats
-    for key in ['core_temp', 'baseline', 'environment_temp']:
-        if key in st.session_state.demo_params:
-            st.session_state.demo_params[key] = float(st.session_state.demo_params[key])
-    
-    # Page header with demo mode banner
-    st.markdown(f"""
-    <div style='background: linear-gradient(45deg, #FF6B6B, #4ECDC4); padding: 20px; border-radius: 10px; text-align: center; color: white;'>
-        <h1 style='margin: 0;'>{get_text('heat_safety_demo', lang_code)}</h1>
-        <h3 style='margin: 0;'>🚨 {get_text('demo_mode', lang_code)} - FOR EDUCATIONAL PURPOSES ONLY 🚨</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    # Navigation
-    st.markdown("<br>", unsafe_allow_html=True)
-    
-    nav_cols = st.columns(4)
-    with nav_cols[0]:
-        nav_scenarios = st.button(f"🎯 {get_text('scenarios', lang_code)}", use_container_width=True)
-    with nav_cols[1]:
-        nav_custom = st.button(f"⚙️ {get_text('custom', lang_code)}", use_container_width=True)
-    with nav_cols[2]:
-        nav_live = st.button(f"🎬 {get_text('live_demo', lang_code)}", use_container_width=True)
-    with nav_cols[3]:
-        nav_learn = st.button(f"📚 {get_text('learn', lang_code)}", use_container_width=True)
-    
-    # Default to scenarios view
-    current_view = "scenarios"
-    if nav_custom:
-        current_view = "custom"
-    elif nav_live:
-        current_view = "live"
-    elif nav_learn:
-        current_view = "learn"
-    
-    # Initialize session state for demo parameters
-    if 'demo_params' not in st.session_state:
-        st.session_state.demo_params = {
-            'core_temp': 36.6,
-            'baseline': 36.6,
-            'environment_temp': 32,
-            'symptoms': [],
-            'history': []
-        }
-    
-    # SCENARIOS VIEW
-    if current_view == "scenarios":
-        render_scenarios_view(lang_code)
-    
-    # CUSTOM VIEW  
-    elif current_view == "custom":
-        render_custom_view(lang_code)
-    
-    # LIVE DEMO VIEW
-    elif current_view == "live":
-        render_live_demo_view(lang_code)
-    
-    # LEARN VIEW
-    else:
-        render_learn_view(lang_code)
-
 def render_scenarios_view(lang_code):
     """Render the scenarios selection view"""
     st.markdown(f"### 🎯 {get_text('scenarios', lang_code)}")
@@ -330,6 +252,7 @@ def render_scenarios_view(lang_code):
             'symptoms': scenario['symptoms']
         })
         st.success("Scenario applied! / تم تطبيق السيناريو!")
+        st.rerun()
     
     # Display scenario description
     st.info(scenario['description_en'] if lang_code == "en" else scenario['description_ar'])
@@ -365,7 +288,7 @@ def render_custom_view(lang_code):
         )
     
     with col2:
-        # Environment control - FIXED: proper parameter structure
+        # Environment control
         st.session_state.demo_params['environment_temp'] = st.slider(
             f"🌡️ {get_text('feels_like', lang_code)} (°C)",
             min_value=25.0,
@@ -384,16 +307,21 @@ def render_custom_view(lang_code):
             "Sensory changes / تغيرات حسية"
         ]
         
+        # Filter default values to only include those that exist in options
+        current_symptoms = st.session_state.demo_params['symptoms']
+        valid_defaults = [symptom for symptom in current_symptoms if symptom in symptom_options]
+        
         selected_symptoms = st.multiselect(
             f"📋 {get_text('symptoms', lang_code)}",
-            symptom_options,
-            default=st.session_state.demo_params['symptoms'],
+            options=symptom_options,
+            default=valid_defaults,
             help="Select any current symptoms" if lang_code == "en" else "اختر أي أعراض حالية"
         )
         st.session_state.demo_params['symptoms'] = selected_symptoms
     
     # Show risk assessment
     render_risk_assessment(lang_code)
+
 def render_live_demo_view(lang_code):
     """Render the live automated demo view"""
     st.markdown(f"### 🎬 {get_text('live_demo', lang_code)}")
@@ -407,6 +335,7 @@ def render_live_demo_view(lang_code):
             st.session_state.demo_start_time = datetime.now()
             st.session_state.demo_params['core_temp'] = 36.6
             st.session_state.demo_params['environment_temp'] = 35
+            st.session_state.demo_params['symptoms'] = []
         
         if st.button("Start MS Flare-up Demo / بدء تجربة نوبة التصلب", use_container_width=True):
             st.session_state.demo_running = True  
@@ -607,6 +536,74 @@ def render_risk_assessment(lang_code):
                     st.session_state.demo_params['core_temp'] - 0.4
                 )
                 st.rerun()
+
+def main():
+    # Language selection
+    col1, col2 = st.columns([3, 1])
+    with col2:
+        language = st.radio("Language / اللغة", ["English", "العربية"], horizontal=True)
+        lang_code = "en" if language == "English" else "ar"
+    
+    # Initialize session state for demo parameters
+    if 'demo_params' not in st.session_state:
+        st.session_state.demo_params = {
+            'core_temp': 36.6,
+            'baseline': 36.6,
+            'environment_temp': 32.0,
+            'symptoms': [],
+            'history': []
+        }
+    
+    # Ensure all numeric parameters are floats
+    for key in ['core_temp', 'baseline', 'environment_temp']:
+        if key in st.session_state.demo_params:
+            st.session_state.demo_params[key] = float(st.session_state.demo_params[key])
+    
+    # Page header with demo mode banner
+    st.markdown(f"""
+    <div style='background: linear-gradient(45deg, #FF6B6B, #4ECDC4); padding: 20px; border-radius: 10px; text-align: center; color: white;'>
+        <h1 style='margin: 0;'>{get_text('heat_safety_demo', lang_code)}</h1>
+        <h3 style='margin: 0;'>🚨 {get_text('demo_mode', lang_code)} - FOR EDUCATIONAL PURPOSES ONLY 🚨</h3>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    # Navigation
+    st.markdown("<br>", unsafe_allow_html=True)
+    
+    nav_cols = st.columns(4)
+    with nav_cols[0]:
+        nav_scenarios = st.button(f"🎯 {get_text('scenarios', lang_code)}", use_container_width=True)
+    with nav_cols[1]:
+        nav_custom = st.button(f"⚙️ {get_text('custom', lang_code)}", use_container_width=True)
+    with nav_cols[2]:
+        nav_live = st.button(f"🎬 {get_text('live_demo', lang_code)}", use_container_width=True)
+    with nav_cols[3]:
+        nav_learn = st.button(f"📚 {get_text('learn', lang_code)}", use_container_width=True)
+    
+    # Default to scenarios view
+    current_view = "scenarios"
+    if nav_custom:
+        current_view = "custom"
+    elif nav_live:
+        current_view = "live"
+    elif nav_learn:
+        current_view = "learn"
+    
+    # SCENARIOS VIEW
+    if current_view == "scenarios":
+        render_scenarios_view(lang_code)
+    
+    # CUSTOM VIEW  
+    elif current_view == "custom":
+        render_custom_view(lang_code)
+    
+    # LIVE DEMO VIEW
+    elif current_view == "live":
+        render_live_demo_view(lang_code)
+    
+    # LEARN VIEW
+    else:
+        render_learn_view(lang_code)
 
 if __name__ == "__main__":
     main()
