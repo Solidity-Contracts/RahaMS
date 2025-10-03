@@ -1057,7 +1057,7 @@ def render_about_page(lang: str = "English"):
 - يعطيك **تنبيهًا مبكرًا** ونصيحة قصيرة قابلة للتنفيذ.
 """)
 
-👉 **تنظيم إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
+⚠️ **تنظيم إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
 
         st.header("✨ ماذا يمكن أن يفعل لأجلك؟")
         st.markdown("""
@@ -1085,7 +1085,7 @@ def render_about_page(lang: str = "English"):
 - Gives **early, actionable alerts** in plain language.
 """)
 
-👉 **Tanzim MS turns that invisible 0.5°C into an _early warning system_.**
+⚠️ **Tanzim MS turns that invisible 0.5°C into an _early warning system_.**
 
         st.header("✨ What can it do for you?")
         st.markdown("""
