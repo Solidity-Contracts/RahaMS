@@ -1788,13 +1788,10 @@ elif page_id == "monitor":
 
             - **ESP8266 Microcontroller**: Reads both sensors and sends data to the cloud
             
-            - **Feels-like temperature**: Provided by **OpenWeather API** - combines air temperature with humidity 
-              to show how hot it actually feels on your body
-            
             **What these temperatures mean:**
             - **Core Temperature**: Your internal body temperature - the most important indicator of heat stress
             - **Peripheral Temperature**: Your skin temperature - reacts quickly to environmental changes
-            - **Feels-like**: Combined effect of air temperature + humidity from weather data
+            - **Feels-like**: Combined effect of air temperature + humidity from weather data provided by **OpenWeather API**
             - **Baseline**: Your personal normal temperature (set in Settings) used for alert thresholds
             """)
         else:
@@ -1809,13 +1806,11 @@ elif page_id == "monitor":
 
             - **متحكم ESP8266 الدقيق**: يقرأ كلا المستشعرين ويرسل البيانات إلى السحابة
             
-            - **درجة الحرارة المحسوسة**: مقدمة من **OpenWeather API** - تجمع بين درجة حرارة الهواء والرطوبة
-              لتظهر مدى الشعور الحقيقي بالحرارة على جسمك
-            
             **ماذا تعني هذه الدرجات:**
             - **درجة الحرارة الأساسية**: درجة حرارة جسمك الداخلية - المؤشر الأهم للإجهاد الحراري
             - **درجة الحرارة الطرفية**: درجة حرارة جلدك - تتفاعل بسرعة مع التغيرات البيئية
             - **درجة الحرارة المحسوسة**: التأثير المشترك لدرجة حرارة الهواء والرطوبة من بيانات الطقس
+            - درجة الحرارة المحسوسة: التأثير المشترك لدرجة حرارة الهواء + الرطوبة من بيانات الطقس المقدمة من OpenWeather API
             - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (تم ضبطها في الإعدادات) تُستخدم لعتبات التنبيه
             """)
 
