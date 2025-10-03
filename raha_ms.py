@@ -1048,12 +1048,17 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
         
 # ================== ABOUT (EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
-    # ====== Styles (aligned with other pages; no flashy hero) ======
+    # ====== Styles (aligned with other pages, but with a standout ribbon) ======
     st.markdown("""
     <style>
       .page-head { margin: 6px 0 10px 0; }
-      .page-head h2 { margin: 0 0 4px 0; font-weight: 800; }
-      .sub { opacity: .85; margin: 0; }
+      .page-head h2 { margin: 0 0 6px 0; font-weight: 800; }
+      .sub { opacity: .9; margin: 0; }
+      .ribbon {
+        border: 1px solid rgba(0,0,0,.06);
+        background: linear-gradient(90deg, rgba(34,197,94,.10), rgba(14,165,233,.10));
+        padding: 10px 12px; border-radius: 12px; margin-top: 10px;
+      }
       .pill {
         display:inline-block; padding: 3px 10px; border-radius: 999px;
         background: var(--pill-bg, #f5f5f5); border: 1px solid rgba(0,0,0,.08);
@@ -1092,7 +1097,8 @@ def render_about_page(lang: str = "English"):
         st.markdown("""
 <div class="page-head">
   <h2>👋 أهلاً بك في <strong>تنظيم إم إس</strong></h2>
-  <p class="sub">يساعدك على اكتشاف الفروقات الصغيرة في الحرارة <strong>قبل أن تُربك يومك</strong>.</p>
+  <p class="sub">هو <strong>تطبيق</strong> لمساعدة أشخاص التصلّب المتعدد على إدارة الحرارة بذكاء، عبر مقارنة قراءاتك بخطّك الأساسي ومواءمتها مع الطقس.</p>
+  <div class="ribbon">🌍 مصمّم للخليج وبواجهتين <strong>العربية والإنجليزية</strong> — من أوائل التطبيقات التي تركّز على احتياجات المنطقة حيث التطبيقات الصحية قليلة التخصّص.</div>
   <div style="margin-top:6px;">
     <span class="pill">تخطيط ذكي</span>
     <span class="pill">متابعة سهلة</span>
@@ -1108,48 +1114,49 @@ def render_about_page(lang: str = "English"):
         with tab1:
             st.subheader("الفكرة باختصار")
             st.markdown("""
-- مع التصلّب المتعدد، **ارتفاع بسيط (≈ نصف درجة)** قد يسبّب التعب أو ضبابية الرؤية.
-- يعتمد تنظيم إم إس على **خطّك الأساسي** لملاحظة هذه الفروق الصغيرة مبكرًا.
-- يدمج قراءات الجسم مع **الإحساس الحراري والرطوبة** ليعطيك صورة أوضح.
+- مع التصلّب المتعدد، **ارتفاع بسيط (≈ نصف درجة)** قد يسبّب تعبًا أو ضبابية رؤية.
+- تنظيم إم إس يقرأ حرارة الجسم (داخلية + الجلد) ويقارنها بـ **خطّك الأساسي** ليكشف الفروق الصغيرة التي قد لا تلاحظها.
+- يدمج ذلك مع **الإحساس الحراري والرطوبة** ليعكس واقع الطقس في الخليج.
 """)
-            st.markdown('<div class="callout">🎯 الهدف: مساعدتك على التصرف بخطوة بسيطة قبل أن تتفاقم الأعراض.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="callout">🎯 الهدف: أن تلاحظ الفرق مبكرًا وتتخذ خطوة بسيطة قبل أن تتفاقم الأعراض.</div>', unsafe_allow_html=True)
+            st.caption("المكوّنات: حساس لدرجة الحرارة الداخلية (الأساسية) + حساس لحرارة الجلد (الطرفية). التفاصيل التقنية تظهر في الصفحات المتقدمة.")
 
-            st.caption("المكوّنات: حساس للحرارة الداخلية (الأساسية) + حساس لحرارة الجلد (الطرفية). التفاصيل التقنية تظهر لاحقًا.")
-
-            # Preview cards (consistent icons)
             st.subheader("ماذا ستجد في الصفحات القادمة")
             st.markdown('<div class="grid">', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📊 المراقبة</h3><p>عرض مباشر لحرارتك مقارنة بالخط الأساسي.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🧭 المخطِّط</h3><p>تنبؤ بأبرد <strong>ساعتين</strong> خلال ٤٨ ساعة.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📝 الملاحظات</h3><p>توثيق سريع وتصدير بياناتك كـ <strong>CSV</strong> للطبيب.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🤖 الرفيق الشخصي</h3><p>ينظر إلى ملاحظاتك وأعراضك ليقدّم نصائح مخصّصة (مثل التخطيط لنزهة أو السفر).</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📊 المراقبة</h3><p>عرض مباشر لحرارتك مقابل خطّك الأساسي، مع تبويب <strong>عرض تجريبي</strong> لفهم سلوك النظام تحت سيناريوهات مختلفة.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🧭 المخطِّط</h3><p>اقتراح <strong>نوافذ تبريد لساعتين</strong> خلال ٤٨ ساعة، بناءً على الطقس المحلي.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📝 الملاحظات</h3><p>توثيق الأعراض والأحداث بسرعة وتصديرها كملف <strong>CSV</strong> للمشاركة مع طبيبك.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🤖 الرفيق الشخصي</h3><p>يستخدم ملاحظاتك وأعراضك للإجابة المخصّصة (مثل التخطيط لرحلة أو نزهة بحسب تعبك الأخير).</p></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown(
-                '<span class="cta is-static">ابدأ من تبويب المراقبة</span>'
-                '<span class="cta is-static">استخدم المخطِّط لاختيار الوقت الأنسب</span>',
+                '<span class="cta is-static">افتح تبويب المراقبة للبدء</span>'
+                '<span class="cta is-static">جرّب تبويب العرض التجريبي لفهم السلوك</span>',
                 unsafe_allow_html=True
             )
+            st.markdown('<div class="footnote">🧪 لماذا العرض التجريبي؟ لأن الوصول إلى "ذروة" الارتفاع صعب بدون مجهود كبير؛ العرض يُحاكي حالات مختلفة (نشاط، جوّ حار، إضافة تبريد مثل مروحة) لتشاهد كيف يستجيب النظام.</div>', unsafe_allow_html=True)
 
         # ====== Tab 2: How it helps (action verbs) ======
         with tab2:
-            st.subheader("أفعال واضحة تساعدك يوميًا")
+            st.subheader("أفعال واضحة — نتائج ملموسة")
             st.markdown("""
-- **يُراقب حرارتك باستمرار** ويقارنها بالخط الأساسي.
-- **يُطابق الطقس الفعلي** مع حالتك (إحساس حراري + رطوبة).
-- **يقترح خطوات عملية**: ترطيب، إبطاء، انتقال لظل/مكيّف.
-- **يُخطّط لك بذكاء**: أفضل نوافذ تبريد في الـ ٤٨ ساعة القادمة.
-- **يُسهّل مشاركة بياناتك**: تصدير كـ <strong>CSV</strong> لمراجعته مع طبيبك.
-- **يُشخصن تجربتك بالذكاء الاصطناعي**: رفيق يستخدم ملاحظاتك وأعراضك للإجابة على أسئلة الحياة اليومية (مثل: هل وقت الشاطئ مناسب غدًا؟).
+- **يُراقب حرارتك باستمرار** ويقارنها بخطّك الأساسي.
+- **يُطابق الطقس الفعلي** في الخليج (إحساس حراري + رطوبة) ليجعل النصيحة واقعية.
+- **يقترح خطوات عملية**: ترطيب، إبطاء، الانتقال لظل/مكيّف، تبريد بسيط.
+- **يُخطّط لك بذكاء**: أفضل **نوافذ تبريد لساعتين** خلال الـ٤٨ ساعة القادمة.
+- **يُسهّل المشاركة**: تصدير بياناتك كـ <strong>CSV</strong> لمراجعتها مع طبيبك.
+- **يُشخصن تجربتك بالذكاء الاصطناعي**: رفيق يطّلع على ملاحظاتك/أعراضك ويجيب على أسئلة التخطيط (مثل السفر أو التخييم وفق حالتك).
+- **يُريك السلوك من دون عناء** عبر **العرض التجريبي**: اختبر سيناريوهات وتدخّلات مثل إضافة مروحة أو تبريد موضعي لترى التأثير فورًا.
 """)
-            st.markdown('<div class="footnote">🔒 <strong>الخصوصية:</strong> بياناتك تظل محمية، لا تُباع ولا تُشارك، وتُستخدم فقط لدعمك.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="footnote">🔒 <strong>الخصوصية:</strong> بياناتك تبقى محمية، لا تُباع ولا تُشارك، وتُستخدم فقط لدعمك.</div>', unsafe_allow_html=True)
 
     else:
         # ====== Header ======
         st.markdown("""
 <div class="page-head">
   <h2>👋 Welcome to <strong>Tanzim MS</strong></h2>
-  <p class="sub">It helps you spot small temperature differences <strong>before they derail your day</strong>.</p>
+  <p class="sub">It’s an <strong>app</strong> that helps people with Multiple Sclerosis manage heat intelligently by comparing your readings to your baseline and aligning them with real weather.</p>
+  <div class="ribbon">🌍 Designed for the Gulf (GCC) and fully <strong>bilingual (Arabic & English)</strong> — one of the first apps focused on this region, where few health tools are localized.</div>
   <div style="margin-top:6px;">
     <span class="pill">Smart planning</span>
     <span class="pill">Easy tracking</span>
@@ -1163,43 +1170,43 @@ def render_about_page(lang: str = "English"):
 
         # ====== Tab 1: What is Tanzim? ======
         with tab1:
-            st.subheader("In plain words")
+            st.subheader("The idea in simple words")
             st.markdown("""
 - With MS, even a **~0.5°C rise** can trigger fatigue or blurry vision.
-- Tanzim compares your readings to **your baseline** so you notice subtle changes early.
-- It blends temps with **feels-like & humidity** for context that makes sense.
+- Tanzim reads core + skin temperatures and compares them to **your personal baseline** to surface subtle changes you might miss.
+- It pairs that with **feels-like & humidity**, tuned for Gulf conditions.
 """)
-            st.markdown('<div class="callout">🎯 The goal: take a simple step before small shifts turn into big symptoms.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="callout">🎯 Goal: notice the change early and take a simple step before symptoms snowball.</div>', unsafe_allow_html=True)
+            st.caption("We use two sensors: one for core (internal) temperature and one for skin (peripheral). Model names appear on advanced pages.")
 
-            st.caption("We use two sensors: one for core (internal) temperature, one for skin (peripheral). Technical details live in advanced pages.")
-
-            # Preview cards (consistent icons)
             st.subheader("What to expect next")
             st.markdown('<div class="grid">', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📊 Monitor</h3><p>Live readings vs. your baseline.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🧭 Planner</h3><p><strong>Coolest 2-hour windows</strong> across the next 48 hours.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📝 Journal</h3><p>Quick notes + export your data as <strong>CSV</strong> for your clinician.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🤖 Companion</h3><p>Personalized: it looks at your journal & symptoms to answer planning questions (e.g., beach tomorrow? short trip?).</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📊 Monitor</h3><p>Live readings vs. your baseline — plus a dedicated <strong>Demo</strong> tab to explore how the system behaves.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🧭 Planner</h3><p><strong>Coolest 2-hour windows</strong> across the next 48 hours for your location.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📝 Journal</h3><p>Log symptoms/events quickly and export your data as a <strong>CSV</strong> to share with your clinician.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🤖 Companion</h3><p>Personalized answers that use your journal & symptoms (e.g., is a short trip or beach day wise given last week’s fatigue?).</p></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
             st.markdown(
                 '<span class="cta is-static">Open the Monitor tab to start</span>'
-                '<span class="cta is-static">Use the Planner to pick cooler times</span>',
+                '<span class="cta is-static">Try the Demo to see reactions</span>',
                 unsafe_allow_html=True
             )
+            st.markdown('<div class="footnote">🧪 Why a Demo? Hitting a real “spike” can require heavy exertion. The demo simulates conditions (hot weather, activity) and interventions (e.g., a cooling fan) so you can see how Tanzim would respond—without stressing your body.</div>', unsafe_allow_html=True)
 
         # ====== Tab 2: How it helps (action verbs) ======
         with tab2:
-            st.subheader("Action, not noise")
+            st.subheader("Actions that make a difference")
             st.markdown("""
-- **Monitors your temperature** vs. baseline.
-- **Matches real weather** with feels-like + humidity.
-- **Suggests practical steps**: hydrate, slow down, find shade/AC.
-- **Predicts 48-hour cooling windows**: best 2-hour slots.
-- **Exports data as CSV** for easy review with your clinician.
-- **Gives personalized AI guidance**: uses your journal & symptoms to help plan (e.g., outings, short trips).
+- **Monitors your temperature** continuously vs. your baseline.
+- **Matches real Gulf weather** (feels-like + humidity) so guidance fits your day.
+- **Suggests practical steps**: hydrate, slow down, find shade/AC, light cooling.
+- **Predicts 48-hour cooling windows**: best two-hour slots for planning.
+- **Exports your data as CSV** so you can review it with your clinician.
+- **Gives personalized AI guidance**: uses your journal & symptoms to help plan trips, outings, and daily routines.
+- **Shows behavior safely via the Demo**: test scenarios and interventions (like adding a fan) and see the impact instantly.
 """)
-            st.markdown('<div class="footnote">🔒 <strong>Privacy:</strong> your data stays private, never sold or shared, and is used only to support you.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="footnote">🔒 <strong>Privacy:</strong> your data stays private, never sold or shared, and is only used to support you.</div>', unsafe_allow_html=True)
 
 # ================== PLANNER HELPERS ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
