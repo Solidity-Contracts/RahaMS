@@ -92,7 +92,7 @@ SMOOTH_WINDOW = 3
 # ================== I18N ==================
 TEXTS = {
     "English": {
-        "about_title": "About Raha MS",
+        "about_title": "About Tanzim MS",
         "temp_monitor": "Heat Safety Monitor",
         "planner": "Planner & Tips",
         "journal": "Journal",
@@ -184,7 +184,7 @@ TEXTS = {
         "baseline_caption": "ℹ️ Baseline is used by the Heat Safety Monitor to decide when to alert (≥ 0.5°C above your baseline).",
     },
     "Arabic": {
-        "about_title": "عن تطبيق راحة إم إس",
+        "about_title": "عن تطبيق تنظيم إم إس",
         "temp_monitor": "مراقبة السلامة الحرارية",
         "planner": "المخطط والنصائح",
         "journal": "اليوميات",
@@ -1048,61 +1048,144 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
         
 # ================== ABOUT (EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
+    # Subtle styling to make tabs & tiles stand out
+    st.markdown("""
+    <style>
+      .hero {
+        background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%);
+        color: white; padding: 18px 16px; border-radius: 14px; margin-bottom: 14px;
+      }
+      .pill {
+        display:inline-block; padding: 4px 10px; border-radius: 999px;
+        background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
+        font-weight:600; margin-right:6px; margin-top:6px;
+      }
+      .tile {
+        background: var(--card-bg, #fff);
+        border-radius: 14px; padding: 16px; border-left: 8px solid var(--left, #22c55e);
+        box-shadow: 0 2px 10px rgba(0,0,0,0.06); height: 100%;
+      }
+      .tile h3 { margin: 0 0 6px 0; }
+      .callout {
+        background: #f0f9ff; border-left: 6px solid #38bdf8; padding: 12px 14px;
+        border-radius: 10px; margin: 10px 0;
+      }
+      .cta {
+        display:inline-block; padding: 10px 14px; border-radius: 10px; font-weight:700;
+        border: 1px solid #22c55e; color: #16a34a; background: #ecfdf5;
+        text-decoration:none; margin-right:8px; margin-top:6px;
+      }
+      @media (prefers-color-scheme: dark) {
+        .callout { background: #082f49; border-left-color: #38bdf8; }
+        .tile { background: #0b1220; }
+      }
+    </style>
+    """, unsafe_allow_html=True)
+
     if lang == "Arabic":
-        st.title("🧠 ما هو تنظيم إم إس؟")
         st.markdown("""
-**تنظيم إم إس** يساعدك على التعامل مع الحرارة إذا كنت تعاني من التصلّب المتعدد:
+<div class="hero">
+  <h2 style="margin:0;">🔥 ما هو <strong>تنظيم إم إس</strong>؟</h2>
+  <p style="margin:6px 0 0 0;">تطبيق عملي لمساعدة أشخاص التصلّب المتعدد على <strong>إدارة الحرارة</strong> بذكاء—بالاعتماد على خطّك الأساسي، حرارة جسمك، والإحساس الحراري.</p>
+  <div style="margin-top:6px;">
+    <span class="pill">تنبيهات مبكرة</span>
+    <span class="pill">ذكاء الطقس</span>
+    <span class="pill">قراءات حساسات مباشرة</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
+
+        tab1, tab2 = st.tabs(["❓ ما هو تنظيم إم إس؟", "✨ ماذا يقدّم لك؟"])
+
+        with tab1:
+            st.subheader("تنبيه مبكر مبني على خطّك الأساسي—not guesses")
+            st.markdown("""
 - يراقب **ارتفاع حرارتك عن خطّك الأساسي** (+0.5\u00b0م قد يحرّك الأعراض — ظاهرة أوتهوف).
-- يجمع بين **الإحساس الحراري** (الطقس) و **حرارة الجسم الأساسية والطرفية** و(لاحقًا) **الأعراض**.
-- يعطيك **تنبيهًا مبكرًا** ونصيحة قصيرة قابلة للتنفيذ.
-
-👉 **تنظيم إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
+- يجمع **الإحساس الحراري** والرطوبة مع حرارة الجسم الأساسية/الطرفية.
+- يريك **الوضع الآن**: آمن · تحذير · خطر مرتفع — بلغة واضحة وسريعة.
 """)
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown('<div class="tile" style="--left:#22c55e;"><h3>🟢 آمن</h3><p>استمر، ولكن حافظ على الترطيب وخفف الملابس.</p></div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown('<div class="tile" style="--left:#f59e0b;"><h3>🟡 حذر</h3><p>خفّف الوتيرة، تحرّك للظل/المكيف، استخدم تبريدًا بسيطًا.</p></div>', unsafe_allow_html=True)
+            with c3:
+                st.markdown('<div class="tile" style="--left:#ef4444;"><h3>🔴 خطر</h3><p>أوقف الجهد، برّد فورًا، وراقب الأعراض—اطلب مساعدة إذا تطلب الأمر.</p></div>', unsafe_allow_html=True)
 
-        st.header("✨ ماذا يمكن أن يفعل لأجلك؟")
-        st.markdown("""
-- **مراقبة مباشرة**: قراءة حرارة الجسم الأساسية (MLX90614) والطرفية (MAX30205) من حساساتك ومقارنتها بخطّك الأساسي.
-- **ذكاء الطقس**: جلب الإحساس الحراري والرطوبة من OpenWeather لمطابقة الواقع.
-- **تنبيهات واضحة**: عند فرق +0.5\u00b0م أو تجاوز حدود مطلقة.
-- **نوافذ أكثر أمانًا**: يبرز فترات ساعتين أبرد خلال 48 ساعة اعتمادًا على **الإحساس الحراري** والرطوبة.
-- **اليوميات والتصدير**: تسجّل ما حدث وأعراضك بنقرة، وتحمّل السجل كـ Excel/CSV لطبيبك.
-- **وضع المحاكاة**: صندوق رمل للتعلّم و"ماذا لو" بدون حفظ بيانات.
-- **مصمم لحياة الخليج**: نصائح عملية للصيام، الوقوف للصلاة، المسارات المظللة، تبريد السيارة، والبحر.
-- **الأول من نوعه في الخليج**: لا يوجد تطبيق آخر يركّز على حساسية الحرارة مع MS بهذه الدقة.
-- **تخطيط بثقة**: اعرف بالضبط متى وأين يكون الخروج أكثر أمانًا.
-- **افهم محفزاتك**: اربط بين الطقس وحرارتك وأعراضك عبر الوقت.
-- **شارك بياناتك**: قدّم سجلات واضحة ومنظّمة لدعم رعاية أفضل.
+            st.markdown('<div class="callout">💡 **لماذا الآن؟** لأن فرق +0.5\u00b0م صغير ويصعب الشعور به—التطبيق يحوّله إلى <strong>إنذار مبكر</strong> قبل أن تتعطل يومك.</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<a class="cta" href="#monitor">ابدأ المراقبة الآن</a>'
+                '<a class="cta" href="#planner">خطّط لنوافذ أبرد</a>', unsafe_allow_html=True
+            )
 
-🔒 **الخصوصية**: بياناتك محفوظة محليًا (SQLite). هذا نموذج توعوي للتنظيم الذاتي — وليس جهازًا طبيًا. ويمكنك تنزيل درجات الحرارة واليوميات كـ **Excel/CSV** لمشاركتها مع طبيبك.
+        with tab2:
+            st.subheader("أفعال سريعة تُحدث فرقًا")
+            st.markdown("""
+- **اراقب مباشرة**: قراءة حساسات MLX90614 (أساسية) + MAX30205 (طرفية) عبر Supabase.
+- **افهم الطقس**: إحساس حراري + رطوبة من OpenWeather لمطابقة الواقع.
+- **اتخذ إجراءً**: تنبيهات واضحة عندما **Δالأساسية ≥ 0.5\u00b0م** أو تتجاوز حدودًا مطلقة.
+- **خطط بذكاء**: نوافذ ساعتين أبرد خلال 48 ساعة.
+- **وثّق بسهولة**: سجّل ما حدث وأعراضك بنقرة؛ نزّل Excel/CSV لطبيبك.
+- **تعلّم بأمان**: جرّب محاكي التجارب بدون حفظ بيانات.
 """)
+            st.markdown('<div class="callout">🎯 **الهدف**: أن تسبق الأعراض بخطوة، لا أن تطاردها بعد وقوعها.</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<a class="cta" href="#monitor">تشغيل الحساسات</a>'
+                '<a class="cta" href="#journal">إضافة ملاحظة سريعة</a>', unsafe_allow_html=True
+            )
 
     else:
-        st.title("🧠 What is Tanzim MS?")
         st.markdown("""
-**Tanzim MS** helps you cope with heat if you live with MS:
-- Watches your **rise above your personal baseline** (+0.5\u00b0C can trigger Uhthoff’s).
-- Combines **feels-like weather** with your **core/peripheral temps** and (later) **symptoms**.
-- Gives **early, actionable alerts** in plain language.
+<div class="hero">
+  <h2 style="margin:0;">🔥 What is <strong>Tanzim MS</strong>?</h2>
+  <p style="margin:6px 0 0 0;">A practical app to <strong>manage heat with MS</strong> — blending your baseline, body temperature, and feels-like weather.</p>
+  <div style="margin-top:6px;">
+    <span class="pill">Early alerts</span>
+    <span class="pill">Weather intelligence</span>
+    <span class="pill">Live sensor readings</span>
+  </div>
+</div>
+""", unsafe_allow_html=True)
 
-👉 **Tanzim MS turns that invisible 0.5\u00b0C into an _early warning system_.**
+        tab1, tab2 = st.tabs(["❓ What is Tanzim?", "✨ What it does for you"])
+
+        with tab1:
+            st.subheader("An early-warning system built on your baseline—not guesses")
+            st.markdown("""
+- Tracks **rise above your personal baseline** (+0.5\u00b0C can trigger Uhthoff’s).
+- Merges **feels-like** & humidity with core/peripheral temps.
+- Shows **status right now**: Safe · Caution · High — in plain language.
 """)
+            c1, c2, c3 = st.columns(3)
+            with c1:
+                st.markdown('<div class="tile" style="--left:#22c55e;"><h3>🟢 Safe</h3><p>Proceed, stay hydrated, prefer light clothing.</p></div>', unsafe_allow_html=True)
+            with c2:
+                st.markdown('<div class="tile" style="--left:#f59e0b;"><h3>🟡 Caution</h3><p>Slow the pace, seek shade/AC, use simple cooling.</p></div>', unsafe_allow_html=True)
+            with c3:
+                st.markdown('<div class="tile" style="--left:#ef4444;"><h3>🔴 High</h3><p>Stop exertion, cool immediately, monitor symptoms—seek help if needed.</p></div>', unsafe_allow_html=True)
 
-        st.header("✨ What can it do for you?")
-        st.markdown("""
-- **Live monitoring**: Reads core (MLX90614) and peripheral (MAX30205) from your sensors and compares to your baseline.
-- **Weather intelligence**: Pulls feels-like & humidity from OpenWeather to match real conditions.
-- **Clear alerts**: Fires when ΔCore ≥ 0.5\u00b0C or absolute thresholds are crossed.
-- **Smart safe windows**: Highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
-- **Journal & export**: Log what happened in one tap; download as Excel/CSV for your clinician.
-- **Simulator mode**: A learning sandbox to try “what-ifs” without saving data.
-- **Designed for Gulf lifestyle and culture**: Practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
-- **First of its kind in the GCC**: No other app focuses on MS heat sensitivity like this.
-- **Plan confidently**: Know exactly when and where it's safer to go out.
-- **Understand your triggers**: Connect weather, body temperature, and symptoms over time.
-- **Share evidence**: Give your doctor clear, organized records to support better care.
+            st.markdown('<div class="callout">💡 **Why this matters**: a +0.5\u00b0C rise is tiny and hard to feel—Tanzim turns it into an <strong>early alert</strong> before it derails your day.</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<a class="cta" href="#monitor">Start monitoring</a>'
+                '<a class="cta" href="#planner">Plan cooler windows</a>', unsafe_allow_html=True
+            )
 
-🔒 **Privacy**: Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver.
+        with tab2:
+            st.subheader("Action, not noise")
+            st.markdown("""
+- **Monitor live**: MLX90614 (core) + MAX30205 (peripheral) via Supabase.
+- **Match reality**: Feels-like & humidity from OpenWeather.
+- **Act early**: Clear alerts when **ΔCore ≥ 0.5\u00b0C** or absolute thresholds hit.
+- **Plan smart**: Cooler 2-hour windows across the next 48h.
+- **Log fast**: One-tap journal; export Excel/CSV for your clinician.
+- **Learn safely**: Simulator to try “what-ifs” without saving data.
 """)
+            st.markdown('<div class="callout">🎯 **Goal**: get ahead of symptoms—not chase them.</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<a class="cta" href="#monitor">Connect sensors</a>'
+                '<a class="cta" href="#journal">Add a quick note</a>', unsafe_allow_html=True
+            )
+
 
 # ================== PLANNER HELPERS ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
