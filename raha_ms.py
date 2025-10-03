@@ -1129,11 +1129,7 @@ def render_about_page(lang: str = "English"):
             st.markdown('<div class="tile"><h3>🤖 الرفيق الشخصي</h3><p>يستخدم ملاحظاتك وأعراضك للإجابة المخصّصة (مثل التخطيط لرحلة أو نزهة بحسب تعبك الأخير).</p></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            st.markdown(
-                '<span class="cta is-static">افتح تبويب المراقبة للبدء</span>'
-                '<span class="cta is-static">جرّب تبويب العرض التجريبي لفهم السلوك</span>',
-                unsafe_allow_html=True
-            )
+            
             st.markdown('<div class="footnote">🧪 لماذا العرض التجريبي؟ لأن الوصول إلى "ذروة" الارتفاع صعب بدون مجهود كبير؛ العرض يُحاكي حالات مختلفة (نشاط، جوّ حار، إضافة تبريد مثل مروحة) لتشاهد كيف يستجيب النظام.</div>', unsafe_allow_html=True)
 
         # ====== Tab 2: How it helps (action verbs) ======
@@ -1187,11 +1183,6 @@ def render_about_page(lang: str = "English"):
             st.markdown('<div class="tile"><h3>🤖 Companion</h3><p>Personalized answers that use your journal & symptoms (e.g., is a short trip or beach day wise given last week’s fatigue?).</p></div>', unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
 
-            st.markdown(
-                '<span class="cta is-static">Open the Monitor tab to start</span>'
-                '<span class="cta is-static">Try the Demo to see reactions</span>',
-                unsafe_allow_html=True
-            )
             st.markdown('<div class="footnote">🧪 Why a Demo? Hitting a real “spike” can require heavy exertion. The demo simulates conditions (hot weather, activity) and interventions (e.g., a cooling fan) so you can see how Tanzim would respond—without stressing your body.</div>', unsafe_allow_html=True)
 
         # ====== Tab 2: How it helps (action verbs) ======
