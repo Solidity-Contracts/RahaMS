@@ -1538,7 +1538,7 @@ def render_planner():
         st.caption(f"**{T['peak_heat']}:** " + ("; ".join(weather.get('peak_hours', [])) if weather.get('peak_hours') else "—"))
 
 # ================== SIDEBAR ==================
-logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/6512b826bd06f692ad81f896773b44a3b0482001/logo1.PNG"
+logo_url = "https://raw.githubusercontent.com/Solidity-Contracts/RahaMS/fba65899690870f1231741f068bf4d4b31e79363/logo1.PNG"
 st.sidebar.image(logo_url, use_container_width=True)
 
 # ---------- LANGUAGE (read previous -> pick new -> save new) ----------
