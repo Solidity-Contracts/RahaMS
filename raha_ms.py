@@ -146,8 +146,8 @@ TEXTS = {
         "journal_hint": "Use the quick logger or free text. Reasons from Monitor and plans from Planner also save here.",
         "daily_logger": "Daily quick logger",
         "mood": "Mood",
-        "hydration": "Hydration (glasses)",
-        "sleep": "Sleep (hours)",
+        "hydration": "💧 Hydration (glasses)",
+        "sleep": "🛌 Sleep (hours)",
         "fatigue": "Fatigue",
         "free_note": "Free note (optional)",
         "emergency": "Emergency",
@@ -246,8 +246,8 @@ TEXTS = {
         "journal_hint": "استخدم المُسجّل السريع أو النص الحر. كما تُحفظ الأسباب من المراقبة والخطط من المخطط هنا.",
         "daily_logger": "المُسجّل اليومي السريع",
         "mood": "المزاج",
-        "hydration": "شرب الماء (أكواب)",
-        "sleep": "النوم (ساعات)",
+        "hydration": "شرب الماء (أكواب) 💧",
+        "sleep": "النوم (ساعات) 🛌",
         "fatigue": "التعب",
         "free_note": "ملاحظة حرة (اختياري)",
         "emergency": "الطوارئ",
@@ -1669,7 +1669,7 @@ st.sidebar.image(logo_url, use_container_width=True)
 prev_lang = st.session_state.get("_prev_lang", None)
 
 # 2) Let the user pick the current language
-app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "Arabic"], key="language_selector")
+app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "عربي"], key="language_selector")
 
 # 3) Use texts for the CURRENT language
 T = TEXTS[app_language]
