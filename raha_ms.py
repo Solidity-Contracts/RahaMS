@@ -1777,7 +1777,7 @@ elif page_id == "monitor":
     with st.expander("🔬 " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=True):
         if app_language == "English":
             st.markdown("""
-            **We use medical-grade sensors for accurate temperature monitoring:**
+            **We use medical-grade sensors connected to an ESP8266 microcontroller:**
             
             - **MAX30205**: Clinical-grade digital temperature sensor for **peripheral (skin) temperature** 
               (measures with ±0.1°C accuracy, ideal for wearable health monitoring)
@@ -1785,6 +1785,8 @@ elif page_id == "monitor":
             - **MLX90614**: Infrared sensor for **core body temperature**
               (non-contact measurement with ±0.5°C accuracy, estimates internal temperature)
                           (non-contact measurement of surface temperature with ±0.5°C accuracy)
+
+            - **ESP8266 Microcontroller**: Reads both sensors and sends data to the cloud
             
             - **Feels-like temperature**: Provided by **OpenWeather API** - combines air temperature with humidity 
               to show how hot it actually feels on your body
@@ -1804,6 +1806,8 @@ elif page_id == "monitor":
             
             - **MLX90614**: مستشعر بالأشعة تحت الحمراء لـ **درجة حرارة الجسم الأساسية**
               (قياس بدون تلامس بدقة ±0.5°C، يقدر درجة الحرارة الداخلية)
+
+            - **متحكم ESP8266 الدقيق**: يقرأ كلا المستشعرين ويرسل البيانات إلى السحابة
             
             - **درجة الحرارة المحسوسة**: مقدمة من **OpenWeather API** - تجمع بين درجة حرارة الهواء والرطوبة
               لتظهر مدى الشعور الحقيقي بالحرارة على جسمك
@@ -1839,14 +1843,17 @@ elif page_id == "monitor":
                 key="monitor_city",
                 format_func=lambda code: city_label(code, app_language),
             )
+            
         with colB:
-            device_label = "🔌 معرف الجهاز (Supabase)" if app_language == "Arabic" else "🔌 Device ID (Supabase)"
-            device_id = st.text_input(device_label, key="live_device_id", 
-                                     placeholder="esp8266-01")
             if app_language == "English":
-                st.caption("Enter your sensor device ID")
+                st.markdown("**🔌 Sensor Hub**")
+                st.info("ESP8266 with MAX30205 + MLX90614")
+                st.caption("Pre-configured sensor device - contact admin for changes")
             else:
-                st.caption("أدخل معرف جهاز المستشعر")
+                st.markdown("**🔌 محور المستشعرات**")
+                st.info("ESP8266 مع MAX30205 + MLX90614")
+                st.caption("جهاز مستشعر مُهيأ مسبقًا - اتصل بالمسؤول للتغييرات")
+        
         with colC:
             connect_label = "🔄 الاتصال بالمستشعرات" if app_language == "Arabic" else "🔄 Connect to Sensors"
             if st.button(connect_label, use_container_width=True, type="primary"):
