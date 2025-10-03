@@ -1773,9 +1773,21 @@ elif page_id == "monitor":
         st.warning(T["login_first"])
         st.stop()
 
+
+
+    # Sub-tabs
+    if app_language == "English":
+        tabs = st.tabs(["📡 Live Sensor Data", "🔬 Learn & Practice"])
+    else:
+        tabs = st.tabs(["📡 بيانات المستشعرات المباشرة", "🔬 تعلم وتدرب"])
+
     # =========================
-    # SENSOR EXPLANATION SECTION
+    # TAB 1 — LIVE SENSOR DATA
     # =========================
+    
+# =========================
+# SENSOR EXPLANATION SECTION
+# =========================
     with st.expander("🌡️ " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=True):
         if app_language == "English":
             st.markdown("""
@@ -1815,16 +1827,7 @@ elif page_id == "monitor":
             - درجة الحرارة المحسوسة: التأثير المشترك لدرجة حرارة الهواء + الرطوبة من بيانات الطقس المقدمة من الطقس
             - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (تم ضبطها في الإعدادات) تُستخدم لعتبات التنبيه
             """)
-
-    # Sub-tabs
-    if app_language == "English":
-        tabs = st.tabs(["📡 Live Sensor Data", "🔬 Learn & Practice"])
-    else:
-        tabs = st.tabs(["📡 بيانات المستشعرات المباشرة", "🔬 تعلم وتدرب"])
-
-    # =========================
-    # TAB 1 — LIVE SENSOR DATA
-    # =========================
+    
     with tabs[0]:
         if app_language == "English":
             st.info("🔌 **Connected to real sensors** - Displaying live data from your MAX30205 and MLX90614 sensors")
