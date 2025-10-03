@@ -2230,23 +2230,95 @@ elif page_id == "monitor":
                 })
                 st.rerun()
 
-        with col2:
-            if app_language == "English":
-                st.subheader("⚙️ Adjust Values")
-                core_label = "Core Temperature (°C)"
-                baseline_label = "Baseline (°C)"
-                feels_label = "Feels-like (°C)"
-                core_help = "Your internal body temperature"
-                baseline_help = "Your personal normal temperature"
-                feels_help = "Combined effect of temperature + humidity"
-            else:
-                st.subheader("⚙️ ضبط القيم")
-                core_label = "درجة الحرارة الأساسية (°م)"
-                baseline_label = "خط الأساس (°م)"
-                feels_label = "درجة الحرارة المحسوسة (°م)"
-                core_help = "درجة حرارة جسمك الداخلية"
-                baseline_help = "درجة حرارتك الطبيعية الشخصية"
-                feels_help = "التأثير المشترك لدرجة الحرارة والرطوبة"
+            with col2:
+                if app_language == "English":
+                    st.subheader("⚙️ Adjust Values")
+                else:
+                    st.subheader("⚙️ ضبط القيم")
+                
+                s = st.session_state.sim
+                
+                # Temperature adjustment using buttons (works perfectly in RTL)
+                if app_language == "English":
+                    st.write("**Core Temperature:**")
+                    col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
+                    with col_c1:
+                        st.write(f"**{s['core']:.1f}°C**")
+                    with col_c2:
+                        if st.button("⬆️", key="core_up"):
+                            s["core"] = min(39.5, s["core"] + 0.1)
+                            st.rerun()
+                    with col_c3:
+                        if st.button("⬇️", key="core_down"):
+                            s["core"] = max(36.0, s["core"] - 0.1)
+                            st.rerun()
+                            
+                    st.write("**Baseline:**")
+                    col_b1, col_b2, col_b3 = st.columns([2, 1, 1])
+                    with col_b1:
+                        st.write(f"**{s['baseline']:.1f}°C**")
+                    with col_b2:
+                        if st.button("⬆️", key="base_up"):
+                            s["baseline"] = min(37.5, s["baseline"] + 0.1)
+                            st.rerun()
+                    with col_b3:
+                        if st.button("⬇️", key="base_down"):
+                            s["baseline"] = max(36.0, s["baseline"] - 0.1)
+                            st.rerun()
+                            
+                    st.write("**Feels-like:**")
+                    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+                    with col_f1:
+                        st.write(f"**{s['feels']:.1f}°C**")
+                    with col_f2:
+                        if st.button("⬆️", key="feels_up"):
+                            s["feels"] = min(50.0, s["feels"] + 1.0)
+                            st.rerun()
+                    with col_f3:
+                        if st.button("⬇️", key="feels_down"):
+                            s["feels"] = max(25.0, s["feels"] - 1.0)
+                            st.rerun()
+                            
+                else:
+                    # Arabic version
+                    st.write("**درجة الحرارة الأساسية:**")
+                    col_c1, col_c2, col_c3 = st.columns([2, 1, 1])
+                    with col_c1:
+                        st.write(f"**{s['core']:.1f}°م**")
+                    with col_c2:
+                        if st.button("⬆️", key="core_up_ar"):
+                            s["core"] = min(39.5, s["core"] + 0.1)
+                            st.rerun()
+                    with col_c3:
+                        if st.button("⬇️", key="core_down_ar"):
+                            s["core"] = max(36.0, s["core"] - 0.1)
+                            st.rerun()
+                            
+                    st.write("**خط الأساس:**")
+                    col_b1, col_b2, col_b3 = st.columns([2, 1, 1])
+                    with col_b1:
+                        st.write(f"**{s['baseline']:.1f}°م**")
+                    with col_b2:
+                        if st.button("⬆️", key="base_up_ar"):
+                            s["baseline"] = min(37.5, s["baseline"] + 0.1)
+                            st.rerun()
+                    with col_b3:
+                        if st.button("⬇️", key="base_down_ar"):
+                            s["baseline"] = max(36.0, s["baseline"] - 0.1)
+                            st.rerun()
+                            
+                    st.write("**درجة الحرارة المحسوسة:**")
+                    col_f1, col_f2, col_f3 = st.columns([2, 1, 1])
+                    with col_f1:
+                        st.write(f"**{s['feels']:.1f}°م**")
+                    with col_f2:
+                        if st.button("⬆️", key="feels_up_ar"):
+                            s["feels"] = min(50.0, s["feels"] + 1.0)
+                            st.rerun()
+                    with col_f3:
+                        if st.button("⬇️", key="feels_down_ar"):
+                            s["feels"] = max(25.0, s["feels"] - 1.0)
+                            st.rerun()
                 
             s = st.session_state.sim
             
