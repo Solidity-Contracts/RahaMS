@@ -1048,115 +1048,158 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
         
 # ================== ABOUT (EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
-    # ====== Styles ======
+    # ====== Styles (aligned with other pages; no flashy hero) ======
     st.markdown("""
     <style>
-      .hero {
-        background: linear-gradient(135deg, #0ea5e9 0%, #22c55e 100%);
-        color: white; padding: 20px; border-radius: 14px; margin-bottom: 16px;
-      }
+      .page-head { margin: 6px 0 10px 0; }
+      .page-head h2 { margin: 0 0 4px 0; font-weight: 800; }
+      .sub { opacity: .85; margin: 0; }
       .pill {
-        display:inline-block; padding: 4px 10px; border-radius: 999px;
-        background: rgba(255,255,255,0.15); border: 1px solid rgba(255,255,255,0.3);
-        font-weight:600; margin-right:6px; margin-top:6px;
+        display:inline-block; padding: 3px 10px; border-radius: 999px;
+        background: var(--pill-bg, #f5f5f5); border: 1px solid rgba(0,0,0,.08);
+        font-weight:600; margin-right:6px; margin-top:6px; font-size: .92em;
       }
+      .grid { display:grid; grid-template-columns: repeat(1, minmax(0,1fr)); gap: 10px; }
+      @media (min-width: 900px) { .grid { grid-template-columns: repeat(4, minmax(0,1fr)); } }
       .tile {
-        background: var(--card-bg, #fff);
-        border-radius: 14px; padding: 16px; border-left: 8px solid var(--left, #22c55e);
-        box-shadow: 0 2px 10px rgba(0,0,0,0.06); height: 100%;
+        background: var(--card-bg, #fff); border-radius: 14px; padding: 16px;
+        border: 1px solid rgba(0,0,0,.06); box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+        height: 100%;
       }
-      .tile h3 { margin: 0 0 6px 0; }
+      .tile h3 { margin: 0 0 6px 0; font-size: 1.05rem; }
+      .tile p { margin: 0; opacity: .9; }
       .callout {
-        background: #f0f9ff; border-left: 6px solid #38bdf8; padding: 12px 14px;
+        background: #f9fafb; border-left: 6px solid #22c55e; padding: 12px 14px;
         border-radius: 10px; margin: 12px 0;
       }
-      .cta {
-        display:inline-block; padding: 10px 14px; border-radius: 10px; font-weight:700;
-        border: 1px solid #22c55e; color: #16a34a; background: #ecfdf5;
-        text-decoration:none; margin-right:8px; margin-top:6px;
+      .footnote { font-size: .9em; opacity: .8; margin-top: 8px; }
+      .cta.is-static {
+        display:inline-block; padding: 8px 12px; border-radius: 10px; font-weight:700;
+        border: 1px solid #d4d4d8; color: inherit; background: #fafafa; margin-right:8px; margin-top:6px;
+        pointer-events:none; cursor:default;
       }
-      .cta.is-static { pointer-events:none; cursor:default; opacity:0.9; }
-      .footnote { font-size: 0.9em; opacity: 0.75; margin-top:8px; }
       @media (prefers-color-scheme: dark) {
-        .callout { background: #082f49; border-left-color: #38bdf8; }
-        .tile { background: #0b1220; }
+        .tile { background: #0b1220; border-color: rgba(255,255,255,.06); }
+        .callout { background: #0b1220; border-left-color: #22c55e; }
+        .pill { background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.12); }
+        .cta.is-static { background:#0b1220; border-color: rgba(255,255,255,.12); }
       }
     </style>
     """, unsafe_allow_html=True)
 
-    # ====== Arabic ======
     if lang == "Arabic":
+        # ====== Header ======
         st.markdown("""
-<div class="hero">
-  <h2 style="margin:0;">👋 أهلاً بك في <strong>تنظيم إم إس</strong></h2>
-  <p style="margin:6px 0 0 0;">تطبيق يساعد الأشخاص المصابين بالتصلّب المتعدد على <strong>التعامل مع الحرارة</strong> قبل أن تُسبّب أعراضًا مرهقة.</p>
+<div class="page-head">
+  <h2>👋 أهلاً بك في <strong>تنظيم إم إس</strong></h2>
+  <p class="sub">يساعدك على اكتشاف الفروقات الصغيرة في الحرارة <strong>قبل أن تُربك يومك</strong>.</p>
   <div style="margin-top:6px;">
-    <span class="pill">إنذار مبكر</span>
     <span class="pill">تخطيط ذكي</span>
     <span class="pill">متابعة سهلة</span>
+    <span class="pill">🤖 رفيق شخصي</span>
+    <span class="pill">🔒 خصوصية أولاً</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["❓ ما هو تنظيم إم إس؟", "🚀 كيف يساعدك؟"])
+        tab1, tab2 = st.tabs(["📖 ما هو تنظيم إم إس؟", "🚀 كيف يساعدك؟"])
 
+        # ====== Tab 1: What is Tanzim? ======
         with tab1:
             st.subheader("الفكرة باختصار")
             st.markdown("""
-- الحرارة حتى لو ارتفعت **نصف درجة** قد تُطلق أعراض مثل التعب أو ضبابية الرؤية (ظاهرة أوتهوف).
-- تنظيم إم إس يراقب حرارتك باستمرار ويُحوّل هذا الفرق الصغير إلى <strong>إنذار مبكر</strong>.
-- يعتمد على **خطّك الأساسي** (حرارتك الطبيعية) بدل التوقّعات العامة.
+- مع التصلّب المتعدد، **ارتفاع بسيط (≈ نصف درجة)** قد يسبّب التعب أو ضبابية الرؤية.
+- يعتمد تنظيم إم إس على **خطّك الأساسي** لملاحظة هذه الفروق الصغيرة مبكرًا.
+- يدمج قراءات الجسم مع **الإحساس الحراري والرطوبة** ليعطيك صورة أوضح.
 """)
-            st.markdown('<div class="callout">💡 النتيجة: إشعارات مبسّطة بلغة "آمن · حذر · خطر" بدل أرقام معقدة.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="callout">🎯 الهدف: مساعدتك على التصرف بخطوة بسيطة قبل أن تتفاقم الأعراض.</div>', unsafe_allow_html=True)
 
+            st.caption("المكوّنات: حساس للحرارة الداخلية (الأساسية) + حساس لحرارة الجلد (الطرفية). التفاصيل التقنية تظهر لاحقًا.")
+
+            # Preview cards (consistent icons)
+            st.subheader("ماذا ستجد في الصفحات القادمة")
+            st.markdown('<div class="grid">', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📊 المراقبة</h3><p>عرض مباشر لحرارتك مقارنة بالخط الأساسي.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🧭 المخطِّط</h3><p>تنبؤ بأبرد <strong>ساعتين</strong> خلال ٤٨ ساعة.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📝 الملاحظات</h3><p>توثيق سريع وتصدير بياناتك كـ <strong>CSV</strong> للطبيب.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🤖 الرفيق الشخصي</h3><p>ينظر إلى ملاحظاتك وأعراضك ليقدّم نصائح مخصّصة (مثل التخطيط لنزهة أو السفر).</p></div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown(
+                '<span class="cta is-static">ابدأ من تبويب المراقبة</span>'
+                '<span class="cta is-static">استخدم المخطِّط لاختيار الوقت الأنسب</span>',
+                unsafe_allow_html=True
+            )
+
+        # ====== Tab 2: How it helps (action verbs) ======
         with tab2:
-            st.subheader("من الفكرة إلى الفعل")
+            st.subheader("أفعال واضحة تساعدك يوميًا")
             st.markdown("""
-- **حساسان صغيران**: أحدهما يقيس حرارة الجسم الداخلية، والآخر حرارة الجلد الخارجية.
-- **معلومات الطقس**: درجة الإحساس الحراري والرطوبة من خدمة عالمية.
-- **تنبيه ذكي**: يُظهر وضعك الحالي ويقترح خطوة بسيطة (شرب ماء، الانتقال للظل، التبريد).
-- **مخطط حرارة**: يقترح لك أفضل ساعتين أبرد في اليومين القادمين.
-- **دفتر ملاحظات سريع**: تكتب ما حدث وتُصدّره بسهولة للطبيب.
+- **يُراقب حرارتك باستمرار** ويقارنها بالخط الأساسي.
+- **يُطابق الطقس الفعلي** مع حالتك (إحساس حراري + رطوبة).
+- **يقترح خطوات عملية**: ترطيب، إبطاء، انتقال لظل/مكيّف.
+- **يُخطّط لك بذكاء**: أفضل نوافذ تبريد في الـ ٤٨ ساعة القادمة.
+- **يُسهّل مشاركة بياناتك**: تصدير كـ <strong>CSV</strong> لمراجعته مع طبيبك.
+- **يُشخصن تجربتك بالذكاء الاصطناعي**: رفيق يستخدم ملاحظاتك وأعراضك للإجابة على أسئلة الحياة اليومية (مثل: هل وقت الشاطئ مناسب غدًا؟).
 """)
-            st.markdown('<div class="callout">🎯 الهدف: أن تتصرّف قبل أن تشتد الأعراض.</div>', unsafe_allow_html=True)
-            st.markdown('<div class="footnote">🛡️ <strong>خصوصيتك مهمة:</strong> بياناتك تُخزَّن محليًا أو بشكل آمن ولا تُباع أو تُشارك مع أي طرف ثالث. الهدف الوحيد هو مساعدتك.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="footnote">🔒 <strong>الخصوصية:</strong> بياناتك تظل محمية، لا تُباع ولا تُشارك، وتُستخدم فقط لدعمك.</div>', unsafe_allow_html=True)
 
-    # ====== English ======
     else:
+        # ====== Header ======
         st.markdown("""
-<div class="hero">
-  <h2 style="margin:0;">👋 Welcome to <strong>Tanzim MS</strong></h2>
-  <p style="margin:6px 0 0 0;">An app that helps people with Multiple Sclerosis <strong>manage heat safely</strong> before it worsens symptoms.</p>
+<div class="page-head">
+  <h2>👋 Welcome to <strong>Tanzim MS</strong></h2>
+  <p class="sub">It helps you spot small temperature differences <strong>before they derail your day</strong>.</p>
   <div style="margin-top:6px;">
-    <span class="pill">Early alerts</span>
     <span class="pill">Smart planning</span>
     <span class="pill">Easy tracking</span>
+    <span class="pill">🤖 Personalized companion</span>
+    <span class="pill">🔒 Privacy-first</span>
   </div>
 </div>
 """, unsafe_allow_html=True)
 
-        tab1, tab2 = st.tabs(["❓ What is Tanzim?", "🚀 How it helps you"])
+        tab1, tab2 = st.tabs(["📖 What is Tanzim?", "🚀 How it helps you"])
 
+        # ====== Tab 1: What is Tanzim? ======
         with tab1:
-            st.subheader("The idea in simple words")
+            st.subheader("In plain words")
             st.markdown("""
-- Even a **0.5°C rise** can trigger fatigue, blurry vision, or brain fog (Uhthoff’s phenomenon).
-- Tanzim constantly compares your readings to your **personal baseline**.
-- It turns tiny changes into a clear <strong>early warning</strong> you can act on.
+- With MS, even a **~0.5°C rise** can trigger fatigue or blurry vision.
+- Tanzim compares your readings to **your baseline** so you notice subtle changes early.
+- It blends temps with **feels-like & humidity** for context that makes sense.
 """)
-            st.markdown('<div class="callout">💡 Instead of numbers, you see "Safe · Caution · High risk" in plain language.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="callout">🎯 The goal: take a simple step before small shifts turn into big symptoms.</div>', unsafe_allow_html=True)
 
+            st.caption("We use two sensors: one for core (internal) temperature, one for skin (peripheral). Technical details live in advanced pages.")
+
+            # Preview cards (consistent icons)
+            st.subheader("What to expect next")
+            st.markdown('<div class="grid">', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📊 Monitor</h3><p>Live readings vs. your baseline.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🧭 Planner</h3><p><strong>Coolest 2-hour windows</strong> across the next 48 hours.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>📝 Journal</h3><p>Quick notes + export your data as <strong>CSV</strong> for your clinician.</p></div>', unsafe_allow_html=True)
+            st.markdown('<div class="tile"><h3>🤖 Companion</h3><p>Personalized: it looks at your journal & symptoms to answer planning questions (e.g., beach tomorrow? short trip?).</p></div>', unsafe_allow_html=True)
+            st.markdown('</div>', unsafe_allow_html=True)
+
+            st.markdown(
+                '<span class="cta is-static">Open the Monitor tab to start</span>'
+                '<span class="cta is-static">Use the Planner to pick cooler times</span>',
+                unsafe_allow_html=True
+            )
+
+        # ====== Tab 2: How it helps (action verbs) ======
         with tab2:
-            st.subheader("From idea to action")
+            st.subheader("Action, not noise")
             st.markdown("""
-- **Two small sensors**: one checks your core (internal) body temperature, the other your skin (peripheral) temperature.
-- **Weather data**: feels-like temperature and humidity from a trusted global source.
-- **Smart alerts**: clear status + a simple suggestion (hydrate, slow down, move to shade).
-- **Heat planner**: highlights the coolest two-hour windows in the next 48 hours.
-- **Quick journal**: jot down symptoms/events and export to Excel/CSV for your doctor.
+- **Monitors your temperature** vs. baseline.
+- **Matches real weather** with feels-like + humidity.
+- **Suggests practical steps**: hydrate, slow down, find shade/AC.
+- **Predicts 48-hour cooling windows**: best 2-hour slots.
+- **Exports data as CSV** for easy review with your clinician.
+- **Gives personalized AI guidance**: uses your journal & symptoms to help plan (e.g., outings, short trips).
 """)
-            st.markdown('<div class="callout">🎯 The goal: act early, before symptoms get worse.</div>', unsafe_allow_html=True)
-            st.markdown('<div class="footnote">🛡️ <strong>Your privacy matters:</strong> your data is stored locally or securely, never sold or shared. It exists only to help you manage your heat safety.</div>', unsafe_allow_html=True)
+            st.markdown('<div class="footnote">🔒 <strong>Privacy:</strong> your data stays private, never sold or shared, and is used only to support you.</div>', unsafe_allow_html=True)
 
 # ================== PLANNER HELPERS ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
