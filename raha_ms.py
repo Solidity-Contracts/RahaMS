@@ -1806,7 +1806,7 @@ elif page_id == "monitor":
             - **Core Temperature**: Your internal body temperature - the most important indicator of heat stress
             - **Peripheral Temperature**: Your skin temperature - reacts quickly to environmental changes
             - **Feels-like**: Combined effect of air temperature + humidity from weather data provided by **OpenWeather API**
-            - **Baseline**: Your personal normal temperature (set in Settings) used for alert thresholds
+            - **Baseline**: Your personal normal temperature (**set in Settings**) used for alert thresholds
             """)
         else:
             st.markdown("""
@@ -1825,7 +1825,7 @@ elif page_id == "monitor":
             - **درجة الحرارة الطرفية**: درجة حرارة جلدك - تتفاعل بسرعة مع التغيرات البيئية
             - **درجة الحرارة المحسوسة**: التأثير المشترك لدرجة حرارة الهواء والرطوبة من بيانات الطقس
             - درجة الحرارة المحسوسة: التأثير المشترك لدرجة حرارة الهواء + الرطوبة من بيانات الطقس المقدمة من الطقس
-            - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (تم ضبطها في الإعدادات) تُستخدم لعتبات التنبيه
+            - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (**تم ضبطها في الإعدادات**) تُستخدم لعتبات التنبيه
             """)
     
     with tabs[0]:
