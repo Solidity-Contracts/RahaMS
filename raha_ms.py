@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import streamlit as st
 import sqlite3, json, requests, random, time, zipfile, io
 import matplotlib
