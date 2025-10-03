@@ -1,449 +1,347 @@
 # =========================
-# Heat Safety Demo (English/Arabic) — FIXED with live plot + persistent nav
+# Heat Safety Simulator (Educational Sandbox) — English / العربية
 # =========================
+# - Simulator-only: no journal, no live-demo tab, no data saving
+# - Many scenarios to apply, then tweak with sliders
+# - Continuous Plotly chart (Core / Baseline / Feels-like) via Live tracking
+# - Status + Why panel uses Uhthoff (Δ >= 0.5 °C), absolute core, env bump
+# - "Simulate ..." buttons are what-if actions (change numbers only)
 
 import time
-from datetime import datetime, timedelta
-
+from datetime import datetime
+import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
-import streamlit as st
 
 # ---------- CONFIG ----------
-st.set_page_config(
-    page_title="Heat Safety Demo - تجربة السلامة من الحرارة",
-    page_icon="🌡️",
-    layout="wide",
-)
+st.set_page_config(page_title="Heat Safety Simulator", page_icon="🌡️", layout="wide")
 
 # ---------- TRANSLATIONS ----------
-TRANSLATIONS = {
-    # Page header
-    "heat_safety_demo": {"en": "Heat Safety Demo", "ar": "تجربة السلامة من الحرارة"},
-    "demo_mode": {"en": "DEMO MODE", "ar": "وضع التجربة"},
-    # Navigation
-    "scenarios": {"en": "Scenarios", "ar": "سيناريوهات"},
-    "custom": {"en": "Custom", "ar": "مخصص"},
-    "live_demo": {"en": "Live Demo", "ar": "تجربة حية"},
+T = {
+    "title": {"en": "Heat Safety Simulator", "ar": "محاكاة السلامة من الحرارة"},
+    "demo_banner": {"en": "DEMO MODE — Educational only. Nothing is saved.", "ar": "وضع التجربة — لأغراض تعليمية فقط. لا يتم حفظ أي بيانات."},
+
+    "simulator": {"en": "Simulator", "ar": "المحاكاة"},
     "learn": {"en": "Learn", "ar": "تعلم"},
-    # Status levels
+
+    "scenarios": {"en": "Scenarios", "ar": "السيناريوهات"},
+    "apply": {"en": "Apply Scenario", "ar": "تطبيق السيناريو"},
+    "custom": {"en": "Custom", "ar": "مخصص"},
+    "core_temp": {"en": "Core Temperature", "ar": "درجة حرارة الجسم"},
+    "baseline": {"en": "Baseline", "ar": "خط الأساس"},
+    "feels_like": {"en": "Feels Like (ambient)", "ar": "الشعور الحقيقي (البيئة)"},
+    "symptoms": {"en": "Symptoms (validation only — not used for scoring)", "ar": "الأعراض (للتحقق فقط — لا تدخل في التقييم)"},
+    "live_tracking": {"en": "Live tracking (auto-append)", "ar": "تتبع مباشر (إضافة تلقائية)"},
+    "sample_every": {"en": "Sample every (s)", "ar": "التسجيل كل (ثانية)"},
+    "clear_plot": {"en": "Clear plot", "ar": "مسح الرسم"},
+    "simulate_actions": {"en": "Simulate actions (what-if, changes numbers only)", "ar": "محاكاة الإجراءات (للتجربة فقط، تغيّر القيم فقط)"},
+    "simulate_vest": {"en": "Simulate Cooling Vest", "ar": "محاكاة سترة التبريد"},
+    "simulate_indoors": {"en": "Simulate Moving Indoors", "ar": "محاكاة الانتقال للداخل"},
+    "simulate_hydrate": {"en": "Simulate Hydration", "ar": "محاكاة الترطيب"},
+    "simulate_shade": {"en": "Simulate Rest in Shade", "ar": "محاكاة الراحة في الظل"},
+
+    "status": {"en": "Status", "ar": "الحالة"},
     "safe": {"en": "Safe", "ar": "آمن"},
     "caution": {"en": "Caution", "ar": "حذر"},
     "high": {"en": "High Risk", "ar": "خطر مرتفع"},
     "critical": {"en": "Critical", "ar": "حرج"},
-    # Parameters
-    "core_temp": {"en": "Core Temperature", "ar": "درجة حرارة الجسم"},
-    "baseline": {"en": "Baseline", "ar": "خط الأساس"},
-    "delta_temp": {"en": "Δ Temperature", "ar": "فرق الدرجة"},
-    "environment": {"en": "Environment", "ar": "البيئة"},
-    "symptoms": {"en": "Symptoms", "ar": "الأعراض"},
-    "feels_like": {"en": "Feels Like", "ar": "الشعور الحقيقي"},
-    # Alerts
-    "uhthoff_alert": {"en": "UHTHOFF'S PHENOMENON ALERT", "ar": "تنبيه ظاهرة أوتهوف"},
-    "trigger": {"en": "Triggers", "ar": "المحفزات"},
-    "what_this_means": {"en": "What this means", "ar": "ماذا يعني هذا"},
-    "recommended_action": {"en": "Recommended action", "ar": "الإجراء الموصى به"},
-    # Scenario names
-    "morning_commute": {"en": "Morning commute in Dubai summer", "ar": "الذهاب للعمل صباحاً في صيف دبي"},
-    "office_ac_failure": {"en": "Office work with AC failure", "ar": "العمل في المكتب مع عطل في التكييف"},
-    "evening_walk_vest": {"en": "Evening walk with cooling vest", "ar": "نزهة مسائية مع سترة تبريد"},
-    "ms_flare_up": {"en": "MS flare-up at home", "ar": "نوبة تصلب متعدد في المنزل"},
-    "exercise_humid": {"en": "Exercise in humid conditions", "ar": "تمارين في ظروف رطبة"},
-    # Interventions
-    "try_cooling_vest": {"en": "Try Cooling Vest", "ar": "جرب سترة التبريد"},
-    "move_indoors": {"en": "Move Indoors", "ar": "انتقل للداخل"},
-    "hydrate_now": {"en": "Hydrate Now", "ar": "اشرب الماء الآن"},
-    "rest_in_shade": {"en": "Rest in Shade", "ar": "ارتح في الظل"},
+    "why": {"en": "Why this status (rules firing)", "ar": "سبب الحالة (القواعد المفعّلة)"},
+    "triggers": {"en": "Triggers", "ar": "المحفزات"},
+
+    "delta": {"en": "Δ vs baseline", "ar": "فرق عن خط الأساس"},
+    "recommend": {"en": "Recommended action", "ar": "الإجراء الموصى به"},
+
+    # Learn text (kept concise)
+    "learn_md_en": {
+        "en": """
+### Uhthoff’s phenomenon
+- Small rises in **core temp (~+0.5°C)** can temporarily worsen MS symptoms.
+- Usually **reverses** after cooling.
+
+### App thresholds (heuristics)
+- **ΔCore ≥ 0.5°C** → *Caution*
+- **Core ≥ 37.8°C** → *Caution*
+- **Core ≥ 38.0°C** → *High*
+- **Core ≥ 38.5°C** → *Critical*
+- **Feels-like ≥ 38°C** → bump
+- **Feels-like ≥ 42°C** → high bump
+
+### Helpful “what-ifs”
+Cooling garments, AC/fans/shade, hydration, timing (avoid peak heat), pre-cooling.
+        """,
+        "ar": ""
+    },
+    "learn_md_ar": {
+        "en": "",
+        "ar": """
+### ظاهرة أوتهوف
+- ارتفاع بسيط في **حرارة الجسم (~+0.5°C)** قد يسبب تدهورًا مؤقتًا للأعراض.
+- عادة **يتحسن** عند التبريد.
+
+### عتبات التطبيق (إرشادية)
+- **فرق درجة ≥ 0.5°C** → *حذر*
+- **حرارة ≥ 37.8°C** → *حذر*
+- **حرارة ≥ 38.0°C** → *خطر مرتفع*
+- **حرارة ≥ 38.5°C** → *حرج*
+- **الشعور الحقيقي ≥ 38°C** → زيادة
+- **الشعور الحقيقي ≥ 42°C** → زيادة كبيرة
+
+### محاكاة مفيدة
+سترات تبريد، تكييف/مراوح/ظل، ترطيب، توقيت مناسب، تبريد مسبق.
+        """
+    }
 }
 
-
-def t(key, lang="en"):
-    return TRANSLATIONS.get(key, {}).get(lang, key)
-
+def tr(key, lang="en"):
+    return T.get(key, {}).get(lang, key)
 
 # ---------- RISK ENGINE ----------
-def calculate_risk_status(core_temp, baseline, environment_temp, language="en"):
+def classify_status(core_c: float, baseline_c: float, feels_c: float):
     """
-    Return (status_key, triggers_list)
-    Uhthoff (Δ >= 0.5°C) + absolute core + environment bump.
-    Symptoms are not used to score (validation only).
+    Levels by rules (in order of importance):
+      - Uhthoff: ΔCore >= 0.5°C -> at least Caution
+      - Absolute core: 37.8 / 38.0 / 38.5 -> Caution / High / Critical
+      - Environment bump: Feels-like 38 / 42 -> Caution / High
+    Returns (status_key, triggers_list)
     """
-    delta = core_temp - baseline
-    level = 0  # 0 Safe, 1 Caution, 2 High, 3 Critical
+    delta = core_c - baseline_c
+    level = 0
     triggers = []
 
     # Uhthoff
     if delta >= 0.5:
         level = max(level, 1)
-        triggers.append(
-            (t("uhthoff_alert", language),
-             f"{t('delta_temp', language)} +{delta:.1f}°C ≥ 0.5°C")
-        )
+        triggers.append(f"ΔCore +{delta:.1f}°C ≥ 0.5°C")
 
     # Absolute core
-    if core_temp >= 38.5:
+    if core_c >= 38.5:
         level = 3
-        triggers.append(("Core ≥ 38.5°C", ""))
-    elif core_temp >= 38.0:
+        triggers.append("Core ≥ 38.5°C")
+    elif core_c >= 38.0:
         level = max(level, 2)
-        triggers.append(("Core ≥ 38.0°C", ""))
-    elif core_temp >= 37.8:
+        triggers.append("Core ≥ 38.0°C")
+    elif core_c >= 37.8:
         level = max(level, 1)
-        triggers.append(("Core ≥ 37.8°C", ""))
+        triggers.append("Core ≥ 37.8°C")
 
-    # Environment
-    if environment_temp >= 42:
+    # Environment bump
+    if feels_c >= 42.0:
         level = max(level, 2)
-        triggers.append(("Feels-like ≥ 42°C", ""))
-    elif environment_temp >= 38:
+        triggers.append("Feels-like ≥ 42°C")
+    elif feels_c >= 38.0:
         level = max(level, 1)
-        triggers.append(("Feels-like ≥ 38°C", ""))
+        triggers.append("Feels-like ≥ 38°C")
 
     status_keys = ["safe", "caution", "high", "critical"]
     return status_keys[level], triggers
 
+def status_color(key: str) -> str:
+    return {"safe": "#E6F4EA", "caution": "#FFF8E1", "high": "#FFE0E0", "critical": "#FFCDD2"}.get(key, "#EEE")
 
-def status_color(status_key: str) -> str:
-    return {
-        "safe": "#E6F4EA",
-        "caution": "#FFF8E1",
-        "high": "#FFE0E0",
-        "critical": "#FFCDD2",
-    }.get(status_key, "#EEE")
+def status_emoji(key: str) -> str:
+    return {"safe": "✅", "caution": "⚠️", "high": "🔴", "critical": "🚨"}.get(key, "❓")
 
-
-def status_emoji(status_key: str) -> str:
-    return {"safe": "✅", "caution": "⚠️", "high": "🔴", "critical": "🚨"}.get(status_key, "❓")
-
-
-# ---------- SCENARIOS ----------
+# ---------- SCENARIOS (many, meaningful) ----------
+# Each scenario sets starting values; users can tweak
 SCENARIOS = {
-    "morning_commute": {"core_temp": 37.4, "environment_temp": 41, "desc_en": "Hot car, sun exposure",
-                        "desc_ar": "سيارة ساخنة مع تعرض للشمس"},
-    "office_ac_failure": {"core_temp": 37.8, "environment_temp": 35, "desc_en": "Indoor heat buildup (AC off)",
-                          "desc_ar": "تراكم حرارة داخلية (تعطل المكيف)"},
-    "evening_walk_vest": {"core_temp": 37.0, "environment_temp": 38, "desc_en": "Cooling vest helping outdoors",
-                          "desc_ar": "سترة تبريد تساعد في الخارج"},
-    "ms_flare_up": {"core_temp": 38.2, "environment_temp": 28, "desc_en": "Elevated core with mild ambient",
-                    "desc_ar": "ارتفاع داخلي مع بيئة معتدلة"},
-    "exercise_humid": {"core_temp": 37.9, "environment_temp": 39, "desc_en": "Exercise in humid conditions",
-                       "desc_ar": "تمرين في رطوبة عالية"},
+    # Daily life
+    "Morning commute (Dubai summer)":        {"core": 37.4, "feels": 41.0, "desc": "Hot car, sun exposure"},
+    "School pickup (mid-afternoon sun)":     {"core": 37.5, "feels": 40.0, "desc": "Short walk + parking lot heat"},
+    "Grocery run (indoor AC)":               {"core": 37.0, "feels": 26.0, "desc": "Cool indoor environment"},
+    "Office day (normal AC)":                {"core": 36.8, "feels": 24.0, "desc": "Steady cool conditions"},
+    "Office AC failure":                     {"core": 37.8, "feels": 35.0, "desc": "Indoor heat buildup"},
+    "Night AC outage":                       {"core": 37.6, "feels": 33.0, "desc": "Poor sleep + warm room"},
+
+    # Exercise & activity
+    "Light walk (shade, breezy)":            {"core": 37.2, "feels": 33.0, "desc": "Shaded path + airflow"},
+    "Moderate exercise (humid)":             {"core": 37.9, "feels": 39.0, "desc": "Humidity slows cooling"},
+    "Vigorous exercise (direct sun)":        {"core": 38.0, "feels": 42.0, "desc": "High heat load outdoors"},
+    "Treadmill (gym, with fan)":             {"core": 37.6, "feels": 28.0, "desc": "Cooling airflow helps"},
+    "Treadmill (no fan)":                    {"core": 37.7, "feels": 31.0, "desc": "Less convective cooling"},
+    "Outdoor chores (midday)":               {"core": 37.8, "feels": 40.0, "desc": "Sun + exertion"},
+    "Beach at noon (sun + sand)":            {"core": 37.6, "feels": 43.0, "desc": "High radiant heat from sand"},
+
+    # Health / internal load
+    "Fever at home":                         {"core": 38.2, "feels": 28.0, "desc": "Elevated core despite mild ambient"},
+    "Hot bath / sauna":                      {"core": 38.3, "feels": 45.0, "desc": "Rapid heating"},
+    "MS flare-up at rest":                   {"core": 38.1, "feels": 27.0, "desc": "Internal rise, quiet environment"},
+
+    # Cooling strategies & timing
+    "Evening stroll (cooler hours)":         {"core": 37.0, "feels": 34.0, "desc": "Better timing"},
+    "Evening walk (cooling vest)":           {"core": 37.0, "feels": 38.0, "desc": "Vest blunts rise outdoors"},
+    "Move to mall (pre-cool)":               {"core": 36.9, "feels": 24.0, "desc": "Pre-cool before activity"},
+
+    # Transport / incidents
+    "Car breakdown (direct sun)":            {"core": 37.8, "feels": 44.0, "desc": "Trapped heat, high risk"},
+    "Short taxi ride (AC on)":               {"core": 37.1, "feels": 26.0, "desc": "Brief exposure then cool"},
 }
-
-SYMPTOM_OPTIONS = [
-    "Blurred vision / ضبابية الرؤية",
-    "Fatigue / إرهاق",
-    "Weakness / ضعف",
-    "Balance issues / مشاكل توازن",
-    "Sensory changes / تغيرات حسية",
-]
-
 
 # ---------- PLOTTING ----------
 def append_history_point():
-    """Append the current state to history for plotting."""
-    p = st.session_state.demo
+    p = st.session_state.sim
     st.session_state.history.append({
         "ts": datetime.now().strftime("%H:%M:%S"),
-        "core": float(p["core_temp"]),
+        "core": float(p["core"]),
         "baseline": float(p["baseline"]),
-        "feelslike": float(p["environment_temp"]),
+        "feels": float(p["feels"]),
     })
 
-
-def plot_history(lang_code):
-    """Plot Core, Baseline, Feels-like over time with Plotly."""
+def plot_history(lang):
     if not st.session_state.history:
         st.info("Turn on **Live tracking** to start the plot.")
         return
-
     df = pd.DataFrame(st.session_state.history)
     fig = go.Figure()
-
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["feelslike"], mode="lines+markers",
-                             name=t("feels_like", lang_code)))
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers",
-                             name=t("core_temp", lang_code)))
-    fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines",
-                             name=t("baseline", lang_code)))
-
-    fig.update_layout(
-        height=320,
-        margin=dict(l=10, r=10, t=10, b=10),
-        legend=dict(orientation="h", y=1.1),
-        xaxis_title="Time",
-        yaxis_title="°C",
-    )
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=tr("feels_like", lang)))
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=tr("core_temp", lang)))
+    fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=tr("baseline", lang)))
+    fig.update_layout(height=320, margin=dict(l=10, r=10, t=10, b=10),
+                      legend=dict(orientation="h", y=1.12), xaxis_title="Time", yaxis_title="°C")
     st.plotly_chart(fig, use_container_width=True)
 
+# ---------- STATUS RENDER ----------
+def render_status(lang):
+    p = st.session_state.sim
+    key, trig = classify_status(p["core"], p["baseline"], p["feels"])
+    badge = f"<div style='display:inline-block;padding:6px 10px;border-radius:8px;background:{status_color(key)};font-weight:700'>{status_emoji(key)} {tr(key, lang)}</div>"
+    st.markdown(badge, unsafe_allow_html=True)
 
-# ---------- VIEWS ----------
-def view_scenarios(lang_code):
-    st.markdown(f"### 🎯 {t('scenarios', lang_code)}")
-
-    # Scenario picker
-    names = {
-        t("morning_commute", lang_code): "morning_commute",
-        t("office_ac_failure", lang_code): "office_ac_failure",
-        t("evening_walk_vest", lang_code): "evening_walk_vest",
-        t("ms_flare_up", lang_code): "ms_flare_up",
-        t("exercise_humid", lang_code): "exercise_humid",
-    }
-    label = st.selectbox("📋 " + t("scenarios", lang_code), list(names.keys()))
-    key = names[label]
-    sc = SCENARIOS[key]
-
-    # Apply preset
-    if st.button("Apply Scenario / تطبيق السيناريو", use_container_width=True):
-        st.session_state.demo["core_temp"] = float(sc["core_temp"])
-        st.session_state.demo["environment_temp"] = float(sc["environment_temp"])
-        st.success("Applied!")
-        # Write one point to history so the plot shows something immediately
-        append_history_point()
-        st.rerun()
-
-    st.info(sc["desc_en"] if lang_code == "en" else sc["desc_ar"])
-    render_risk(lang_code)
-
-
-def view_custom(lang_code):
-    st.markdown(f"### ⚙️ {t('custom', lang_code)}")
-    col1, col2 = st.columns(2)
-
-    with col1:
-        st.session_state.demo["core_temp"] = st.slider(
-            f"🌡️ {t('core_temp', lang_code)} (°C)",
-            36.0, 39.5, float(st.session_state.demo["core_temp"]), 0.1,
-        )
-        st.session_state.demo["baseline"] = st.slider(
-            f"📊 {t('baseline', lang_code)} (°C)",
-            36.0, 37.5, float(st.session_state.demo["baseline"]), 0.1,
-        )
-
-    with col2:
-        st.session_state.demo["environment_temp"] = st.slider(
-            f"🌡️ {t('feels_like', lang_code)} (°C)",
-            25.0, 50.0, float(st.session_state.demo["environment_temp"]), 1.0,
-        )
-        # Symptoms = validation only
-        current = [s for s in st.session_state.demo["symptoms"] if s in SYMPTOM_OPTIONS]
-        st.session_state.demo["symptoms"] = st.multiselect(
-            f"📋 {t('symptoms', lang_code)}", options=SYMPTOM_OPTIONS, default=current
-        )
-
-    # Live tracking controls
-    st.markdown("---")
-    live_cols = st.columns([0.35, 0.35, 0.3])
-    with live_cols[0]:
-        st.session_state.live_on = st.toggle("Live tracking (auto-append)", value=st.session_state.live_on)
-    with live_cols[1]:
-        st.session_state.sample_every = st.select_slider("Sample every (s)", [1, 2, 3, 5, 10], value=st.session_state.sample_every)
-    with live_cols[2]:
-        if st.button("🧹 Clear plot"):
-            st.session_state.history.clear()
-            st.toast("Cleared")
-
-    if st.session_state.live_on:
-        # Append point each rerun; autorefresh to trigger reruns
-        append_history_point()
-        try:
-            st.autorefresh(interval=st.session_state.sample_every * 1000, key="live_auto")
-        except Exception:
-            pass
-
-    plot_history(lang_code)
-    render_risk(lang_code)
-
-
-def view_live_demo(lang_code):
-    st.markdown(f"### 🎬 {t('live_demo', lang_code)}")
-
-    col1, col2 = st.columns(2)
-    with col1:
-        if st.button("Start Heat Exposure / بدء التعرض للحرارة", use_container_width=True):
-            st.session_state.demo_running = True
-            st.session_state.demo_start = datetime.now()
-            st.session_state.demo.update({"core_temp": 36.6, "environment_temp": 35})
-    with col2:
-        if st.button("Stop / إيقاف", use_container_width=True):
-            st.session_state.demo_running = False
-
-    # Sim loop
-    if st.session_state.demo_running:
-        secs = (datetime.now() - st.session_state.demo_start).seconds
-        if secs < 30:  # warm up
-            st.session_state.demo["core_temp"] = min(38.5, 36.6 + secs * 0.06)
-            st.session_state.demo["environment_temp"] = min(45, 35 + secs * 0.3)
-        elif secs < 45:  # symptoms period (for validation only)
-            if len(st.session_state.demo["symptoms"]) < 2:
-                st.session_state.demo["symptoms"] = ["Fatigue / إرهاق", "Blurred vision / ضبابية الرؤية"]
-        else:  # plateau
-            st.session_state.demo["core_temp"] = min(39.0, st.session_state.demo["core_temp"] + 0.02)
-
-        append_history_point()
-        try:
-            st.autorefresh(interval=500, key="demo_auto")
-        except Exception:
-            time.sleep(0.5)
-            st.rerun()
-
-    plot_history(lang_code)
-    render_risk(lang_code)
-
-
-def view_learn(lang_code):
-    st.markdown(f"### 📚 {t('learn', lang_code)}")
-    if lang_code == "en":
-        st.markdown("""
-### 🤒 Uhthoff's Phenomenon
-- Temporary worsening of MS symptoms with small increases in body temperature
-- Often triggered at **~+0.5°C above baseline**
-- Usually reversible once you cool down
-
-### 🌡️ Key thresholds (app heuristics)
-- +0.5°C above baseline → **Caution**
-- 37.8°C → **Caution**
-- 38.0°C → **High**
-- 38.5°C → **Critical**
-
-### ❄️ Helpful actions
-Cooling garments, AC/fans/shade, hydration, timing (avoid peak heat), and pre-cooling.
-""")
-    else:
-        st.markdown("""
-### 🤒 ظاهرة أوتهوف
-- تدهور مؤقت في الأعراض مع ارتفاع بسيط في درجة حرارة الجسم
-- غالبًا يحدث عند **+0.5°C تقريبًا فوق خط الأساس**
-- يتحسن عادة عند التبريد
-
-### 🌡️ عتبات رئيسية (في التطبيق)
-- +0.5°C فوق خط الأساس → **حذر**
-- 37.8°C → **حذر**
-- 38.0°C → **خطر مرتفع**
-- 38.5°C → **حرج**
-
-### ❄️ إجراءات مفيدة
-سترات تبريد، تكييف/مراوح/ظل، ترطيب، توقيت مناسب، وتبريد مسبق.
-""")
-
-
-def render_risk(lang_code):
-    p = st.session_state.demo
-    status_key, trig = calculate_risk_status(
-        p["core_temp"], p["baseline"], p["environment_temp"], lang_code
-    )
-    col = status_color(status_key)
-    emoji = status_emoji(status_key)
-
-    st.markdown(
-        f"""
-<div style='background:{col};padding:14px;border-radius:10px;margin-top:10px'>
-  <h3 style='margin:0'>{emoji} {t(status_key, lang_code).upper()}</h3>
-</div>
-""",
-        unsafe_allow_html=True,
-    )
-
+    # Metrics
     m1, m2, m3 = st.columns(3)
     with m1:
-        delta = p["core_temp"] - p["baseline"]
-        st.metric(t("core_temp", lang_code), f"{p['core_temp']:.1f}°C", f"Δ{delta:+.1f}°C")
+        st.metric(tr("core_temp", lang), f"{p['core']:.1f}°C", f"Δ{(p['core']-p['baseline']):+.1f}°C")
     with m2:
-        st.metric(t("feels_like", lang_code), f"{p['environment_temp']:.1f}°C")
+        st.metric(tr("baseline", lang), f"{p['baseline']:.1f}°C")
     with m3:
-        st.metric(t("symptoms", lang_code), f"{len(p['symptoms'])}", "active" if p["symptoms"] else "none")
+        st.metric(tr("feels_like", lang), f"{p['feels']:.1f}°C")
 
-    if trig:
-        st.markdown("---")
-        st.markdown(f"### 🚨 {t('trigger', lang_code)}")
-        for title, detail in trig:
-            if detail:
-                st.write(f"• **{title}** — {detail}")
-            else:
-                st.write(f"• **{title}**")
-
-    # Status-specific guidance (short and clear)
-    if status_key in ("caution", "high", "critical"):
-        st.markdown("---")
-        st.markdown(f"### 💡 {t('recommended_action', lang_code)}")
-        act_cols = st.columns(4)
-        with act_cols[0]:
-            if st.button(f"❄️ {t('try_cooling_vest', lang_code)}", use_container_width=True):
-                p["core_temp"] = max(p["baseline"], p["core_temp"] - 0.6); st.rerun()
-        with act_cols[1]:
-            if st.button(f"🏠 {t('move_indoors', lang_code)}", use_container_width=True):
-                p["environment_temp"] = 25; p["core_temp"] = max(p["baseline"], p["core_temp"] - 0.3); st.rerun()
-        with act_cols[2]:
-            if st.button(f"💧 {t('hydrate_now', lang_code)}", use_container_width=True):
-                p["core_temp"] = max(p["baseline"], p["core_temp"] - 0.2); st.rerun()
-        with act_cols[3]:
-            if st.button(f"🌳 {t('rest_in_shade', lang_code)}", use_container_width=True):
-                p["environment_temp"] = max(20, p["environment_temp"] - 8); p["core_temp"] = max(p["baseline"], p["core_temp"] - 0.4); st.rerun()
-
+    with st.expander(tr("why", lang), expanded=True):
+        if trig:
+            for tline in trig:
+                st.write("• " + tline)
+        else:
+            st.write("• No thresholds tripped yet.")
 
 # ---------- APP ----------
 def main():
-    # Language selector
+    # Language
     top, langc = st.columns([3, 1])
     with langc:
-        language = st.radio("Language / اللغة", ["English", "العربية"], horizontal=True)
-    lang_code = "en" if language == "English" else "ar"
+        lang = "en" if st.radio("Language / اللغة", ["English", "العربية"], horizontal=True) == "English" else "ar"
 
-    # Header
+    # Banner
     st.markdown(
         f"""
-<div style='background:linear-gradient(45deg,#FF6B6B,#4ECDC4);padding:18px;border-radius:10px;text-align:center;color:white'>
-  <h1 style='margin:0'>{t('heat_safety_demo', lang_code)}</h1>
-  <h3 style='margin:0'>🚨 {t('demo_mode', lang_code)} — FOR EDUCATIONAL PURPOSES ONLY 🚨</h3>
+<div style='background:linear-gradient(45deg,#FF6B6B,#4ECDC4);padding:16px;border-radius:10px;text-align:center;color:white'>
+  <h1 style='margin:0'>{tr("title", lang)}</h1>
+  <h4 style='margin:6px 0 0'>{tr("demo_banner", lang)}</h4>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-    # ---- Session defaults ----
-    if "demo" not in st.session_state:
-        st.session_state.demo = {
-            "core_temp": 36.6,
-            "baseline": 36.6,
-            "environment_temp": 32.0,
-            "symptoms": [],
-        }
+    # Session defaults
+    if "sim" not in st.session_state:
+        st.session_state.sim = {"core": 36.6, "baseline": 36.6, "feels": 32.0}
     if "history" not in st.session_state:
         st.session_state.history = []
     if "live_on" not in st.session_state:
         st.session_state.live_on = False
     if "sample_every" not in st.session_state:
         st.session_state.sample_every = 2
-    if "view" not in st.session_state:
-        st.session_state.view = "scenarios"
-    if "demo_running" not in st.session_state:
-        st.session_state.demo_running = False
 
-    # ---- Navigation (persistent) ----
-    st.markdown("<br>", unsafe_allow_html=True)
-    nav = st.columns(4)
-    with nav[0]:
-        if st.button(f"🎯 {t('scenarios', lang_code)}", use_container_width=True):
-            st.session_state.view = "scenarios"
-    with nav[1]:
-        if st.button(f"⚙️ {t('custom', lang_code)}", use_container_width=True):
-            st.session_state.view = "custom"
-    with nav[2]:
-        if st.button(f"🎬 {t('live_demo', lang_code)}", use_container_width=True):
-            st.session_state.view = "live"
-    with nav[3]:
-        if st.button(f"📚 {t('learn', lang_code)}", use_container_width=True):
-            st.session_state.view = "learn"
+    # Tabs (Simulator + Learn)
+    tabs = st.tabs([tr("simulator", lang), tr("learn", lang)])
 
-    # ---- Route ----
-    if st.session_state.view == "scenarios":
-        view_scenarios(lang_code)
-    elif st.session_state.view == "custom":
-        view_custom(lang_code)
-    elif st.session_state.view == "live":
-        view_live_demo(lang_code)
-    else:
-        view_learn(lang_code)
+    with tabs[0]:
+        # Top: Scenarios (left) + Custom sliders (right)
+        left, right = st.columns([0.55, 0.45])
+
+        with left:
+            st.subheader("🎯 " + tr("scenarios", lang))
+            scen_name = st.selectbox("📋", list(SCENARIOS.keys()), index=0)
+            sc = SCENARIOS[scen_name]
+
+            if st.button("✅ " + tr("apply", lang), use_container_width=True):
+                st.session_state.sim["core"] = float(sc["core"])
+                st.session_state.sim["feels"] = float(sc["feels"])
+                # keep user's baseline as-is (personal), but you can modify if you prefer:
+                # st.session_state.sim["baseline"] = 36.6
+                append_history_point()
+                st.success(sc.get("desc", "Applied"))
+                st.rerun()
+
+            st.caption(sc.get("desc", ""))
+
+        with right:
+            st.subheader("⚙️ " + tr("custom", lang))
+            st.session_state.sim["core"] = st.slider(f"🌡️ {tr('core_temp', lang)} (°C)", 36.0, 39.5, float(st.session_state.sim["core"]), 0.1)
+            st.session_state.sim["baseline"] = st.slider(f"📊 {tr('baseline', lang)} (°C)", 36.0, 37.5, float(st.session_state.sim["baseline"]), 0.1)
+            st.session_state.sim["feels"] = st.slider(f"🌡️ {tr('feels_like', lang)} (°C)", 25.0, 50.0, float(st.session_state.sim["feels"]), 1.0)
+
+            # Symptoms (validation only, not in scoring) — optional visual note
+            st.multiselect(f"📋 {tr('symptoms', lang)}", options=[
+                "Blurred vision / ضبابية الرؤية",
+                "Fatigue / إرهاق",
+                "Weakness / ضعف",
+                "Balance issues / مشاكل توازن",
+                "Sensory changes / تغيرات حسية",
+            ], default=[])
+
+        st.markdown("---")
+
+        # Live tracking + Plot
+        lc1, lc2, lc3 = st.columns([0.35, 0.35, 0.3])
+        with lc1:
+            st.session_state.live_on = st.toggle(tr("live_tracking", lang), value=st.session_state.live_on, help="Appends a point each refresh")
+        with lc2:
+            st.session_state.sample_every = st.select_slider(tr("sample_every", lang), options=[1, 2, 3, 5, 10], value=st.session_state.sample_every)
+        with lc3:
+            if st.button("🧹 " + tr("clear_plot", lang)):
+                st.session_state.history.clear()
+                st.toast("Cleared")
+
+        # Append + auto-refresh when live
+        if st.session_state.live_on:
+            append_history_point()
+            try:
+                st.autorefresh(interval=st.session_state.sample_every * 1000, key="auto_sim")
+            except Exception:
+                pass
+
+        plot_history(lang)
+
+        # Status + Why
+        st.markdown("---")
+        st.subheader("🧭 " + tr("status", lang))
+        render_status(lang)
+
+        # Simulate actions (what-if only)
+        st.markdown("---")
+        st.subheader("🧪 " + tr("simulate_actions", lang))
+        ac1, ac2, ac3, ac4 = st.columns(4)
+        if ac1.button("❄️ " + tr("simulate_vest", lang), use_container_width=True):
+            st.session_state.sim["core"] = max(st.session_state.sim["baseline"], st.session_state.sim["core"] - 0.6)
+            st.session_state.sim["feels"] = max(20.0, st.session_state.sim["feels"] - 2.0)
+            st.rerun()
+        if ac2.button("🏠 " + tr("simulate_indoors", lang), use_container_width=True):
+            st.session_state.sim["feels"] = 25.0
+            st.session_state.sim["core"] = max(st.session_state.sim["baseline"], st.session_state.sim["core"] - 0.3)
+            st.rerun()
+        if ac3.button("💧 " + tr("simulate_hydrate", lang), use_container_width=True):
+            st.session_state.sim["core"] = max(st.session_state.sim["baseline"], st.session_state.sim["core"] - 0.2)
+            st.rerun()
+        if ac4.button("🌳 " + tr("simulate_shade", lang), use_container_width=True):
+            st.session_state.sim["feels"] = max(20.0, st.session_state.sim["feels"] - 5.0)
+            st.session_state.sim["core"] = max(st.session_state.sim["baseline"], st.session_state.sim["core"] - 0.4)
+            st.rerun()
+
+    with tabs[1]:
+        st.subheader("📚 " + tr("learn", lang))
+        if lang == "en":
+            st.markdown(T["learn_md_en"]["en"])
+        else:
+            st.markdown(T["learn_md_ar"]["ar"])
 
 
 if __name__ == "__main__":
