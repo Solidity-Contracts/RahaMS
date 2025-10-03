@@ -415,6 +415,39 @@ SAFE_RTL_CSS = """
 """
 st.markdown(SAFE_RTL_CSS, unsafe_allow_html=True)
 
+# Add this to your existing CSS section
+RTL_SLIDER_FIX = """
+<style>
+/* RTL Slider fixes */
+[dir="rtl"] .stSlider > div:first-child {
+    direction: ltr;
+    text-align: left;
+}
+
+[dir="rtl"] .stSlider label {
+    text-align: right;
+    direction: rtl;
+}
+
+[dir="rtl"] .stSlider div[data-testid="stTickBar"] {
+    direction: ltr;
+}
+
+/* Ensure slider track and thumb display correctly in RTL */
+[dir="rtl"] .stSlider div[style*="width"] {
+    direction: ltr;
+}
+
+/* Fix for slider value display in RTL */
+[dir="rtl"] .stSlider span {
+    direction: ltr;
+    unicode-bidi: isolate;
+}
+</style>
+"""
+
+st.markdown(RTL_SLIDER_FIX, unsafe_allow_html=True)
+
 # ================== DB ==================
 @st.cache_resource
 def get_conn():
