@@ -375,7 +375,7 @@ h3 { margin-top: 0.2rem; }
 """
 st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
 
-# ---------- RTL SIDEBAR FIX (Arabic mobile + desktop) ----------
+#---------- RTL SIDEBAR FIX (Arabic mobile + desktop) ----------
 SAFE_RTL_CSS = """
 <style>
 /* Make the MAIN CONTENT RTL; do NOT touch the sidebar container here */
