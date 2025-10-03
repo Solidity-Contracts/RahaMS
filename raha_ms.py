@@ -1774,7 +1774,7 @@ elif page_id == "monitor":
     # =========================
     # SENSOR EXPLANATION SECTION
     # =========================
-    with st.expander("🔬 " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=True):
+    with st.expander("🌡️ " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=True):
         if app_language == "English":
             st.markdown("""
             **We use medical-grade sensors connected to an ESP8266 microcontroller:**
@@ -1821,9 +1821,9 @@ elif page_id == "monitor":
 
     # Sub-tabs
     if app_language == "English":
-        tabs = st.tabs(["📡 Live Sensor Data", "🧪 Learn & Practice"])
+        tabs = st.tabs(["📡 Live Sensor Data", "🔬 Learn & Practice"])
     else:
-        tabs = st.tabs(["📡 بيانات المستشعرات المباشرة", "🧪 تعلم وتدرب"])
+        tabs = st.tabs(["📡 بيانات المستشعرات المباشرة", "🔬 تعلم وتدرب"])
 
     # =========================
     # TAB 1 — LIVE SENSOR DATA
@@ -2207,11 +2207,11 @@ elif page_id == "monitor":
         
         with col1:
             if app_language == "English":
-                st.subheader("🎯 Try Different Scenarios")
+                st.subheader("🔍 Try Different Scenarios")
                 scenario_label = "Choose a scenario"
                 apply_label = "Apply Scenario"
             else:
-                st.subheader("🎯 جرب سيناريوهات مختلفة")
+                st.subheader("🔍 جرب سيناريوهات مختلفة")
                 scenario_label = "اختر سيناريو"
                 apply_label = "تطبيق السيناريو"
                 
