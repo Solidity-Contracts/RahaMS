@@ -1193,12 +1193,23 @@ def render_about_page(lang: str = "English"):
             st.caption("We use two sensors: one for core (internal) temperature and one for skin (peripheral). Model names appear on advanced pages.")
 
             st.subheader("What to expect next")
-            st.markdown('<div class="grid">', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📊 Monitor</h3><p>Live readings vs. your baseline — plus a dedicated <strong>Demo</strong> tab to explore how the system behaves.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🧭 Planner</h3><p><strong>Coolest 2-hour windows</strong> across the next 48 hours for your location.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>📝 Journal</h3><p>Log symptoms/events quickly and export your data as a <strong>CSV</strong> to share with your clinician.</p></div>', unsafe_allow_html=True)
-            st.markdown('<div class="tile"><h3>🤖 Companion</h3><p>Personalized answers that use your journal & symptoms (e.g., is a short trip or beach day wise given last week's fatigue?).</p></div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+            col1, col2, col3, col4 = st.columns(4)
+            with col1:
+                with st.container():
+                    st.markdown("### 📊 Monitor")
+                    st.markdown("Live readings vs. your baseline — plus a dedicated **Demo** tab to explore how the system behaves.")
+            with col2:
+                with st.container():
+                    st.markdown("### 🧭 Planner")
+                    st.markdown("**Coolest 2-hour windows** across the next 48 hours for your location.")
+            with col3:
+                with st.container():
+                    st.markdown("### 📝 Journal")
+                    st.markdown("Log symptoms/events quickly and export your data as a **CSV** to share with your clinician.")
+            with col4:
+                with st.container():
+                    st.markdown("### 🤖 Companion")
+                    st.markdown("Personalized answers that use your journal & symptoms (e.g., is a short trip or beach day wise given last week's fatigue?).")
 
             st.markdown('<div class="footnote">🧪 Why a Demo? Hitting a real "spike" can require heavy exertion. The demo simulates conditions (hot weather, activity) and interventions (e.g., a cooling fan) so you can see how Tanzim would respond—without stressing your body.</div>', unsafe_allow_html=True)
 
