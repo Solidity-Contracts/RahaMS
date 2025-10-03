@@ -1,10 +1,35 @@
-streamlit
 openai
-matplotlib
-requests
-folium
-streamlit-folium
-plotly
+
+# Core app
+streamlit>=1.32
+pandas>=2.0
+numpy>=1.24
+
+# Visualization
+matplotlib>=3.7
+plotly>=5.18
+
+# Weather / HTTP
+requests>=2.31
+
+# Maps (you already import these)
+folium>=0.15
+streamlit-folium>=0.18
+
+# Supabase client (v2)
 supabase>=2.6
-pandas
-python-dateutil
+
+# Arabic text shaping for Matplotlib (you use arabic_reshaper + bidi)
+arabic-reshaper>=3.0
+python-bidi>=0.4.2
+
+# Excel export (pick at least one; both is fine)
+openpyxl>=3.1
+xlsxwriter>=3.1
+
+# Optional: smooth timezones on Windows / some containers
+tzdata>=2024.1
+
+# Optional: if you want convenient auto-refresh helper (used as st_autorefresh)
+streamlit-autorefresh>=1.0
+
