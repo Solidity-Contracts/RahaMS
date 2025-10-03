@@ -1771,26 +1771,35 @@ elif page_id == "monitor":
         st.warning(T["login_first"])
         st.stop()
 
+    # =========================
+    # SENSOR EXPLANATION SECTION
+    # =========================
+    with st.expander("🔬 About Our Temperature Sensors", expanded=True):
+        st.markdown("""
+        **We use medical-grade sensors for accurate temperature monitoring:**
+        
+        - **MAX30205**: Clinical-grade digital temperature sensor for **core body temperature** 
+          (measures with ±0.1°C accuracy, ideal for internal temperature tracking)
+        
+        - **MLX90614**: Infrared sensor for **peripheral (skin) temperature**
+          (non-contact measurement of surface temperature with ±0.5°C accuracy)
+        
+        **What these temperatures mean:**
+        - **Core Temperature**: Your internal body temperature - the most important indicator of heat stress
+        - **Peripheral Temperature**: Your skin temperature - reacts quickly to environmental changes
+        - **Feels-like**: Combined effect of air temperature + humidity on how hot it feels
+        - **Baseline**: Your personal normal temperature (set in Settings) used for alert thresholds
+        """)
+
     # Sub-tabs
-    tabs = st.tabs(["📡 Live (Sensors)", "🧪 Simulator"])
+    tabs = st.tabs(["📡 Live Sensor Data", "🧪 Learn & Practice"])
 
     # =========================
-    # TAB 1 — LIVE (SENSORS)
+    # TAB 1 — LIVE SENSOR DATA
     # =========================
     with tabs[0]:
-        st.session_state.setdefault("live_running", False)
-        st.session_state.setdefault("live_core_smoothed", [])
-        st.session_state.setdefault("live_core_raw", [])
-        st.session_state.setdefault("live_periph_smoothed", [])
-        st.session_state.setdefault("live_periph_raw", [])
-        st.session_state.setdefault("live_tick", 0)
-        st.session_state.setdefault("last_db_write_tick", -999)
-        st.session_state.setdefault("last_alert_ts", 0.0)
-        st.session_state.setdefault("_last_tick_ts", 0.0)
-        st.session_state.setdefault("baseline", 37.0)
-        st.session_state.setdefault("interval_slider", SIM_INTERVAL_SEC)
-        st.session_state.setdefault("live_device_id", "esp8266-01")
-
+        st.info("🔌 **Connected to real sensors** - Displaying live data from your MAX30205 and MLX90614 sensors")
+        
         colA, colB, colC, colD = st.columns([1.2, 1.1, 1, 1.3])
         with colA:
             city = st.selectbox(
@@ -1801,317 +1810,171 @@ elif page_id == "monitor":
                 format_func=lambda code: city_label(code, app_language),
             )
         with colB:
-            st.text_input("🔌 Device ID (Supabase)", key="live_device_id")
-            interval = st.slider("⏱️ " + T["sensor_update"], 30, 300, st.session_state["interval_slider"], 15, key="interval_slider")
+            device_id = st.text_input("🔌 Device ID (Supabase)", key="live_device_id", 
+                                     placeholder="esp8266-01")
+            st.caption("Enter your sensor device ID")
         with colC:
-            if not st.session_state["live_running"] and st.button(T["start_monitoring"], use_container_width=True):
-                st.session_state["live_running"] = True
-                # Start from baseline to reduce false-first alert
-                core_start = round(st.session_state["baseline"], 2)
-                periph_start = round(core_start - 0.7, 2)
-                st.session_state["live_core_smoothed"] = [core_start]
-                st.session_state["live_core_raw"] = [core_start]
-                st.session_state["live_periph_smoothed"] = [periph_start]
-                st.session_state["live_periph_raw"] = [periph_start]
-                st.session_state["live_tick"] = 0
-                st.session_state["last_db_write_tick"] = -999
-                st.session_state["last_alert_ts"] = 0.0
-                st.session_state["_last_tick_ts"] = 0.0
-                st.rerun()
-            if st.session_state["live_running"] and st.button(T["pause"], use_container_width=True, key="pause_btn"):
-                st.session_state["live_running"] = False
-                st.rerun()
+            if st.button("🔄 Connect to Sensors", use_container_width=True, type="primary"):
+                # Test connection to Supabase
+                sample = fetch_latest_sensor_sample(device_id or "esp8266-01")
+                if sample:
+                    st.success(f"✅ Connected! Last reading: {sample['core']}°C core, {sample['peripheral']}°C peripheral")
+                    # Initialize with real data
+                    st.session_state["live_core_smoothed"] = [sample['core']]
+                    st.session_state["live_periph_smoothed"] = [sample['peripheral']]
+                    st.session_state["live_running"] = True
+                else:
+                    st.error("❌ No sensor data found. Check device ID or sensor connection.")
         with colD:
             baseline_text = "الأساس" if app_language == "Arabic" else "Baseline"
-            change_text = "(التغيير في الإعدادات)" if app_language == "Arabic" else "(change in Settings)"
             st.markdown(
-                f"<div class='badge'>{baseline_text}: <strong>{st.session_state['baseline']:.1f}°C</strong> "
-                f"<span class='small'>{change_text}</span></div>", unsafe_allow_html=True
+                f"<div class='badge'>{baseline_text}: <strong>{st.session_state.get('baseline', 37.0):.1f}°C</strong></div>", 
+                unsafe_allow_html=True
             )
 
-        # Weather (cached)
+        # Weather data
         weather, w_err, fetched_ts = get_weather_cached(city)
-        colW1, colW2 = st.columns([1, 1])
-        with colW1:
-            if weather is None:
-                st.error(f"{T['weather_fail']}: {w_err or '—'}")
-                st.stop()
-            else:
-                fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%H:%M") if fetched_ts else "—"
-                weather_text = "آخر تحديث للطقس" if app_language == "Arabic" else "Weather last updated"
-                st.caption(f"{weather_text}: {fetched_label}")
-        with colW2:
-            if st.button(T["refresh_weather"], use_container_width=True):
-                st.session_state.get("_weather_cache", {}).pop(city, None)
-                st.rerun()
+        if weather is None:
+            st.error(f"{T['weather_fail']}: {w_err or '—'}")
+        else:
+            fetched_label = datetime.fromtimestamp(fetched_ts, TZ_DUBAI).strftime("%H:%M") if fetched_ts else "—"
+            weather_text = "آخر تحديث للطقس" if app_language == "Arabic" else "Weather last updated"
+            st.caption(f"{weather_text}: {fetched_label}")
 
-        # Tick: pull from Supabase instead of simulating
-        now = time.time()
-        last_tick_ts = st.session_state.get("_last_tick_ts", 0.0)
-        if st.session_state["live_running"] and (now - last_tick_ts) >= st.session_state["interval_slider"]:
-            st.session_state["_last_tick_ts"] = now
-
-            sample = fetch_latest_sensor_sample(st.session_state["live_device_id"])
-            if sample:
-                core_raw = round(float(sample["core"]), 2)
-                periph_raw = round(float(sample["peripheral"]), 2)
-            else:
-                # If no new sample yet, hold last values
-                core_raw = st.session_state["live_core_raw"][-1] if st.session_state["live_core_raw"] else st.session_state["baseline"]
-                periph_raw = st.session_state["live_periph_raw"][-1] if st.session_state["live_periph_raw"] else (core_raw - 0.7)
-
-            st.session_state["live_core_raw"].append(core_raw)
-            core_smoothed = moving_avg(st.session_state["live_core_raw"], SMOOTH_WINDOW)
-            st.session_state["live_core_smoothed"].append(core_smoothed)
-
-            st.session_state["live_periph_raw"].append(periph_raw)
-            periph_smoothed = moving_avg(st.session_state["live_periph_raw"], SMOOTH_WINDOW)
-            st.session_state["live_periph_smoothed"].append(periph_smoothed)
-
-            st.session_state["live_tick"] += 1
-
-            latest_body = core_smoothed
+        # Real-time data display
+        st.subheader("📊 Live Sensor Readings")
+        
+        # Get latest sensor data
+        sample = fetch_latest_sensor_sample(device_id or "esp8266-01")
+        if sample:
+            col1, col2, col3, col4 = st.columns(4)
+            
+            with col1:
+                delta = sample['core'] - st.session_state.get('baseline', 37.0)
+                st.metric(
+                    "Core Temperature", 
+                    f"{sample['core']:.1f}°C", 
+                    f"{delta:+.1f}°C",
+                    delta_color="inverse" if delta >= 0.5 else "normal"
+                )
+                
+            with col2:
+                st.metric("Peripheral Temperature", f"{sample['peripheral']:.1f}°C")
+                
+            with col3:
+                st.metric("Feels-like", f"{weather['feels_like']:.1f}°C" if weather else "—")
+                
+            with col4:
+                st.metric("Humidity", f"{weather['humidity']}%" if weather else "—")
+            
+            # Risk assessment
             risk = compute_risk(
-                weather["feels_like"], weather["humidity"],
-                latest_body, st.session_state["baseline"], [], []
+                weather["feels_like"] if weather else 30, 
+                weather["humidity"] if weather else 50,
+                sample['core'], 
+                st.session_state.get('baseline', 37.0), 
+                [], []
             )
-            st.session_state["last_check"] = {
-                "city": city, "body_temp": latest_body, "peripheral_temp": periph_smoothed,
-                "baseline": st.session_state['baseline'],
-                "weather_temp": weather["temp"], "feels_like": weather["feels_like"],
-                "humidity": weather["humidity"], "weather_desc": weather["desc"],
-                "status": risk["status"], "color": risk["color"], "icon": risk["icon"], "advice": risk["advice"],
-                "triggers": [], "symptoms": [], "peak_hours": weather["peak_hours"], "forecast": weather["forecast"],
-                "time": utc_iso_now()
-            }
-
-            # Alert on Δ ≥ 0.5°C (confirm N samples)
-            if should_alert(st.session_state["live_core_smoothed"], st.session_state["baseline"], ALERT_DELTA_C, ALERT_CONFIRM):
-                if (now - st.session_state["last_alert_ts"]) >= ALERT_COOLDOWN_SEC:
-                    st.session_state["last_alert_ts"] = now
-                    msg = ("⚠️ Core temperature has risen ≥ 0.5°C above your baseline. Consider cooling and rest."
-                           if app_language != "Arabic"
-                           else "⚠️ ارتفعت درجة الحرارة الأساسية ≥ ‎0.5°م فوق الأساس. فكر في التبريد والراحة.")
-                    st.warning(msg)
-
-            # Save to temps table every N ticks (unchanged)
-            if st.session_state["live_tick"] - st.session_state["last_db_write_tick"] >= DB_WRITE_EVERY_N:
-                try:
-                    insert_temp_row(
-                        st.session_state.get("user", "guest"), dubai_now_str(), latest_body, periph_smoothed,
-                        weather["temp"], weather["feels_like"], weather["humidity"], risk["status"]
-                    )
-                    st.session_state["last_db_write_tick"] = st.session_state["live_tick"]
-                except Exception as e:
-                    st.warning(f"Could not save to DB: {e}")
-
-            st.rerun()
-
-        # Status card & alert-logger (reuses your existing code)
-        if st.session_state.get("last_check"):
-            last = st.session_state["last_check"]
-            lang_key = "AR" if app_language == "Arabic" else "EN"
-            chips = []
-            chips.append(_badge("City" if lang_key=="EN" else "المدينة", last['city'], EXPLAIN[lang_key]["city"]))
-            chips.append(_badge("Feels-like" if lang_key=="EN" else "الإحساس الحراري", f"{round(last['feels_like'],1)}°C", EXPLAIN[lang_key]["feels_like"]))
-            chips.append(_badge("Humidity" if lang_key=="EN" else "الرطوبة", f"{int(last['humidity'])}%", EXPLAIN[lang_key]["humidity"]))
-            chips.append(_badge("Core" if lang_key=="EN" else "الأساسية", f"{round(last['body_temp'],1)}°C", EXPLAIN[lang_key]["core"]))
-            chips.append(_badge("Peripheral" if lang_key=="EN" else "الطرفية", f"{round(last['peripheral_temp'],1)}°C", EXPLAIN[lang_key]["peripheral"]))
-            chips.append(_badge("Baseline" if lang_key=="EN" else "الأساس", f"{round(last['baseline'],1)}°C", EXPLAIN[lang_key]["baseline"]))
-
+            
+            # Status display
             st.markdown(f"""
-            <div class="big-card" style="--left:{last['color']}">
-              <h3>{last['icon']} <strong>Status: {last['status']}</strong></h3>
-              <p style="margin:6px 0 0 0">{last['advice']}</p>
-              <div class="small" style="margin-top:8px">{''.join(chips)}</div>
-              <p class="small" style="margin-top:6px"><strong>{T['peak_heat']}:</strong> {("; ".join(last.get('peak_hours', []))) if last.get('peak_hours') else "—"}</p>
+            <div class="big-card" style="--left:{risk['color']}">
+              <h3>{risk['icon']} <strong>Status: {risk['status']}</strong></h3>
+              <p style="margin:6px 0 0 0">{risk['advice']}</p>
             </div>
             """, unsafe_allow_html=True)
+            
+            # Alert for significant temperature rise
+            if sample['core'] - st.session_state.get('baseline', 37.0) >= 0.5:
+                st.warning("""
+                ⚠️ **Temperature Alert**: Your core temperature has risen 0.5°C above baseline. 
+                Consider cooling measures and monitor for symptoms.
+                """)
+                
+        else:
+            st.info("""
+            🔌 **No sensor data available**
+            - Make sure your sensors are connected and powered on
+            - Check your Device ID matches your sensor setup
+            - Sensors should be sending data to Supabase
+            """)
 
         # =========================
         # HEALTH EVENT LOGGING SECTION
         # =========================
         st.markdown("---")
-        st.subheader("📝 " + T["log_health_event"])
+        st.subheader("📝 Log Health Event")
         
         with st.form("health_event_form", clear_on_submit=True):
-            st.markdown("#### " + T["temperature_alert"])
+            # Current sensor data context
+            if sample:
+                current_temp = sample['core']
+                delta = current_temp - st.session_state.get('baseline', 37.0)
+                st.info(f"**Current Reading:** Core: {current_temp:.1f}°C | Δ: {delta:+.1f}°C | Peripheral: {sample['peripheral']:.1f}°C")
             
-            # Current temperature display
-            if st.session_state["live_core_smoothed"]:
-                current_temp = st.session_state["live_core_smoothed"][-1]
-                delta = current_temp - st.session_state["baseline"]
-                st.info(f"**Current Core Temperature:** {current_temp:.1f}°C | **Δ from baseline:** {delta:+.1f}°C")
+            st.markdown("#### Triggers & Symptoms")
             
-            st.markdown("#### " + T["triggers_today"])
-            trigger_options = TRIGGERS_EN if app_language == "English" else TRIGGERS_AR
-            chosen_triggers = st.multiselect(
-                T["triggers_today"],
-                trigger_options,
-                help="Select what might have triggered symptoms" if app_language == "English" else "اختر ما قد يكون سبب الأعراض"
-            )
+            col1, col2 = st.columns(2)
             
-            other_trigger = st.text_input(
-                f"{T['other']} ({T['trigger']})",
-                key="health_trigger_other"
-            )
+            with col1:
+                trigger_options = TRIGGERS_EN if app_language == "English" else TRIGGERS_AR
+                chosen_triggers = st.multiselect(
+                    T["triggers_today"],
+                    trigger_options,
+                    help="What might have triggered symptoms?"
+                )
+                other_trigger = st.text_input(f"{T['other']} ({T['trigger']})")
+                
+            with col2:
+                symptom_options = SYMPTOMS_EN if app_language == "English" else SYMPTOMS_AR
+                chosen_symptoms = st.multiselect(
+                    T["symptoms_today"],
+                    symptom_options,
+                    help="Symptoms you're experiencing"
+                )
+                other_symptom = st.text_input(f"{T['other']} ({T['symptom']})")
             
-            st.markdown("#### " + T["symptoms_today"])
-            symptom_options = SYMPTOMS_EN if app_language == "English" else SYMPTOMS_AR
-            chosen_symptoms = st.multiselect(
-                T["symptoms_today"],
-                symptom_options,
-                help="Select symptoms you're experiencing" if app_language == "English" else "اختر الأعراض التي تعاني منها"
-            )
-            
-            other_symptom = st.text_input(
-                f"{T['other']} ({T['symptom']})",
-                key="health_symptom_other"
-            )
-            
-            st.markdown("#### " + T["notes"])
             event_description = st.text_area(
-                T["event_description"],
-                height=100,
-                placeholder="Describe what happened, how you're feeling, or any other details..." if app_language == "English" else "صف ما حدث، كيف تشعر، أو أي تفاصيل أخرى..."
+                "Event Notes",
+                placeholder="Describe what happened, how you're feeling, or any other details...",
+                height=80
             )
             
-            # Combine all triggers and symptoms
+            # Combine all data
             all_triggers = chosen_triggers + ([f"Other: {other_trigger.strip()}"] if other_trigger.strip() else [])
             all_symptoms = chosen_symptoms + ([f"Other: {other_symptom.strip()}"] if other_symptom.strip() else [])
             
-            # Show instant plan if there are triggers or significant temperature rise
-            has_data = (len(all_triggers) > 0) or (len(all_symptoms) > 0) or event_description.strip()
-            if has_data and st.session_state.get("last_check"):
-                current_delta = current_temp - st.session_state["baseline"] if st.session_state["live_core_smoothed"] else 0
-                do_now, plan_later, watch_for = tailored_tips(
-                    all_triggers,
-                    st.session_state["last_check"]["feels_like"],
-                    st.session_state["last_check"]["humidity"],
-                    current_delta, app_language
-                )
-                
-                with st.expander(f"🧊 {T['instant_plan_title']}", expanded=True):
-                    st.write(f"**{T['do_now']}**")
-                    if do_now:
-                        for item in do_now:
-                            st.write(f"• {item}")
-                    else:
-                        st.write("—")
-                    
-                    st.write(f"**{T['plan_later']}**")
-                    if plan_later:
-                        for item in plan_later:
-                            st.write(f"• {item}")
-                    else:
-                        st.write("—")
-                    
-                    st.write(f"**{T['watch_for']}**")
-                    if watch_for:
-                        for item in watch_for:
-                            st.write(f"• {item}")
-                    else:
-                        st.write("—")
-            
-            submitted = st.form_submit_button(T["log_event"])
+            submitted = st.form_submit_button("💾 Save to Journal")
             if submitted:
-                if st.session_state["live_core_smoothed"]:
-                    current_temp = st.session_state["live_core_smoothed"][-1]
-                    current_periph = st.session_state["live_periph_smoothed"][-1] if st.session_state["live_periph_smoothed"] else None
+                if sample:
+                    entry = {
+                        "type": "ALERT",
+                        "at": utc_iso_now(),
+                        "core_temp": round(sample['core'], 1),
+                        "peripheral_temp": round(sample['peripheral'], 1),
+                        "baseline": round(st.session_state.get('baseline', 37.0), 1),
+                        "reasons": all_triggers,
+                        "symptoms": all_symptoms,
+                        "note": event_description.strip(),
+                        "city": city,
+                        "feels_like": weather["feels_like"] if weather else None,
+                        "humidity": weather["humidity"] if weather else None
+                    }
+                    
+                    try:
+                        insert_journal(st.session_state.get("user", "guest"), utc_iso_now(), entry)
+                        st.success("✅ Event saved to journal!")
+                    except Exception as e:
+                        st.warning(f"Could not save event: {e}")
                 else:
-                    current_temp = st.session_state["baseline"]
-                    current_periph = None
-                
-                entry = {
-                    "type": "ALERT",
-                    "at": utc_iso_now(),
-                    "core_temp": round(current_temp, 1),
-                    "peripheral_temp": round(current_periph, 1) if current_periph else None,
-                    "baseline": round(st.session_state['baseline'], 1),
-                    "reasons": all_triggers,
-                    "symptoms": all_symptoms,
-                    "note": event_description.strip(),
-                    "city": city,
-                    "feels_like": weather["feels_like"] if weather else None,
-                    "humidity": weather["humidity"] if weather else None
-                }
-                
-                try:
-                    insert_journal(st.session_state.get("user", "guest"), utc_iso_now(), entry)
-                    st.success("✅ " + T["event_logged"])
-                    st.session_state["live_running"] = False  # Pause monitoring after logging
-                    st.rerun()
-                except Exception as e:
-                    st.warning(f"Could not save event: {e}")
-
-        # =========================
-        # TEMPERATURE TREND CHART
-        # =========================
-        st.markdown("---")
-        st.subheader(T["temperature_trend"])
-        
-        c = get_conn().cursor()
-        try:
-            query = """
-                SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
-                FROM temps WHERE username=? ORDER BY date DESC LIMIT 120
-            """
-            c.execute(query, (st.session_state.get("user", "guest"),))
-            rows = c.fetchall()
-            if rows:
-                rows = rows[::-1]
-                dates = [r[0] for r in rows]
-                core = [r[1] for r in rows]
-                periph = [r[2] for r in rows]
-                feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
-
-                fig, ax = plt.subplots(figsize=(10, 4))
-                if app_language == "Arabic":
-                    lbl_core  = ar_shape("الأساسية")
-                    lbl_peri  = ar_shape("الطرفية")
-                    lbl_feels = ar_shape("الإحساس الحراري")
-                else:
-                    lbl_core, lbl_peri, lbl_feels = "Core", "Peripheral", "Feels-like"
-                ax.plot(range(len(dates)), core,   marker='o', label=lbl_core,  linewidth=2)
-                ax.plot(range(len(dates)), periph, marker='o', label=lbl_peri,  linewidth=1.8)
-                ax.plot(range(len(dates)), feels,  marker='s', label=lbl_feels, linewidth=1.8)
-                ax.set_xticks(range(len(dates)))
-                ax.set_xticklabels([d[11:16] if len(d) >= 16 else d for d in dates], rotation=45, fontsize=9)
-                ax.set_ylabel("°C" if app_language == "English" else "°م", fontproperties=_AR_FONT)
-                ax.legend(prop=_AR_FONT)
-                ax.grid(True, alpha=0.3)
-                if app_language == "Arabic":
-                    title_ar = ar_shape("الأساسية مقابل الطرفية مقابل الإحساس الحراري (كل نقطة = عينة واحدة)")
-                    ax.set_title(title_ar, fontproperties=_AR_FONT, loc="center")
-                else:
-                    ax.set_title("Core vs Peripheral vs Feels-like (one dot = one sample)")
-                st.pyplot(fig)
-                st.caption(
-                    f"Sampling interval: **{st.session_state['interval_slider']} sec** · Weather refresh: **every 15 min** (or Refresh)."
-                    if app_language == "English"
-                    else f"فترة أخذ العينات: **{st.session_state['interval_slider']} ثانية** · تحديث الطقس: **كل 15 دقيقة** (أو استخدم زر التحديث)."
-                )
-        except Exception as e:
-            st.error(f"Chart error: {e}")
+                    st.error("No sensor data available to log")
 
     # =========================
-    # TAB 2 — SIMULATOR (DEMO)
+    # TAB 2 — LEARN & PRACTICE (DEMO)
     # =========================
     with tabs[1]:
-        # Light-weight version of your sandbox; no journal writes
-        st.caption("Demo sandbox — change values to see how alerts react. (No data is saved.)"
-                   if app_language == "English" else "وضع تجريبي — غيّر القيم لترى تغيّر التنبيهات. (لا يتم حفظ البيانات)")
-
-        # Scenarios (a few good presets; extend as needed)
-        scenarios = {
-            "Morning commute (Dubai summer)":  {"core": 37.4, "feels": 41.0},
-            "Moderate exercise (humid)":       {"core": 37.9, "feels": 39.0},
-            "Office AC failure":               {"core": 37.8, "feels": 35.0},
-            "Evening walk (cooler hours)":     {"core": 37.0, "feels": 34.0},
-            "Fever at home":                   {"core": 38.2, "feels": 28.0},
-            "Car breakdown (direct sun)":      {"core": 37.8, "feels": 44.0},
-        }
-
+        st.info("🎯 **Interactive Learning** - Practice recognizing temperature patterns and learn effective cooling strategies")
+        
         # Initialize session state for simulator
         if "sim" not in st.session_state:
             st.session_state.sim = {"core": 36.6, "baseline": st.session_state.get("baseline", 36.8), "feels": 32.0}
@@ -2119,14 +1982,51 @@ elif page_id == "monitor":
             st.session_state.sim_history = []
         if "sim_live" not in st.session_state:
             st.session_state.sim_live = False
-        if "sim_sample" not in st.session_state:
-            st.session_state.sim_sample = 2
 
-        left, right = st.columns([0.55, 0.45])
-        with left:
-            scenario_label = "Scenarios" if app_language=="English" else "السيناريوهات"
-            pick = st.selectbox(f"🎯 {scenario_label}", list(scenarios.keys()))
-            apply_label = "Apply" if app_language=="English" else "تطبيق"
+        # Scenarios with explanations
+        scenarios = {
+            "Morning commute (Dubai summer)": {
+                "core": 37.4, 
+                "feels": 41.0,
+                "desc": "Hot car, sun exposure through windows, limited airflow"
+            },
+            "Moderate exercise (humid day)": {
+                "core": 37.9, 
+                "feels": 39.0,
+                "desc": "Physical activity + high humidity impairs cooling"
+            },
+            "Office AC failure": {
+                "core": 37.8, 
+                "feels": 35.0,
+                "desc": "Indoor heat buildup without ventilation"
+            },
+            "Evening walk (cooler hours)": {
+                "core": 37.0, 
+                "feels": 34.0,
+                "desc": "Better timing, but still warm"
+            },
+            "Fever at home": {
+                "core": 38.2, 
+                "feels": 28.0,
+                "desc": "Internal rise despite cool environment"
+            },
+            "Car breakdown (direct sun)": {
+                "core": 37.8, 
+                "feels": 44.0,
+                "desc": "Trapped heat, high radiant temperature"
+            },
+        }
+
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            st.subheader("🎯 Try Different Scenarios")
+            scenario_label = "Choose a scenario" if app_language=="English" else "اختر سيناريو"
+            pick = st.selectbox(scenario_label, list(scenarios.keys()))
+            
+            st.caption(scenarios[pick]["desc"])
+            
+            apply_label = "Apply Scenario" if app_language=="English" else "تطبيق السيناريو"
             if st.button(apply_label, use_container_width=True):
                 st.session_state.sim["core"] = scenarios[pick]["core"]
                 st.session_state.sim["feels"] = scenarios[pick]["feels"]
@@ -2137,117 +2037,201 @@ elif page_id == "monitor":
                     "feels": float(st.session_state.sim["feels"]),
                 })
                 st.rerun()
-        with right:
+
+        with col2:
+            st.subheader("⚙️ Adjust Values")
             s = st.session_state.sim
-            core_label = "Core (°C)" if app_language=="English" else "الأساسية (°م)"
-            baseline_label = "Baseline (°C)" if app_language=="English" else "الأساس (°م)"
-            feels_label = "Feels-like (°C)" if app_language=="English" else "الإحساس الحراري (°م)"
             
-            s["core"] = st.slider(core_label, 36.0, 39.5, float(s["core"]), 0.1)
-            s["baseline"] = st.slider(baseline_label, 36.0, 37.5, float(s["baseline"]), 0.1)
-            s["feels"] = st.slider(feels_label, 25.0, 50.0, float(s["feels"]), 1.0)
+            s["core"] = st.slider("Core Temperature (°C)", 36.0, 39.5, float(s["core"]), 0.1,
+                                 help="Your internal body temperature")
+            s["baseline"] = st.slider("Baseline (°C)", 36.0, 37.5, float(s["baseline"]), 0.1,
+                                     help="Your personal normal temperature")
+            s["feels"] = st.slider("Feels-like (°C)", 25.0, 50.0, float(s["feels"]), 1.0,
+                                  help="Combined effect of temperature + humidity")
 
-        # Live tracking controls
-        c1, c2, c3 = st.columns([0.35, 0.35, 0.3])
-        with c1:
-            live_label = "Live tracking" if app_language=="English" else "تتبع مباشر"
-            st.session_state.sim_live = st.toggle(live_label, value=st.session_state.sim_live)
-        with c2:
-            sample_label = "Sample every (s)" if app_language=="English" else "تسجيل كل (ثانية)"
-            st.session_state.sim_sample = st.select_slider(sample_label, [1,2,3,5,10], value=st.session_state.sim_sample)
-        with c3:
-            clear_label = "🧹 Clear" if app_language=="English" else "🧹 مسح"
-            if st.button(clear_label):
+        # =========================
+        # INTERACTIVE SOLUTIONS
+        # =========================
+        st.markdown("---")
+        st.subheader("🛠️ Try Cooling Solutions")
+        
+        st.info("Click on solutions below to see how they affect your temperature:")
+        
+        sol_col1, sol_col2, sol_col3, sol_col4 = st.columns(4)
+        
+        with sol_col1:
+            if st.button("❄️ Cooling Vest", use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.6)
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 3.0)
+                st.success("Cooling vest applied! Core ↓0.6°C, Feels-like ↓3°C")
+                st.rerun()
+                
+        with sol_col2:
+            if st.button("🏠 Move Indoors", use_container_width=True):
+                st.session_state.sim["feels"] = 26.0
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.4)
+                st.success("Moved to AC! Feels-like →26°C, Core ↓0.4°C")
+                st.rerun()
+                
+        with sol_col3:
+            if st.button("💧 Hydrate", use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.3)
+                st.success("Hydrated! Core ↓0.3°C")
+                st.rerun()
+                
+        with sol_col4:
+            if st.button("🌳 Rest in Shade", use_container_width=True):
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 8.0)
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.5)
+                st.success("Resting in shade! Feels-like ↓8°C, Core ↓0.5°C")
+                st.rerun()
+
+        # Additional solutions
+        sol_col5, sol_col6, sol_col7, sol_col8 = st.columns(4)
+        
+        with sol_col5:
+            if st.button("🚿 Cool Shower", use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.8)
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 2.0)
+                st.success("Cool shower! Core ↓0.8°C, Feels-like ↓2°C")
+                st.rerun()
+                
+        with sol_col6:
+            if st.button("🍃 Use Fan", use_container_width=True):
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 4.0)
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.2)
+                st.success("Fan running! Feels-like ↓4°C, Core ↓0.2°C")
+                st.rerun()
+                
+        with sol_col7:
+            if st.button("⏰ Rest 30min", use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.7)
+                st.success("Rested! Core ↓0.7°C")
+                st.rerun()
+                
+        with sol_col8:
+            if st.button("🔄 Reset", use_container_width=True, type="secondary"):
                 st.session_state.sim_history.clear()
-                st.toast("Cleared" if app_language=="English" else "تم المسح")
+                st.session_state.sim = {"core": 36.6, "baseline": st.session_state.get("baseline", 36.8), "feels": 32.0}
+                st.success("Reset to normal values")
+                st.rerun()
 
-        # Append point & auto-refresh
-        if st.session_state.sim_live:
-            st.session_state.sim_history.append({
-                "ts": datetime.now().strftime("%H:%M:%S"),
-                "core": float(st.session_state.sim["core"]),
-                "baseline": float(st.session_state.sim["baseline"]),
-                "feels": float(st.session_state.sim["feels"]),
-            })
-            try:
-                st.autorefresh(interval=st.session_state.sim_sample * 1000, key="auto_sim2")
-            except Exception:
-                pass
-
-        # Plot (Plotly)
-        if not st.session_state.sim_history:
-            info_text = "Turn on Live tracking or click Apply to add a point." if app_language=="English" else "فعّل التتبع المباشر أو اضغط تطبيق لإضافة نقطة."
-            st.info(info_text)
-        else:
-            df = pd.DataFrame(st.session_state.sim_history)
-            fig = go.Figure()
-            
-            # Use localized labels
-            feels_name = "Feels-like" if app_language == "English" else "الإحساس الحراري"
-            core_name = "Core" if app_language == "English" else "الأساسية"
-            baseline_name = "Baseline" if app_language == "English" else "الأساس"
-            
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=feels_name))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=core_name))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=baseline_name))
-            
-            fig.update_layout(
-                height=320, 
-                margin=dict(l=10, r=10, t=10, b=10),
-                legend=dict(orientation="h", y=1.12), 
-                xaxis_title="Time", 
-                yaxis_title="°C"
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Status panel
-        def _classify(core, base, feels):
-            delta = core - base
-            level = 0
-            trig = []
-            if delta >= 0.5: 
-                level = max(level, 1)
-                trig.append(f"ΔCore +{delta:.1f}°C ≥ 0.5°C")
-            if core >= 38.5: 
-                level = 3
-                trig.append("Core ≥ 38.5°C")
-            elif core >= 38.0: 
-                level = max(level, 2)
-                trig.append("Core ≥ 38.0°C")
-            elif core >= 37.8: 
-                level = max(level, 1)
-                trig.append("Core ≥ 37.8°C")
-            if feels >= 42.0: 
-                level = max(level, 2)
-                trig.append("Feels-like ≥ 42°C")
-            elif feels >= 38.0: 
-                level = max(level, 1)
-                trig.append("Feels-like ≥ 38°C")
-            return ["safe", "caution", "high", "critical"][level], trig
-
-        key, trig = _classify(st.session_state.sim["core"], st.session_state.sim["baseline"], st.session_state.sim["feels"])
-        colors = {"safe": "#E6F4EA", "caution": "#FFF8E1", "high": "#FFE0E0", "critical": "#FFCDD2"}
-        emojis = {"safe": "✅", "caution": "⚠️", "high": "🔴", "critical": "🚨"}
+        # =========================
+        # STATUS AND VISUALIZATION
+        # =========================
+        st.markdown("---")
         
-        # Localized status labels
-        status_labels = {
-            "safe": "Safe" if app_language == "English" else "آمن",
-            "caution": "Caution" if app_language == "English" else "حذر", 
-            "high": "High Risk" if app_language == "English" else "خطر مرتفع",
-            "critical": "Critical" if app_language == "English" else "حرج"
-        }
+        col_status, col_chart = st.columns([1, 2])
         
-        st.markdown(f"<div class='badge' style='background:{colors[key]}'>{emojis[key]} {status_labels[key]}</div>", unsafe_allow_html=True)
-        
-        why_label = "Why" if app_language=="English" else "السبب"
-        with st.expander(why_label, expanded=True):
-            if trig:
-                for t in trig: 
-                    st.write("• " + t)
+        with col_status:
+            st.subheader("📊 Current Status")
+            
+            # Classification logic
+            def _classify(core, base, feels):
+                delta = core - base
+                level = 0
+                trig = []
+                if delta >= 0.5: 
+                    level = max(level, 1)
+                    trig.append(f"ΔCore +{delta:.1f}°C ≥ 0.5°C")
+                if core >= 38.5: 
+                    level = 3
+                    trig.append("Core ≥ 38.5°C")
+                elif core >= 38.0: 
+                    level = max(level, 2)
+                    trig.append("Core ≥ 38.0°C")
+                elif core >= 37.8: 
+                    level = max(level, 1)
+                    trig.append("Core ≥ 37.8°C")
+                if feels >= 42.0: 
+                    level = max(level, 2)
+                    trig.append("Feels-like ≥ 42°C")
+                elif feels >= 38.0: 
+                    level = max(level, 1)
+                    trig.append("Feels-like ≥ 38°C")
+                return ["safe", "caution", "high", "critical"][level], trig
+
+            key, trig = _classify(st.session_state.sim["core"], 
+                                st.session_state.sim["baseline"], 
+                                st.session_state.sim["feels"])
+            
+            colors = {"safe": "#E6F4EA", "caution": "#FFF8E1", "high": "#FFE0E0", "critical": "#FFCDD2"}
+            emojis = {"safe": "✅", "caution": "⚠️", "high": "🔴", "critical": "🚨"}
+            status_labels = {
+                "safe": "Safe", "caution": "Caution", "high": "High Risk", "critical": "Critical"
+            }
+            
+            st.markdown(f"<div class='badge' style='background:{colors[key]}'>{emojis[key]} {status_labels[key]}</div>", 
+                       unsafe_allow_html=True)
+            
+            # Metrics
+            delta = st.session_state.sim["core"] - st.session_state.sim["baseline"]
+            st.metric("Core Temperature", f"{st.session_state.sim['core']:.1f}°C", f"{delta:+.1f}°C")
+            st.metric("Feels-like", f"{st.session_state.sim['feels']:.1f}°C")
+            st.metric("Baseline", f"{st.session_state.sim['baseline']:.1f}°C")
+            
+            # Why this status
+            with st.expander("Why this status?", expanded=True):
+                if trig:
+                    for t in trig: 
+                        st.write("• " + t)
+                else:
+                    st.write("• No thresholds triggered yet")
+
+        with col_chart:
+            st.subheader("📈 Temperature Trend")
+            
+            # Live tracking toggle
+            live_toggle = st.toggle("Record changes automatically", value=st.session_state.sim_live)
+            if live_toggle and not st.session_state.sim_live:
+                st.session_state.sim_live = True
+                st.session_state.sim_history.append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": float(st.session_state.sim["core"]),
+                    "baseline": float(st.session_state.sim["baseline"]),
+                    "feels": float(st.session_state.sim["feels"]),
+                })
+            st.session_state.sim_live = live_toggle
+            
+            if st.button("Add Manual Point"):
+                st.session_state.sim_history.append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": float(st.session_state.sim["core"]),
+                    "baseline": float(st.session_state.sim["baseline"]),
+                    "feels": float(st.session_state.sim["feels"]),
+                })
+                st.rerun()
+                
+            if st.button("Clear Chart"):
+                st.session_state.sim_history.clear()
+                st.rerun()
+
+            # Plot
+            if not st.session_state.sim_history:
+                st.info("Apply a scenario or enable recording to see the chart")
             else:
-                no_triggers = "No thresholds triggered yet." if app_language == "English" else "لم يتم تفعيل أي عتبات بعد."
-                st.write("• " + no_triggers)
-
+                df = pd.DataFrame(st.session_state.sim_history)
+                fig = go.Figure()
+                
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name="Feels-like"))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name="Core"))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name="Baseline"))
+                
+                fig.update_layout(
+                    height=300, 
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", y=1.1), 
+                    xaxis_title="Time", 
+                    yaxis_title="°C"
+                )
+                st.plotly_chart(fig, use_container_width=True)
 elif page_id == "planner":
     render_planner()
 
