@@ -1114,7 +1114,7 @@ def render_about_page(lang: str = "English"):
         with tab1:
             st.subheader("الفكرة باختصار")
             st.markdown("""
-- مع التصلّب المتعدد، **ارتفاع بسيط (≈ نصف درجة)** قد يسبّب تعبًا أو ضبابية رؤية.
+- **مع التصلّب المتعدد، حتى ارتفاع بسيط **(≈ نصف درجة)** قد يسبّب تعبًا أو ضبابية رؤية — وهذا يُعرف بـ **ظاهرة أوتهوف.
 - تنظيم إم إس يقرأ حرارة الجسم (داخلية + الجلد) ويقارنها بـ **خطّك الأساسي** ليكشف الفروق الصغيرة التي قد لا تلاحظها.
 - يدمج ذلك مع **الإحساس الحراري والرطوبة** ليعكس واقع الطقس في الخليج.
 """)
@@ -1168,7 +1168,7 @@ def render_about_page(lang: str = "English"):
         with tab1:
             st.subheader("The idea in simple words")
             st.markdown("""
-- With MS, even a **~0.5°C rise** can trigger fatigue or blurry vision.
+- With MS, even a **~0.5°C rise** can trigger symptoms like fatigue or blurry vision — this is known as **Uhthoff’s phenomenon**.
 - Tanzim reads core + skin temperatures and compares them to **your personal baseline** to surface subtle changes you might miss.
 - It pairs that with **feels-like & humidity**, tuned for Gulf conditions.
 """)
