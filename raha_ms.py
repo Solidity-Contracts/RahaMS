@@ -1858,7 +1858,7 @@ elif page_id == "monitor":
             connect_label = "🔄 الاتصال بالمستشعرات" if app_language == "Arabic" else "🔄 Connect to Sensors"
             if st.button(connect_label, use_container_width=True, type="primary"):
                 # Test connection to Supabase
-                sample = fetch_latest_sensor_sample(device_id or "esp8266-01")
+                sample = fetch_latest_sensor_sample("esp8266-01")
                 if sample:
                     if app_language == "English":
                         st.success(f"✅ Connected! Last reading: {sample['core']}°C core, {sample['peripheral']}°C peripheral")
