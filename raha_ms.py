@@ -1,5 +1,3 @@
-# -*- coding: utf-8 -*-
-
 import streamlit as st
 import sqlite3, json, requests, random, time, zipfile, io
 import matplotlib
@@ -1048,23 +1046,24 @@ def ai_response(prompt, lang, journal_context="", weather_context=""):
     
     return None, "max_retries_exceeded"
         
-# ================== ABOUT (3-tab, EN/AR, user-friendly) ==================
+# ================== ABOUT (EN/AR, user-friendly) ==================
 def render_about_page(lang: str = "English"):
     if lang == "Arabic":
         st.title("🧠 ما هو تنظيم إم إس؟")
         st.markdown("""
 **تنظيم إم إس** يساعدك على التعامل مع الحرارة إذا كنت تعاني من التصلّب المتعدد:
-- يراقب **ارتفاع حرارتك عن خطّك الأساسي** (+0.5°م قد يحرّك الأعراض — ظاهرة أوتهوف).
+- يراقب **ارتفاع حرارتك عن خطّك الأساسي** (+0.5\u00b0م قد يحرّك الأعراض — ظاهرة أوتهوف).
 - يجمع بين **الإحساس الحراري** (الطقس) و **حرارة الجسم الأساسية والطرفية** و(لاحقًا) **الأعراض**.
 - يعطيك **تنبيهًا مبكرًا** ونصيحة قصيرة قابلة للتنفيذ.
 
-👉 **راحة إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
-          """)
+👉 **تنظيم إم إس يحوِّل هذا الفرق غير المرئي إلى نظام _إنذار مبكر_.**
+""")
+
         st.header("✨ ماذا يمكن أن يفعل لأجلك؟")
         st.markdown("""
 - **مراقبة مباشرة**: قراءة حرارة الجسم الأساسية (MLX90614) والطرفية (MAX30205) من حساساتك ومقارنتها بخطّك الأساسي.
 - **ذكاء الطقس**: جلب الإحساس الحراري والرطوبة من OpenWeather لمطابقة الواقع.
-- **تنبيهات واضحة**: عند فرق +0.5°م أو تجاوز حدود مطلقة.
+- **تنبيهات واضحة**: عند فرق +0.5\u00b0م أو تجاوز حدود مطلقة.
 - **نوافذ أكثر أمانًا**: يبرز فترات ساعتين أبرد خلال 48 ساعة اعتمادًا على **الإحساس الحراري** والرطوبة.
 - **اليوميات والتصدير**: تسجّل ما حدث وأعراضك بنقرة، وتحمّل السجل كـ Excel/CSV لطبيبك.
 - **وضع المحاكاة**: صندوق رمل للتعلّم و"ماذا لو" بدون حفظ بيانات.
@@ -1073,39 +1072,37 @@ def render_about_page(lang: str = "English"):
 - **تخطيط بثقة**: اعرف بالضبط متى وأين يكون الخروج أكثر أمانًا.
 - **افهم محفزاتك**: اربط بين الطقس وحرارتك وأعراضك عبر الوقت.
 - **شارك بياناتك**: قدّم سجلات واضحة ومنظّمة لدعم رعاية أفضل.
-	""")
 
 🔒 **الخصوصية**: بياناتك محفوظة محليًا (SQLite). هذا نموذج توعوي للتنظيم الذاتي — وليس جهازًا طبيًا. ويمكنك تنزيل درجات الحرارة واليوميات كـ **Excel/CSV** لمشاركتها مع طبيبك.
-            """)
+""")
+
     else:
         st.title("🧠 What is Tanzim MS?")
         st.markdown("""
 **Tanzim MS** helps you cope with heat if you live with MS:
-- Watches your **rise above your personal baseline** (+0.5°C can trigger Uhthoff’s).
+- Watches your **rise above your personal baseline** (+0.5\u00b0C can trigger Uhthoff’s).
 - Combines **feels-like weather** with your **core/peripheral temps** and (later) **symptoms**.
 - Gives **early, actionable alerts** in plain language.
-	
 
-👉 **Raha MS turns that invisible 0.5°C into an _early warning system_.**
-          """)
-            
+👉 **Tanzim MS turns that invisible 0.5\u00b0C into an _early warning system_.**
+""")
+
         st.header("✨ What can it do for you?")
         st.markdown("""
 - **Live monitoring**: Reads core (MLX90614) and peripheral (MAX30205) from your sensors and compares to your baseline.
 - **Weather intelligence**: Pulls feels-like & humidity from OpenWeather to match real conditions.
-- **Clear alerts**: Fires when ΔCore ≥ 0.5°C or absolute thresholds are crossed.
-- **Smart safe windows**: highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
+- **Clear alerts**: Fires when ΔCore ≥ 0.5\u00b0C or absolute thresholds are crossed.
+- **Smart safe windows**: Highlights cooler 2-hour periods over the next 48h using **feels-like** and humidity.
 - **Journal & export**: Log what happened in one tap; download as Excel/CSV for your clinician.
 - **Simulator mode**: A learning sandbox to try “what-ifs” without saving data.
-- **Designed for Gulf life style and Culture**: practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
-- **First of its kind in the GCC**: no other app focuses on MS heat sensitivity like this.
-- **Plan confidently**: know exactly when and where it's safer to go out.
-- **Understand your triggers**: connect weather, body temperature, and symptoms over time.
-- **Share evidence**: give your doctor clear, organized records to support better care.
-""")
+- **Designed for Gulf lifestyle and culture**: Practical tips for fasting, prayer standing, shaded walking, car cooling, and beach time.
+- **First of its kind in the GCC**: No other app focuses on MS heat sensitivity like this.
+- **Plan confidently**: Know exactly when and where it's safer to go out.
+- **Understand your triggers**: Connect weather, body temperature, and symptoms over time.
+- **Share evidence**: Give your doctor clear, organized records to support better care.
 
 🔒 **Privacy**: Your data stays on your device (SQLite). This is a community prototype for self-management — not a medical device. You can export your temperatures and journal as **Excel/CSV** to share with your clinician or caregiver.
-            """)
+""")
 
 # ================== PLANNER HELPERS ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
