@@ -1900,7 +1900,7 @@ elif page_id == "monitor":
             st.subheader("📊 قراءات المستشعرات المباشرة")
         
         # Get latest sensor data
-        sample = fetch_latest_sensor_sample(device_id or "esp8266-01")
+        sample = fetch_latest_sensor_sample("esp8266-01")
         if sample:
             col1, col2, col3, col4 = st.columns(4)
             
