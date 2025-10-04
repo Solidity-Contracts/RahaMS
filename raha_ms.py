@@ -2267,3 +2267,537 @@ if not st.session_state.get("_recovery_patch_applied_once"):
 # END PATCH
 # ================================
 
+# ================================
+# RAHA MS — UX UPGRADE PATCH (RTL + About + Sensors + Trend interval + AI verbosity)
+# Paste this entire block at the very bottom of your app file.
+# ================================
+import statistics
+
+# ---- 1) Force full RTL only in Arabic (while keeping slider mechanics LTR) ----
+def _apply_rtl_for_arabic():
+    if app_language == "Arabic":
+        st.markdown("""
+        <style>
+        /* Main content RTL, sidebar kept LTR so it slides correctly */
+        [data-testid="stAppViewContainer"] { direction: rtl !important; text-align: right !important; }
+        [data-testid="stSidebar"] { direction: ltr !important; }
+        [data-testid="stSidebar"] > div { direction: rtl !important; text-align: right !important; }
+
+        /* Sliders: keep mechanics LTR (thumb movement/ticks) but labels stay RTL */
+        [data-testid="stSlider"] { direction: ltr !important; }
+        [data-testid="stSlider"] > label { direction: rtl !important; text-align: right !important; }
+        [data-testid="stSlider"] [data-testid="stTickBar"] { direction: ltr !important; }
+        [data-testid="stSlider"] [data-baseweb="slider"] { direction: ltr !important; }
+        [data-testid="stThumbValue"] { direction: ltr !important; text-align: center !important; }
+        </style>
+        """, unsafe_allow_html=True)
+
+_apply_rtl_for_arabic()  # apply immediately on this run
+
+# ---- 2) Add 'ai_style' to user_prefs schema (safe migration) ----
+def ensure_user_prefs_schema_v2():
+    ensure_user_prefs_schema()  # original creator
+    c = get_conn().cursor()
+    c.execute("PRAGMA table_info(user_prefs)")
+    cols = [r[1] for r in c.fetchall()]
+    if "ai_style" not in cols:
+        try:
+            c.execute("ALTER TABLE user_prefs ADD COLUMN ai_style TEXT")
+            get_conn().commit()
+        except Exception:
+            pass
+
+ensure_user_prefs_schema_v2()
+
+# ---- 3) Richer About page (welcoming, guiding, with CTAs) ----
+def render_about_page_v2(lang: str = "English"):
+    is_ar = (lang == "Arabic")
+    def T_(en, ar): return ar if is_ar else en
+
+    st.markdown(f"""
+    <div style="padding:10px 12px;border:1px solid rgba(0,0,0,.06);border-radius:12px;background:
+      linear-gradient(90deg, rgba(34,197,94,.10), rgba(14,165,233,.10));">
+      <h2 style="margin:0">{'👋 أهلاً بك في' if is_ar else '👋 Welcome to'} <b>Tanzim MS</b></h2>
+      <p style="margin:.2rem 0 0 0">
+        {T_(
+          "A Gulf‑aware companion that helps people with MS stay safer in the heat — by matching your readings to your personal baseline and actual local weather.",
+          "رفيق مُصمَّم للخليج يساعد أشخاص التصلب المتعدد على الأمان في الحر — بمقارنة قراءاتك بخطّك الأساسي وطقسك المحلي الفعلي."
+        )}
+      </p>
+    </div>
+    """, unsafe_allow_html=True)
+
+    colA, colB = st.columns([1,1])
+    with colA:
+        st.markdown("### " + T_("Why heat matters in MS", "لماذا تؤثر الحرارة في التصلب المتعدد"))
+        st.markdown(T_(
+            "- Even a ~0.5°C rise can worsen symptoms (Uhthoff’s phenomenon).\n"
+            "- Humidity in the Gulf makes heat feel heavier and recovery slower.\n"
+            "- Small, early actions (pre‑cool, shade/AC, pacing) prevent bad days.",
+            "- حتى زيادة ≈ 0.5°م قد تُفاقم الأعراض (ظاهرة أوتهوف).\n"
+            "- رطوبة الخليج تجعل الحر أثقل والتعافي أبطأ.\n"
+            "- خطوات صغيرة مبكرة (تبريد مسبق، ظل/مكيّف، تنظيم الجهد) تمنع سوء الأيام."
+        ))
+    with colB:
+        st.markdown("### " + T_("Start in 60 seconds", "ابدأ خلال 60 ثانية"))
+        st.markdown(T_(
+            "1. Open **Settings** → set *Baseline* and **Home City**.\n"
+            "2. Visit **Monitor** → see core/peripheral vs feels‑like/humidity.\n"
+            "3. Log one **Daily** entry in **Journal**.\n"
+            "4. Ask the **AI Companion** for a safe window today.",
+            "1. افتح **الإعدادات** → اضبط *الأساس* و**المدينة الأساسية**.\n"
+            "2. زر **المراقبة** → شاهد الأساسية/الطرفية مقابل المحسوس/الرطوبة.\n"
+            "3. سجّل **مدخلة يومية** في **اليوميات**.\n"
+            "4. اسأل **المساعد** عن نافذة آمنة اليوم."
+        ))
+
+    st.markdown("---")
+    st.markdown("### " + T_("What’s inside", "ماذا ستجد"))
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        st.markdown("**📊 " + T_("Monitor", "المراقبة") + "**")
+        st.caption(T_("Live temps vs baseline + alerts, written simply.", "قراءات مباشرة مقابل الأساس + تنبيهات، بشرح مبسط."))
+        if st.button(T_("Open Monitor", "افتح المراقبة"), key="go_monitor"): 
+            st.session_state["nav_radio"] = "monitor"; st.session_state["current_page"] = "monitor"; st.rerun()
+    with c2:
+        st.markdown("**🧭 " + T_("Planner", "المخطط") + "**")
+        st.caption(T_("Safest 2‑hour windows for your city; instant tips.", "أفضل فترات لساعتين في مدينتك؛ نصائح فورية."))
+        if st.button(T_("Open Planner", "افتح المخطط"), key="go_planner"): 
+            st.session_state["nav_radio"] = "planner"; st.session_state["current_page"] = "planner"; st.rerun()
+    with c3:
+        st.markdown("**📒 " + T_("Journal", "اليوميات") + "**")
+        st.caption(T_("Quick daily logs; export to share with your clinician.", "تسجيلات يومية سريعة؛ تصدير للمشاركة مع طبيبك."))
+        if st.button(T_("Open Journal", "افتح اليوميات"), key="go_journal"): 
+            st.session_state["nav_radio"] = "journal"; st.session_state["current_page"] = "journal"; st.rerun()
+    with c4:
+        st.markdown("**🤖 " + T_("AI Companion", "المرافق الذكي") + "**")
+        st.caption(T_("Personal, bilingual guidance; aware of your city & logs.", "إرشاد شخصي ثنائي اللغة؛ واعٍ بمدينتك وسجلّك."))
+        if st.button(T_("Open Companion", "افتح المساعد"), key="go_assistant"): 
+            st.session_state["nav_radio"] = "assistant"; st.session_state["current_page"] = "assistant"; st.rerun()
+
+    st.markdown("---")
+    st.caption(T_(
+        "Privacy: Your data stays on this device/database for your care. This app gives general wellness guidance — for severe or unusual symptoms, seek urgent medical care.",
+        "الخصوصية: تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يقدم التطبيق إرشادًا عامًا — عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
+    ))
+
+# Use the richer about page from now on
+render_about_page = render_about_page_v2
+
+# ---- 4) Friendlier sensor explainer + trend sampling interval, label toggle ----
+def render_monitor_v2():
+    st.title("☀️ " + T["risk_dashboard"])
+    if "user" not in st.session_state:
+        st.warning(T["login_first"]); return
+
+    tabs = st.tabs(["📡 " + ("Live Sensor Data" if app_language=="English" else "بيانات مباشرة"),
+                    "🔬 " + ("Learn & Practice" if app_language=="English" else "تعلّم وتدرّب")])
+
+    # --- Tab 1: Live Sensor Data ---
+    with tabs[0]:
+        with st.expander("🌡️ " + ("About these numbers" if app_language=="English" else "فهم هذه القراءات"), expanded=False):
+            if app_language=="English":
+                st.markdown("""
+**Core** = your internal body temperature.  
+**Peripheral** = skin/limb temperature (moves with the environment).  
+**Feels‑like** & **Humidity** = what your body experiences outdoors.
+
+**How to read it (no tech needed):**
+- If **Core rises ~0.5°C** above your **Baseline**, you may feel MS symptoms — cool down early.
+- **Feels‑like ≥ 38–42°C** and **Humidity ≥ 60%** make cooling harder → shorten outings, use shade/AC.
+- **Peripheral** often sits **below Core**; when outside in heat it can climb.
+
+**When to act:**
+- You feel worse *and* Core is up → move to AC, cool packs, water, rest 15–20 min.
+- Severe/unusual symptoms? **Seek urgent care.**
+""")
+            else:
+                st.markdown("""
+**الأساسية** = حرارة جسمك الداخلية.  
+**الطرفية** = حرارة الجلد/الأطراف (تتحرك مع البيئة).  
+**المحسوسة** و**الرطوبة** = ما يشعر به جسمك في الخارج.
+
+**كيف تقرأها (بدون تقنية):**
+- إذا **ارتفعت الأساسية ~0.5°م** فوق **خط الأساس** فقد تظهر أعراض — **تدخّل مبكرًا**.
+- **محسوسة ≥ 38–42°م** و**رطوبة ≥ 60%** تجعل التبريد أصعب → قِصّر الخروج واستخدم الظل/المكيف.
+- **الطرفية** غالبًا أقل من **الأساسية**؛ ترتفع في الخارج الحار.
+
+**متى تتصرف:**
+- تشعر بسوء *ومع* ارتفاع الأساسية → انتقل للمكيف، حقائب تبريد، ماء، راحة 15–20 دقيقة.
+- أعراض شديدة/غير معتادة؟ **اطلب رعاية عاجلة.**
+""")
+
+        colA, colB, colC, colD = st.columns([1.3,1.1,1,1.3])
+        with colA:
+            city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0,
+                                key="monitor_city", format_func=lambda c: city_label(c, app_language))
+        with colB:
+            st.markdown("**🔌 Sensor Hub**" if app_language=="English" else "**🔌 محور المستشعرات**")
+            st.caption("ESP8266 + MAX30205 + MLX90614")
+        with colC:
+            if st.button(("🔄 Connect to Sensors" if app_language=="English" else "🔄 الاتصال بالمستشعرات"), use_container_width=True, type="primary"):
+                sample = fetch_latest_sensor_sample("esp8266-01")
+                if sample:
+                    msg = f"✅ Connected! Last: {sample['core']:.1f}°C core, {sample['peripheral']:.1f}°C peripheral" \
+                          if app_language=="English" else f"✅ متصل! آخر قراءة: {sample['core']:.1f}°م أساسية، {sample['peripheral']:.1f}°م طرفية"
+                    st.success(msg)
+                    st.session_state["live_core_smoothed"] = [sample['core']]
+                    st.session_state["live_periph_smoothed"] = [sample['peripheral']]
+                    st.session_state["live_running"] = True
+                else:
+                    st.error("❌ No sensor data found. Check device and Supabase configuration." if app_language=="English"
+                             else "❌ لا توجد بيانات مستشعر. تحقق من الجهاز وإعداد Supabase.")
+        with colD:
+            st.markdown(f"<div class='badge'>{'Baseline' if app_language=='English' else 'الأساس'}: "
+                        f"<strong>{st.session_state.get('baseline', 37.0):.1f}°C</strong></div>", unsafe_allow_html=True)
+
+        weather, err = get_weather(city)
+        col1, col2, col3, col4 = st.columns(4)
+        sample = fetch_latest_sensor_sample("esp8266-01")
+        if sample:
+            with col1:
+                delta = sample['core'] - st.session_state.get('baseline', 37.0)
+                st.metric("Core" if app_language=="English" else "الأساسية",
+                          f"{sample['core']:.1f}°C", f"{delta:+.1f}°C",
+                          delta_color="inverse" if delta>=0.5 else "normal")
+            with col2:
+                st.metric("Peripheral" if app_language=="English" else "الطرفية",
+                          f"{sample['peripheral']:.1f}°C")
+        else:
+            with col1:
+                st.info("🔌 No live sensor data" if app_language=="English" else "🔌 لا توجد بيانات مباشرة")
+        with col3:
+            st.metric(("Feels‑like" if app_language=="English" else "المحسوسة"),
+                      f"{(weather or {}).get('feels_like','—')}°C" if weather else "—")
+        with col4:
+            st.metric(("Humidity" if app_language=="English" else "الرطوبة"),
+                      f"{(weather or {}).get('humidity','—')}%" if weather else "—")
+
+        # Risk card + warning
+        if weather and sample:
+            risk = compute_risk(weather["feels_like"], weather["humidity"], sample['core'], st.session_state.get('baseline', 37.0), [], [])
+            st.markdown(f"""
+            <div class="big-card" style="--left:{risk['color']}">
+              <h3>{risk['icon']} <strong>{T['status']}: {risk['status']}</strong></h3>
+              <p style="margin:6px 0 0 0">{risk['advice']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if (sample['core'] - st.session_state.get('baseline', 37.0)) >= 0.5:
+                st.warning(
+                    "⚠️ Temperature Alert: core is 0.5°C above baseline. Cool down and monitor symptoms.\n\nIf severe/unusual symptoms occur, seek urgent care."
+                    if app_language=="English" else
+                    "⚠️ تنبيه: الأساسية أعلى بـ 0.5°م من الأساس. تبرد وراقب الأعراض.\n\nإذا ظهرت أعراض شديدة/غير معتادة فاطلب رعاية عاجلة."
+                )
+        elif weather and not sample:
+            st.info("Live sensor data not available; showing weather-based context." if app_language=="English"
+                    else "لا توجد بيانات مستشعر؛ عرض سياق الطقس فقط.")
+        else:
+            st.error(f"{T['weather_fail']}: {err or '—'}")
+
+        if st.button(T["refresh_weather"], key="refresh_weather_btn_v2"):
+            get_weather.clear(); st.rerun()
+
+        # --- Health Event Logging (unchanged UI but kept here) ---
+        st.markdown("---")
+        st.subheader("📝 " + ("Log Health Event" if app_language=="English" else "تسجيل حدث صحي"))
+        with st.form("health_event_form_v2", clear_on_submit=True):
+            if sample:
+                current_temp = sample['core']
+                delta = current_temp - st.session_state.get('baseline', 37.0)
+                st.info(
+                    f"**Current:** Core {current_temp:.1f}°C | Δ {delta:+.1f}°C | Peripheral {sample['peripheral']:.1f}°C" if app_language=="English"
+                    else f"**الحالي:** الأساسية {current_temp:.1f}°م | الفرق {delta:+.1f}°م | الطرفية {sample['peripheral']:.1f}°م"
+                )
+            trigger_opts = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+            symptom_opts = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+            colA2, colB2 = st.columns(2)
+            with colA2:
+                chosen_tr = st.multiselect(T["triggers_today"], trigger_opts)
+                tr_other = st.text_input(f"{T['other']} ({T['trigger']})")
+            with colB2:
+                chosen_sy = st.multiselect(T["symptoms_today"], symptom_opts)
+                sy_other = st.text_input(f"{T['other']} ({T['symptom']})")
+            event_description = st.text_area(T["notes"], height=80)
+            all_triggers = chosen_tr + ([f"Other: {tr_other.strip()}"] if tr_other.strip() else [])
+            all_symptoms = chosen_sy + ([f"Other: {sy_other.strip()}"] if sy_other.strip() else [])
+            if st.form_submit_button("💾 " + ( "Save to Journal" if app_language=="English" else "حفظ في اليوميات")):
+                entry = {
+                    "type":"ALERT","at": utc_iso_now(),
+                    "core_temp": round(sample['core'],1) if sample else None,
+                    "peripheral_temp": round(sample['peripheral'],1) if sample else None,
+                    "baseline": round(st.session_state.get('baseline', 37.0),1),
+                    "reasons": all_triggers, "symptoms": all_symptoms, "note": event_description.strip(),
+                    "city": city, "feels_like": (weather or {}).get("feels_like"), "humidity": (weather or {}).get("humidity")
+                }
+                insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                st.success("✅ Saved!" if app_language=="English" else "✅ تم الحفظ!")
+
+        # --- Temperature trend with sampling interval + label toggle ---
+        st.markdown("---")
+        st.subheader(T["temperature_trend"])
+        label_mode = st.radio(("X‑axis" if app_language=="English" else "المحور السيني"),
+                              options=(["Time only","Date & Time"] if app_language=="English" else ["الوقت فقط","التاريخ + الوقت"]),
+                              horizontal=True, key="trend_label_mode")
+
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
+            FROM temps WHERE username=? ORDER BY date DESC LIMIT 50
+        """, (st.session_state.get("user","guest"),))
+        rows = c.fetchall()
+        if rows:
+            rows = rows[::-1]
+            dates_iso = [r[0] for r in rows]
+            # timestamps
+            ts = []
+            for d in dates_iso:
+                try: dt = datetime.fromisoformat(d.replace("Z","+00:00"))
+                except Exception: dt = datetime.now(timezone.utc)
+                ts.append(dt.astimezone(TZ_DUBAI))
+            # intervals (minutes)
+            if len(ts) >= 2:
+                gaps = [(ts[i]-ts[i-1]).total_seconds()/60 for i in range(1,len(ts))]
+                median_gap = statistics.median(gaps)
+            else:
+                median_gap = None
+
+            core = [r[1] for r in rows]; periph = [r[2] for r in rows]
+            feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
+
+            fig, ax = plt.subplots(figsize=(10, 4))
+            if app_language=="Arabic":
+                lbl_core  = ar_shape("الأساسية"); lbl_peri = ar_shape("الطرفية"); lbl_feels = ar_shape("المحسوسة")
+            else:
+                lbl_core, lbl_peri, lbl_feels = "Core", "Peripheral", "Feels‑like"
+            ax.plot(range(len(ts)), core,   marker='o', label=lbl_core,  linewidth=2)
+            ax.plot(range(len(ts)), periph, marker='o', label=lbl_peri,  linewidth=1.8)
+            ax.plot(range(len(ts)), feels,  marker='s', label=lbl_feels, linewidth=1.8)
+
+            ax.set_xticks(range(len(ts)))
+            if (label_mode == "Date & Time") or (label_mode == "التاريخ + الوقت"):
+                xt = [t.strftime("%d %b • %H:%M") for t in ts]
+            else:
+                xt = [t.strftime("%H:%M") for t in ts]
+            ax.set_xticklabels(xt, rotation=45, fontsize=9)
+
+            ax.set_ylabel("°C" if app_language=="English" else "°م", fontproperties=_AR_FONT)
+            ax.legend(prop=_AR_FONT); ax.grid(True, alpha=0.3)
+            if app_language=="Arabic":
+                ax.set_title(ar_shape("الأساسية مقابل الطرفية مقابل المحسوسة"), fontproperties=_AR_FONT, loc="center")
+            else:
+                ax.set_title("Core vs Peripheral vs Feels‑like")
+            st.pyplot(fig)
+
+            # sampling caption
+            cap = "Timezone: Asia/Dubai"
+            if median_gap is not None:
+                cap = (f"Sampling: ~{median_gap:.0f} min between points • " + cap) if app_language=="English" \
+                      else (f"التقاطع: ~{median_gap:.0f} دقيقة بين النقاط • " + cap)
+            st.caption(cap)
+        else:
+            st.info("No temperature history to chart yet." if app_language=="English" else "لا يوجد سجل درجات لعرضه.")
+
+    # --- Tab 2: Learn & Practice (leave as in your build) ---
+    with tabs[1]:
+        st.info("🎯 Practice recognizing patterns and cooling strategies." if app_language=="English"
+                else "🎯 تدرب على التعرف على الأنماط واستراتيجيات التبريد.")
+        st.write("Try scenarios and see how solutions (cooling vest, AC, hydration) change core/feels‑like.")
+
+# Use the improved monitor from now on
+render_monitor = render_monitor_v2
+
+# ---- 5) AI verbosity: preference in prompt + compact UI for long answers ----
+def _system_prompt_v2(lang: str, username: str | None, prompt_text: str) -> tuple[str, str, str]:
+    city_code = resolve_city_for_chat(prompt_text)
+    wx = get_weather_context(city_code)
+    journal = get_recent_journal_context(username, max_entries=5) if username else ""
+    # read prefs
+    prefs = load_user_prefs(username) if username else {}
+    ai_style = (prefs.get("ai_style") or "Concise")
+
+    sys = (
+        "You are Raha MS AI Companion — a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf. "
+        "Be practical, culturally aware (Arabic/English; prayer/fasting context), and action‑oriented. "
+        "Never diagnose; focus on cooling, pacing, hydration, timing, and safety. "
+        "Structure answers into three sections named exactly: 'Do now', 'Plan later', 'Watch for'. "
+    )
+    if ai_style.lower().startswith("concise"):
+        sys += "Start with one‑line summary. Keep each section ≤3 short bullets (≤12 words each). "
+    else:
+        sys += "Start with one‑line summary, then up to 5 bullets per section with brief rationale. "
+
+    if journal and "No recent journal" not in journal:
+        sys += f"\n\nUser's recent journal (summarized):\n{journal}"
+    if wx:
+        sys += f"\n\nWeather context:\n{wx}"
+    sys += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
+    return sys, (city_code or ""), wx
+
+# swap in the new prompt builder
+_system_prompt = _system_prompt_v2
+
+def render_settings_v2():
+    st.title("⚙️ " + T["settings"])
+    if "user" not in st.session_state:
+        st.warning(T["login_first"]); return
+
+    # Load contacts
+    def load_emergency_contacts(username):
+        try:
+            c = get_conn().cursor()
+            c.execute("SELECT primary_phone, secondary_phone FROM emergency_contacts WHERE username=?", (username,))
+            row = c.fetchone()
+            if row: return row[0] or "", row[1] or ""
+            return "", ""
+        except Exception:
+            return "", ""
+
+    def save_emergency_contacts(username, p1, p2):
+        conn = get_conn(); c = conn.cursor()
+        try:
+            c.execute("""
+                INSERT INTO emergency_contacts (username, primary_phone, secondary_phone, updated_at)
+                VALUES (?,?,?,?)
+                ON CONFLICT(username) DO UPDATE SET
+                  primary_phone=excluded.primary_phone,
+                  secondary_phone=excluded.secondary_phone,
+                  updated_at=excluded.updated_at
+            """, (username, tel_href(p1), tel_href(p2), utc_iso_now()))
+            conn.commit()
+            return True, None
+        except Exception as e:
+            return False, str(e)
+
+    if "primary_phone" not in st.session_state or "secondary_phone" not in st.session_state:
+        p1, p2 = load_emergency_contacts(st.session_state["user"])
+        st.session_state["primary_phone"], st.session_state["secondary_phone"] = p1, p2
+
+    # Read prefs
+    prefs = load_user_prefs(st.session_state["user"])
+    st.subheader(T["baseline_setting"])
+    st.session_state.setdefault("baseline", 37.0)
+    st.session_state.setdefault("use_temp_baseline", True)
+    base = st.number_input(T["baseline_setting"], 35.5, 38.5, float(st.session_state["baseline"]), step=0.1, key="settings_baseline_v2")
+    useb = st.checkbox(T["use_temp_baseline"], value=st.session_state["use_temp_baseline"], key="settings_useb_v2")
+
+    st.subheader(T["contacts"])
+    p1 = st.text_input(T["primary_phone"], st.session_state["primary_phone"], key="settings_p1_v2")
+    p2 = st.text_input(T["secondary_phone"], st.session_state["secondary_phone"], key="settings_p2_v2")
+
+    st.subheader(T.get("home_city","Home City"))
+    home_city = st.selectbox(T.get("home_city","Home City"), GCC_CITIES,
+                             index=(GCC_CITIES.index(prefs["home_city"]) if prefs.get("home_city") in GCC_CITIES else 0),
+                             format_func=lambda c: city_label(c, app_language), key="settings_home_city_v2")
+    tz = st.text_input(T.get("timezone","Timezone (optional)"), prefs.get("timezone") or "", key="settings_tz_v2")
+
+    st.subheader("🤖 " + ("AI answer style" if app_language=="English" else "أسلوب إجابات المساعد"))
+    ai_style = st.radio(("Answer length" if app_language=="English" else "طول الإجابة"),
+                        ["Concise","Detailed"], index=(0 if (prefs.get("ai_style") or "Concise")=="Concise" else 1),
+                        horizontal=True, key="settings_ai_style_v2")
+
+    if st.button(T["save_settings"], key="settings_save_btn_v2"):
+        st.session_state["baseline"] = float(base)
+        st.session_state["use_temp_baseline"] = bool(useb)
+        st.session_state["primary_phone"] = (p1 or "").strip()
+        st.session_state["secondary_phone"] = (p2 or "").strip()
+
+        ok, err = save_emergency_contacts(st.session_state["user"], p1, p2)
+        save_user_prefs(st.session_state["user"], home_city=home_city, timezone=tz, language=app_language, ai_style=ai_style)
+        if ok: st.success("✅ " + T["saved"])
+        else: st.error(f"Failed to save contacts: {err}")
+
+    st.markdown("---")
+    if st.button(T["logout"], type="secondary", key="settings_logout_v2"):
+        for k in ["user", "primary_phone", "secondary_phone", "current_city"]:
+            st.session_state.pop(k, None)
+        st.success(T["logged_out"]); st.rerun()
+
+render_settings = render_settings_v2
+
+def render_assistant_v2():
+    st.title("🤝 " + T["assistant_title"])
+    if "user" not in st.session_state:
+        st.warning(T["login_first"]); return
+
+    st.caption(T["assistant_hint"])
+    st.session_state.setdefault("chat_history", [])
+    st.session_state.setdefault("ai_provider_last", None)
+    st.session_state.setdefault("ai_last_error", None)
+    st.session_state.setdefault("ai_last_finish_reason", None)
+
+    # Read AI style for compact rendering
+    prefs = load_user_prefs(st.session_state["user"])
+    ai_style_pref = (prefs.get("ai_style") or "Concise")
+
+    for m in st.session_state["chat_history"]:
+        with st.chat_message(m["role"]):
+            st.markdown(m["content"])
+
+    prompt = st.chat_input(T["ask_me_anything"])
+    if prompt:
+        with st.chat_message("user"): st.markdown(prompt)
+        st.session_state["chat_history"].append({"role":"user","content":prompt})
+
+        # Ask for city once if unknown
+        city_code = resolve_city_for_chat(prompt)
+        if city_code is None and not st.session_state.get("_asked_city_once"):
+            st.session_state["_asked_city_once"] = True
+            with st.chat_message("assistant"):
+                st.info("I don’t know your city yet. Pick one to tailor advice:" if app_language=="English"
+                        else "لا أعرف مدينتك بعد. اختر مدينة لتخصيص الإرشاد:")
+                pick = st.selectbox("📍 City", GCC_CITIES, index=0, key="assistant_city_pick_v2",
+                                    format_func=lambda c: city_label(c, app_language))
+                if st.button("Use this city" if app_language=="English" else "استخدام هذه المدينة", key="use_city_btn_v2"):
+                    st.session_state["current_city"] = pick
+                    st.rerun()
+
+        with st.chat_message("assistant"):
+            ph = st.empty(); ph.markdown("💭 " + T["thinking"])
+            text, err = ai_chat(prompt, app_language)
+            if err:
+                fallback = get_fallback_response(prompt, app_language)
+                ph.markdown(fallback)
+                st.session_state["chat_history"].append({"role":"assistant","content":fallback})
+            else:
+                # Compact display in Concise mode: summary line + collapsible details if long
+                if ai_style_pref == "Concise" and text and len(text) > 800 and ("\n" in text):
+                    first, rest = text.split("\n", 1)
+                    ph.markdown(first.strip())
+                    with st.expander("Details" if app_language=="English" else "التفاصيل", expanded=False):
+                        st.markdown(rest.strip())
+                else:
+                    ph.markdown(text)
+                st.session_state["chat_history"].append({"role":"assistant","content":text})
+
+    # Status
+    bits = []
+    prov = st.session_state.get("ai_provider_last")
+    if prov: bits.append(("✅ " if not st.session_state.get("ai_last_error") else "⚠️ ") + f"Provider: {prov}")
+    err = st.session_state.get("ai_last_error")
+    if err: bits.append(f"Last error: {err}")
+    fin = st.session_state.get("ai_last_finish_reason")
+    if fin: bits.append(f"finish_reason: {fin}")
+    if bits: st.caption(" • ".join(bits))
+
+    st.markdown("---")
+    col1, col2 = st.columns([1,5])
+    with col1:
+        if st.button(T["reset_chat"], key="reset_chat_btn_v2"):
+            for k in ["chat_history","ai_last_error","ai_provider_last","ai_last_finish_reason","_asked_city_once"]:
+                st.session_state.pop(k, None)
+            st.rerun()
+    with col2:
+        disclaimer = ("This chat provides general wellness information only. Always consult your healthcare provider for medical advice."
+                      if app_language=="English" else "هذه المحادثة تقدم معلومات عامة. استشر مقدم الرعاية الصحية دائمًا.")
+        st.caption(disclaimer)
+
+render_assistant = render_assistant_v2
+
+# Trigger a one‑time rerun so the overrides apply immediately
+if not st.session_state.get("_ux_patch_applied_once"):
+    st.session_state["_ux_patch_applied_once"] = True
+    st.rerun()
+# ================================
+# END UX UPGRADE PATCH
+# ================================
+
