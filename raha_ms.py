@@ -1616,3 +1616,654 @@ with st.sidebar.expander("📞 " + T["emergency"], expanded=False):
             st.caption("Set numbers in Settings." if app_language=="English" else "أضف الأرقام من الإعدادات.")
     else:
         st.caption("Login to view quick‑dial contacts." if app_language=="English" else "سجّل الدخول لعرض جهات الاتصال.")
+
+# ================================
+# RAHA MS — SENSORS EXPLAINER + RECOVERY LOGGER + AI LEARNING PATCH
+# Paste this block at the very bottom of your app file.
+# ================================
+import statistics
+from datetime import datetime as _dt
+
+# ---------- Localized action library ----------
+ACTIONS_EN = [
+    "Moved indoors/AC", "Cooling vest", "Cool shower", "Rested 15–20 min",
+    "Drank water", "Electrolyte drink", "Fan airflow", "Stayed in shade",
+    "Wet towel/neck wrap", "Lowered intensity / paused", "Pre‑cooled car",
+    "Changed to light clothing", "Wrist/forearm cooling", "Ice pack"
+]
+ACTIONS_AR = [
+    "الانتقال إلى الداخل/مكيف", "سترة تبريد", "دش بارد", "راحة 15–20 دقيقة",
+    "شرب ماء", "مشروب إلكتروليت", "مروحة", "الظل",
+    "منشفة مبللة/لف الرقبة", "خفض الشدة / توقف", "تبريد السيارة مسبقًا",
+    "ملابس خفيفة", "تبريد المعصم/الساعد", "كمادة ثلج"
+]
+def _actions_for_lang(lang):
+    return ACTIONS_AR if lang == "Arabic" else ACTIONS_EN
+
+# ---------- Helpers ----------
+_LEVEL_BY_STATUS = {"Safe":0, "Caution":1, "High":2, "Danger":3}
+def _risk_level(status: str) -> int:
+    return _LEVEL_BY_STATUS.get(str(status), 0)
+
+def _parse_iso(s):
+    try:
+        return _dt.fromisoformat(s.replace("Z","+00:00"))
+    except Exception:
+        return _dt.now(timezone.utc)
+
+# ---------- Aggregate “what works” from RECOVERY entries ----------
+def get_top_actions_counts(username: str, lookback_days: int = 30) -> list[tuple[str,int]]:
+    try:
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, entry FROM journal
+            WHERE username=? ORDER BY date DESC LIMIT 500
+        """, (username,))
+        rows = c.fetchall()
+    except Exception:
+        rows = []
+    counts = {}
+    cutoff = _dt.now(timezone.utc) - timedelta(days=lookback_days)
+    for dt_raw, raw in rows:
+        try:
+            obj = json.loads(raw)
+        except Exception:
+            continue
+        if obj.get("type") != "RECOVERY": 
+            continue
+        try:
+            ts = _parse_iso(dt_raw)
+        except Exception:
+            ts = _dt.now(timezone.utc)
+        if ts < cutoff:
+            continue
+        for a in obj.get("actions", []):
+            a = str(a).strip()
+            if not a: 
+                continue
+            counts[a] = counts.get(a, 0) + 1
+    return sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:6]
+
+def _format_top_actions_str(username: str, lang: str) -> str:
+    tops = get_top_actions_counts(username, lookback_days=60)
+    if not tops:
+        return ""
+    if lang == "Arabic":
+        lines = ["إجراءات فعّالة مؤخرًا لهذا المستخدم:"]
+        for a, n in tops:
+            lines.append(f"- {a} ×{n}")
+        return "\n".join(lines)
+    else:
+        lines = ["Top effective actions for this user recently:"]
+        for a, n in tops:
+            lines.append(f"- {a} ×{n}")
+        return "\n".join(lines)
+
+# ---------- Extend system prompt so AI learns from RECOVERY ----------
+def _system_prompt_v3(lang: str, username: str | None, prompt_text: str) -> tuple[str, str, str]:
+    # reuse the city/weather/journal builder from the current version
+    city_code = resolve_city_for_chat(prompt_text)
+    wx = get_weather_context(city_code)
+    journal = get_recent_journal_context(username, max_entries=5) if username else ""
+    prefs = load_user_prefs(username) if username else {}
+    ai_style = (prefs.get("ai_style") or "Concise")
+
+    sys = (
+        "You are Raha MS AI Companion — a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf. "
+        "Be practical, culturally aware (Arabic/English; prayer/fasting context), and action‑oriented. "
+        "Never diagnose; focus on cooling, pacing, hydration, timing, and safety. "
+        "Structure answers into three sections named exactly: 'Do now', 'Plan later', 'Watch for'. "
+    )
+    if ai_style.lower().startswith("concise"):
+        sys += "Start with one‑line summary. Keep each section ≤3 short bullets (≤12 words each). "
+    else:
+        sys += "Start with one‑line summary, then up to 5 bullets per section with brief rationale. "
+
+    if journal and "No recent journal" not in journal:
+        sys += f"\n\nUser's recent journal (summarized):\n{journal}"
+    if wx:
+        sys += f"\n\nWeather context:\n{wx}"
+
+    # NEW: feed what actually worked for this user
+    if username:
+        tops = _format_top_actions_str(username, lang)
+        if tops:
+            sys += f"\n\nPersonalized prior success:\n{tops}\nPrioritize these when appropriate."
+
+    sys += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
+    return sys, (city_code or ""), wx
+
+# Swap the prompt builder
+_system_prompt = _system_prompt_v3
+
+# ---------- Upgrade the sensors explainer + add recovery logger into Monitor ----------
+def render_monitor_v3():
+    st.title("☀️ " + T["risk_dashboard"])
+    if "user" not in st.session_state:
+        st.warning(T["login_first"]); return
+
+    tabs = st.tabs(["📡 " + ("Live Sensor Data" if app_language=="English" else "بيانات مباشرة"),
+                    "🔬 " + ("Learn & Practice" if app_language=="English" else "تعلّم وتدرّب")])
+
+    # --- Tab 1: Live Sensor Data ---
+    with tabs[0]:
+        # >>> RICH SENSORS EXPLAINER
+        with st.expander("🔎 " + ("About sensors & temperatures" if app_language=="English" else "عن المستشعرات والقراءات"), expanded=False):
+            if app_language == "English":
+                st.markdown("""
+**Hardware (what’s collecting data):**
+- **MAX30205** — medical‑grade digital thermometer on skin → **Peripheral** temperature (±0.1°C).
+- **MLX90614** — infrared sensor estimating internal body temp → **Core** (±0.5°C typical).
+- **ESP8266** — small Wi‑Fi board that reads sensors and sends data to the app.
+
+**The 4 temperatures you’ll see:**
+- **Core** — internal body temp; most linked to heat stress. *Typical resting ~36.5–37.2°C*.
+- **Peripheral** — skin temp; responds quickly to the environment. *Usually < Core indoors.*
+- **Feels‑like** — what the weather *feels* like outdoors (air + humidity). *High humidity makes cooling harder.*
+- **Baseline** — **your** usual core temperature (set in **Settings**). We flag rises **≥0.5°C** above this.
+
+**How to use them together:**
+- If **Core ↑ ~0.5°C** vs **Baseline** → pre‑cool, AC/shade, water, rest **15–20 min**.
+- If **Feels‑like ≥ 38–42°C** or **Humidity ≥ 60%** → shorten outings; choose cooler windows.
+- Improving from **High/Danger → Caution/Safe**? Use **“Log what helped”** to teach the app what works **for you**.
+""")
+            else:
+                st.markdown("""
+**العتاد (ما الذي يجمع البيانات):**
+- **MAX30205** — ميزان حرارة رقمي طبي على الجلد → **الطرفية** (±0.1°م).
+- **MLX90614** — مستشعر تحت الحمراء يقدّر الحرارة الداخلية → **الأساسية** (±0.5°م تقريبيًا).
+- **ESP8266** — لوحة Wi‑Fi صغيرة تقرأ المستشعرات وترسل البيانات للتطبيق.
+
+**القراءات الأربع التي تراها:**
+- **الأساسية** — حرارة الجسم الداخلية؛ الأكثر ارتباطًا بالإجهاد الحراري. *الراحة ~36.5–37.2°م*.
+- **الطرفية** — حرارة الجلد؛ تتأثر بسرعة بالبيئة. *غالبًا أقل من الأساسية داخل المباني*.
+- **المحسوسة** — ما **نشهده** في الخارج (هواء + رطوبة). *الرطوبة العالية تصعّب التبريد*.
+- **خط الأساس** — حرارتك المعتادة (**اضبطها في الإعدادات**). ننبه عند الارتفاع **≥0.5°م** فوقها.
+
+**كيف تستخدمها معًا:**
+- إذا **ارتفعت الأساسية ~0.5°م** فوق **الأساس** → تبريد مسبق، مكيّف/ظل، ماء، راحة **15–20 دقيقة**.
+- إذا **المحسوسة ≥ 38–42°م** أو **الرطوبة ≥ 60%** → قصّر الخروج؛ اختر أوقاتًا أبرد.
+- تحسّن من **مرتفع/حرج → حذر/آمن**؟ استخدم **“سجّل ما ساعدك”** ليَتعلَّم التطبيق ما يناسبك.
+""")
+
+        # Top row
+        colA, colB, colC, colD = st.columns([1.3,1.1,1,1.3])
+        with colA:
+            city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES, index=0,
+                                key="monitor_city", format_func=lambda c: city_label(c, app_language))
+        with colB:
+            st.markdown("**🔌 Sensor Hub**" if app_language=="English" else "**🔌 محور المستشعرات**")
+            st.caption("ESP8266 + MAX30205 + MLX90614")
+        with colC:
+            if st.button(("🔄 Connect to Sensors" if app_language=="English" else "🔄 الاتصال بالمستشعرات"), use_container_width=True, type="primary"):
+                sample = fetch_latest_sensor_sample("esp8266-01")
+                if sample:
+                    msg = f"✅ Connected! Last: {sample['core']:.1f}°C core, {sample['peripheral']:.1f}°C peripheral" \
+                          if app_language=="English" else f"✅ متصل! آخر قراءة: {sample['core']:.1f}°م أساسية، {sample['peripheral']:.1f}°م طرفية"
+                    st.success(msg)
+                    st.session_state["live_core_smoothed"] = [sample['core']]
+                    st.session_state["live_periph_smoothed"] = [sample['peripheral']]
+                    st.session_state["live_running"] = True
+                else:
+                    st.error("❌ No sensor data found. Check device and Supabase configuration." if app_language=="English"
+                             else "❌ لا توجد بيانات مستشعر. تحقق من الجهاز وإعداد Supabase.")
+        with colD:
+            st.markdown(f"<div class='badge'>{'Baseline' if app_language=='English' else 'الأساس'}: "
+                        f"<strong>{st.session_state.get('baseline', 37.0):.1f}°C</strong></div>", unsafe_allow_html=True)
+
+        # Metrics
+        weather, err = get_weather(city)
+        col1, col2, col3, col4 = st.columns(4)
+        sample = fetch_latest_sensor_sample("esp8266-01")
+        if sample:
+            with col1:
+                delta = sample['core'] - st.session_state.get('baseline', 37.0)
+                st.metric("Core" if app_language=="English" else "الأساسية",
+                          f"{sample['core']:.1f}°C", f"{delta:+.1f}°C",
+                          delta_color="inverse" if delta>=0.5 else "normal")
+            with col2:
+                st.metric("Peripheral" if app_language=="English" else "الطرفية",
+                          f"{sample['peripheral']:.1f}°C")
+        else:
+            with col1:
+                st.info("🔌 No live sensor data" if app_language=="English" else "🔌 لا توجد بيانات مباشرة")
+        with col3:
+            st.metric(("Feels‑like" if app_language=="English" else "المحسوسة"),
+                      f"{(weather or {}).get('feels_like','—')}°C" if weather else "—")
+        with col4:
+            st.metric(("Humidity" if app_language=="English" else "الرطوبة"),
+                      f"{(weather or {}).get('humidity','—')}%" if weather else "—")
+
+        # Risk + alert
+        risk = None
+        if weather and sample:
+            risk = compute_risk(weather["feels_like"], weather["humidity"], sample['core'], st.session_state.get('baseline', 37.0), [], [])
+            st.markdown(f"""
+            <div class="big-card" style="--left:{risk['color']}">
+              <h3>{risk['icon']} <strong>{T['status']}: {risk['status']}</strong></h3>
+              <p style="margin:6px 0 0 0">{risk['advice']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if (sample['core'] - st.session_state.get('baseline', 37.0)) >= 0.5:
+                st.warning(
+                    "⚠️ Temperature Alert: core is 0.5°C above baseline. Cool down and monitor symptoms.\n\nIf severe/unusual symptoms occur, seek urgent care."
+                    if app_language=="English" else
+                    "⚠️ تنبيه: الأساسية أعلى بـ 0.5°م من الأساس. تبرد وراقب الأعراض.\n\nإذا ظهرت أعراض شديدة/غير معتادة فاطلب رعاية عاجلة."
+                )
+        elif weather and not sample:
+            st.info("Live sensor data not available; showing weather-based context." if app_language=="English"
+                    else "لا توجد بيانات مستشعر؛ عرض سياق الطقس فقط.")
+        else:
+            st.error(f"{T['weather_fail']}: {err or '—'}")
+
+        # ------- NEW: Recovery logger (automatic on improvement) -------
+        if risk and sample and weather:
+            curr = {
+                "status": risk["status"],
+                "level": _risk_level(risk["status"]),
+                "time_iso": utc_iso_now(),
+                "core": float(sample["core"]),
+                "periph": float(sample.get("peripheral", 0.0)),
+                "feels": float(weather["feels_like"]),
+                "humidity": float(weather["humidity"]),
+                "city": city
+            }
+            prev = st.session_state.get("_risk_track")
+
+            # Manual "Log cooling action" button
+            with st.expander(("Log a cooling action" if app_language=="English" else "سجّل إجراء تبريد"), expanded=False):
+                with st.form("manual_recovery_form", clear_on_submit=True):
+                    acts = st.multiselect(("What did you do?" if app_language=="English" else "ماذا فعلت؟"),
+                                          _actions_for_lang(app_language))
+                    note = st.text_area(("Details (optional)" if app_language=="English" else "تفاصيل (اختياري)"), height=70)
+                    if st.form_submit_button("Save" if app_language=="English" else "حفظ"):
+                        entry = {
+                            "type":"RECOVERY","at": utc_iso_now(),
+                            "from_status": curr["status"], "to_status": curr["status"],
+                            "actions": acts, "note": note.strip(),
+                            "core_before": None, "core_after": curr["core"],
+                            "peripheral_before": None, "peripheral_after": curr["periph"],
+                            "feels_like_before": None, "feels_like_after": curr["feels"],
+                            "humidity_before": None, "humidity_after": curr["humidity"],
+                            "city": city, "duration_min": None
+                        }
+                        insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                        st.success("Saved" if app_language=="English" else "تم الحفظ")
+
+            # Automatic prompt on improvement
+            show_prompt = False
+            if prev and (curr["level"] < prev["level"]):
+                show_prompt = True
+            # avoid nagging: show each transition once
+            if st.session_state.get("_recovery_prompt_dismissed_ts"):
+                # only show again if a new lower status is reached later
+                pass
+
+            if show_prompt:
+                msg = (f"✅ Improved: {prev['status']} → {curr['status']}. What helped?"
+                       if app_language=="English" else
+                       f"✅ تحسُّن: {prev['status']} ← {curr['status']}. ما الذي ساعد؟")
+                st.success(msg)
+                with st.form("auto_recovery_form", clear_on_submit=True):
+                    acts = st.multiselect(("Choose actions" if app_language=="English" else "اختر الإجراءات"),
+                                          _actions_for_lang(app_language))
+                    note = st.text_area(("Details (optional)" if app_language=="English" else "تفاصيل (اختياري)"),
+                                        height=70)
+                    colx, coly = st.columns([1,1])
+                    with colx:
+                        save_clicked = st.form_submit_button("Save" if app_language=="English" else "حفظ")
+                    with coly:
+                        dismiss_clicked = st.form_submit_button("Dismiss" if app_language=="English" else "تجاهل")
+
+                if save_clicked:
+                    # duration
+                    t1 = _parse_iso(prev["time_iso"])
+                    t2 = _parse_iso(curr["time_iso"])
+                    dur = int((t2 - t1).total_seconds() // 60) if t2 and t1 else None
+                    entry = {
+                        "type":"RECOVERY","at": utc_iso_now(),
+                        "from_status": prev["status"], "to_status": curr["status"],
+                        "actions": acts, "note": note.strip(),
+                        "core_before": round(prev["core"],2) if prev.get("core") is not None else None,
+                        "core_after": round(curr["core"],2),
+                        "peripheral_before": round(prev.get("periph",0.0),2) if prev.get("periph") is not None else None,
+                        "peripheral_after": round(curr["periph"],2),
+                        "feels_like_before": round(prev.get("feels",0.0),2) if prev.get("feels") is not None else None,
+                        "feels_like_after": round(curr["feels"],2),
+                        "humidity_before": int(prev.get("humidity",0)) if prev.get("humidity") is not None else None,
+                        "humidity_after": int(curr["humidity"]),
+                        "city": city, "duration_min": dur
+                    }
+                    insert_journal(st.session_state["user"], utc_iso_now(), entry)
+                    st.success("✅ Saved — thanks! This teaches your assistant what works for you."
+                               if app_language=="English" else
+                               "✅ تم الحفظ — شكرًا! هذا يعلّم مساعدك ما ينفع معك.")
+                    # update tracker to stop re‑prompt
+                    st.session_state["_risk_track"] = curr
+                elif dismiss_clicked:
+                    st.session_state["_risk_track"] = curr
+                    st.session_state["_recovery_prompt_dismissed_ts"] = utc_iso_now()
+            else:
+                # no improvement → just update tracker snapshot
+                st.session_state["_risk_track"] = curr
+
+        # Show top actions chips (last 30 days)
+        if "user" in st.session_state:
+            tops = get_top_actions_counts(st.session_state["user"], lookback_days=30)
+            if tops:
+                st.markdown("---")
+                st.markdown("**💡 " + ("What helps you most (last 30 days)" if app_language=="English" else "ما يساعدك غالبًا (آخر 30 يومًا)") + "**")
+                chip_css = """
+                <style>
+                .chip { display:inline-block; padding:6px 10px; margin:4px 6px; border:1px solid rgba(0,0,0,.15);
+                        border-radius:999px; font-size:0.95em; }
+                @media (prefers-color-scheme: dark) { .chip { border-color: rgba(255,255,255,.25);} }
+                </style>
+                """
+                st.markdown(chip_css, unsafe_allow_html=True)
+                html = "".join([f"<span class='chip'>{a} ×{n}</span>" for a,n in tops])
+                st.markdown(html, unsafe_allow_html=True)
+
+        # Trend + sampling interval (reuse your existing section)
+        st.markdown("---")
+        st.subheader(T["temperature_trend"])
+        label_mode = st.radio(("X‑axis" if app_language=="English" else "المحور السيني"),
+                              options=(["Time only","Date & Time"] if app_language=="English" else ["الوقت فقط","التاريخ + الوقت"]),
+                              horizontal=True, key="trend_label_mode_v3")
+
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, body_temp, peripheral_temp, weather_temp, feels_like, status
+            FROM temps WHERE username=? ORDER BY date DESC LIMIT 50
+        """, (st.session_state.get("user","guest"),))
+        rows = c.fetchall()
+        if rows:
+            rows = rows[::-1]
+            dates_iso = [r[0] for r in rows]
+            ts = []
+            for d in dates_iso:
+                try: dt = _dt.fromisoformat(d.replace("Z","+00:00"))
+                except Exception: dt = _dt.now(timezone.utc)
+                ts.append(dt.astimezone(TZ_DUBAI))
+            if len(ts) >= 2:
+                gaps = [(ts[i]-ts[i-1]).total_seconds()/60 for i in range(1,len(ts))]
+                median_gap = statistics.median(gaps)
+            else:
+                median_gap = None
+
+            core = [r[1] for r in rows]; periph = [r[2] for r in rows]
+            feels = [(r[4] if r[4] is not None else r[3]) for r in rows]
+            fig, ax = plt.subplots(figsize=(10, 4))
+            if app_language=="Arabic":
+                lbl_core  = ar_shape("الأساسية"); lbl_peri = ar_shape("الطرفية"); lbl_feels = ar_shape("المحسوسة")
+            else:
+                lbl_core, lbl_peri, lbl_feels = "Core", "Peripheral", "Feels‑like"
+            ax.plot(range(len(ts)), core,   marker='o', label=lbl_core,  linewidth=2)
+            ax.plot(range(len(ts)), periph, marker='o', label=lbl_peri,  linewidth=1.8)
+            ax.plot(range(len(ts)), feels,  marker='s', label=lbl_feels, linewidth=1.8)
+            ax.set_xticks(range(len(ts)))
+            if (label_mode == "Date & Time") or (label_mode == "التاريخ + الوقت"):
+                xt = [t.strftime("%d %b • %H:%M") for t in ts]
+            else:
+                xt = [t.strftime("%H:%M") for t in ts]
+            ax.set_xticklabels(xt, rotation=45, fontsize=9)
+            ax.set_ylabel("°C" if app_language=="English" else "°م", fontproperties=_AR_FONT)
+            ax.legend(prop=_AR_FONT); ax.grid(True, alpha=0.3)
+            if app_language=="Arabic":
+                ax.set_title(ar_shape("الأساسية مقابل الطرفية مقابل المحسوسة"), fontproperties=_AR_FONT, loc="center")
+            else:
+                ax.set_title("Core vs Peripheral vs Feels‑like")
+            st.pyplot(fig)
+            cap = "Timezone: Asia/Dubai"
+            if median_gap is not None:
+                cap = (f"Sampling: ~{median_gap:.0f} min between points • " + cap) if app_language=="English" \
+                      else (f"التقاط: ~{median_gap:.0f} دقيقة بين النقاط • " + cap)
+            st.caption(cap)
+        else:
+            st.info("No temperature history to chart yet." if app_language=="English" else "لا يوجد سجل درجات لعرضه.")
+
+    # --- Tab 2 remains as in your build ---
+    with tabs[1]:
+        st.info("🎯 Practice recognizing patterns and cooling strategies." if app_language=="English"
+                else "🎯 تدرب على التعرف على الأنماط واستراتيجيات التبريد.")
+        st.write("Try scenarios and see how solutions (cooling vest, AC, hydration) change core/feels‑like.")
+
+# Swap in the improved monitor
+render_monitor = render_monitor_v3
+
+# ---------- Journal: render RECOVERY entries nicely ----------
+def _pretty_recovery(entry, lang="English"):
+    when = entry.get("at", utc_iso_now())
+    try:
+        dt = _dt.fromisoformat(when.replace("Z","+00:00"))
+    except Exception:
+        dt = _dt.now(timezone.utc)
+    when_label = dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+    from_s = entry.get("from_status","?")
+    to_s   = entry.get("to_status","?")
+    acts   = entry.get("actions", [])
+    dur    = entry.get("duration_min", None)
+    core_b = entry.get("core_before")
+    core_a = entry.get("core_after")
+    delta  = (round((core_a - core_b),1) if (core_a is not None and core_b is not None) else None)
+    if lang == "Arabic":
+        header = f"**{when_label}** — **تعافٍ** ({from_s} → {to_s})"
+        lines = []
+        if acts: lines.append("**الإجراءات:** " + ", ".join(map(str,acts)))
+        meta = []
+        if dur is not None: meta.append(f"{dur} دقيقة")
+        if delta is not None: meta.append(f"Δ الأساسية {delta:+.1f}°م")
+        if meta: lines.append("**المدة/التغير:** " + " • ".join(meta))
+        note = (entry.get("note") or "").strip()
+        if note: lines.append("**ملاحظة:** " + note)
+        return header, "\n\n".join(lines)
+    else:
+        header = f"**{when_label}** — **Recovery** ({from_s} → {to_s})"
+        lines = []
+        if acts: lines.append("**Actions:** " + ", ".join(map(str,acts)))
+        meta = []
+        if dur is not None: meta.append(f"{dur} min")
+        if delta is not None: meta.append(f"Δ core {delta:+.1f}°C")
+        if meta: lines.append("**Duration/Change:** " + " • ".join(meta))
+        note = (entry.get("note") or "").strip()
+        if note: lines.append("**Note:** " + note)
+        return header, "\n\n".join(lines)
+
+# Override journal renderer to include RECOVERY
+def render_journal_v2():
+    st.title("📒 " + T["journal"])
+    if "user" not in st.session_state:
+        st.warning(T["login_first"]); return
+
+    st.caption(T["journal_hint"])
+    # (keep your existing daily quick logger UI)
+    # Reuse original function if you prefer; we only change the list rendering below.
+
+    # --- Daily quick logger (same as current app) ---
+    col1, col2, col3, col4 = st.columns(4)
+    with col1:
+        mood_options = ["🙂 Okay", "😌 Calm", "😕 Low", "😣 Stressed", "😴 Tired"] if app_language=="English" else ["🙂 بخير", "😌 هادئ", "😕 منخفض", "😣 متوتر", "😴 متعب"]
+        mood = st.selectbox(T["mood"], mood_options)
+    with col2:
+        hydration = st.slider(T["hydration"], 0, 12, 6, key="hydration_slider_v2")
+    with col3:
+        sleep = st.slider(T["sleep"], 0, 12, 7, key="sleep_slider_v2")
+    with col4:
+        fatigue_options = [f"{i}/10" for i in range(0,11)]
+        fatigue = st.selectbox(T["fatigue"], fatigue_options, index=4)
+    trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
+    symptom_options = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
+    chosen_tr = st.multiselect(("Triggers (optional)" if app_language=="English" else "المحفزات (اختياري)"), trigger_options, key="tr_v2")
+    tr_other = st.text_input(f"{T['other']} ({T['trigger']})", "", key="tr_other_v2")
+    chosen_sy = st.multiselect(("Symptoms (optional)" if app_language=="English" else "الأعراض (اختياري)"), symptom_options, key="sy_v2")
+    sy_other = st.text_input(f"{T['other']} ({T['symptom']})", "", key="sy_other_v2")
+    free_note = st.text_area(T["free_note"], height=100, key="free_note_v2")
+    if st.button(T["save_entry"], key="journal_save_v2"):
+        entry = {
+            "type":"DAILY","at": utc_iso_now(),
+            "mood": mood, "hydration_glasses": hydration, "sleep_hours": sleep, "fatigue": fatigue,
+            "triggers": chosen_tr + ([f"Other: {tr_other.strip()}"] if tr_other.strip() else []),
+            "symptoms": chosen_sy + ([f"Other: {sy_other.strip()}"] if sy_other.strip() else []),
+            "note": free_note.strip()
+        }
+        insert_journal(st.session_state["user"], utc_iso_now(), entry)
+        st.success("✅ " + T["saved"])
+
+    st.markdown("---")
+
+    c = get_conn().cursor()
+    c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
+    rows = c.fetchall()
+    if not rows:
+        st.info("No journal entries yet." if app_language=="English" else "لا توجد مدخلات بعد.")
+        return
+
+    available_types = ["PLAN","ALERT","ALERT_AUTO","RECOVERY","DAILY","NOTE"]
+    type_filter = st.multiselect(T["filter_by_type"], options=available_types, default=available_types)
+    page_size = 12
+    st.session_state.setdefault("journal_offset", 0)
+    start = st.session_state["journal_offset"]; end = start + 200
+    chunk = rows[start:end]
+
+    def _render_entry(raw_entry_json):
+        try: obj = json.loads(raw_entry_json)
+        except Exception: obj = {"type":"NOTE","at": utc_iso_now(), "text": str(raw_entry_json)}
+        t = obj.get("type","NOTE")
+        when = obj.get("at", utc_iso_now())
+        try:
+            dt = _dt.fromisoformat(when.replace("Z","+00:00"))
+        except Exception:
+            dt = _dt.now(timezone.utc)
+        when_label = dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+        if t == "RECOVERY":
+            header, body = _pretty_recovery(obj, app_language)
+            icon = "🧊"
+        elif t == "PLAN":
+            city = obj.get("city","—"); act = obj.get("activity","—")
+            start_t = obj.get("start","—"); end_t = obj.get("end","—")
+            fl = obj.get("feels_like"); hum = obj.get("humidity")
+            meta = f"Feels‑like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
+            header = f"**{when_label}** — **Plan** ({city})" if app_language=="English" else f"**{when_label}** — **خطة** ({city})"
+            body = (f"**Activity:** {act}\n\n**Time:** {start_t} → {end_t}\n\n{meta}") if app_language=="English" else (f"**النشاط:** {act}\n\n**الوقت:** {start_t} → {end_t}\n\n{meta}")
+            icon = "🗓️"
+        elif t in ("ALERT","ALERT_AUTO"):
+            core = obj.get("core_temp") or obj.get("body_temp"); periph = obj.get("peripheral_temp"); base = obj.get("baseline")
+            delta = (core - base) if (core is not None and base is not None) else None
+            reasons = obj.get("reasons") or []; symptoms = obj.get("symptoms") or []
+            header = f"**{when_label}** — **Heat alert**" if app_language=="English" else f"**{when_label}** — **تنبيه حراري**"
+            lines = []
+            if core is not None: lines.append(("**Core:** " if app_language=="English" else "**الأساسية:** ") + f"{core}°C")
+            if periph is not None: lines.append(("**Peripheral:** " if app_language=="English" else "**الطرفية:** ") + f"{periph}°C")
+            if base is not None: lines.append(("**Baseline:** " if app_language=="English" else "**الأساس:** ") + f"{base}°C")
+            if delta is not None: lines.append(("**Δ from baseline:** " if app_language=="English" else "**الفرق عن الأساس:** ") + f"+{round(delta,1)}°C")
+            if reasons: lines.append(("**Reasons:** " if app_language=="English" else "**الأسباب:** ") + ", ".join(map(str,reasons)))
+            if symptoms: lines.append(("**Symptoms:** " if app_language=="English" else "**الأعراض:** ") + ", ".join(map(str,symptoms)))
+            body = "\n\n".join(lines); icon = "🚨"
+        elif t == "DAILY":
+            mood = obj.get("mood","—"); hyd = obj.get("hydration_glasses","—")
+            sleep = obj.get("sleep_hours","—"); fat = obj.get("fatigue","—")
+            header = f"**{when_label}** — **Daily log**" if app_language=="English" else f"**{when_label}** — **مُسجّل يومي**"
+            lines = [f"**Mood:** {mood}", f"**Hydration:** {hyd}", f"**Sleep:** {sleep}h", f"**Fatigue:** {fat}"] if app_language=="English" \
+                else [f"**المزاج:** {mood}", f"**الترطيب:** {hyd}", f"**النوم:** {sleep}س", f"**التعب:** {fat}"]
+            note = (obj.get("note") or "").strip()
+            if note: lines.append(("**Note:** " if app_language=="English" else "**ملاحظة:** ") + note)
+            body = "\n\n".join(lines); icon = "🧩"
+        else:
+            text = obj.get("text") or obj.get("note") or "—"
+            header = f"**{when_label}** — **Note**" if app_language=="English" else f"**{when_label}** — **ملاحظة**"
+            body = text; icon = "📝"
+        return header, body, icon, t, obj, when_label
+
+    parsed = []
+    for dt_raw, raw_json in chunk:
+        title, body, icon, t, obj, when_label = _render_entry(raw_json)
+        if t not in type_filter: continue
+        try:
+            dt = _dt.fromisoformat(dt_raw.replace("Z","+00:00"))
+        except Exception:
+            dt = _dt.now(timezone.utc)
+        day_key = dt.astimezone(TZ_DUBAI).strftime("%A, %d %B %Y")
+        parsed.append((day_key, title, body, icon, obj, raw_json))
+    current_day = None; shown = 0
+    for day, title, body, icon, obj, raw_json in parsed:
+        if shown >= 12: break
+        if day != current_day:
+            st.markdown(f"## {day}")
+            current_day = day
+        st.markdown(f"""
+        <div class="big-card" style="--left:#94a3b8;margin-bottom:12px;">
+          <h3 style="margin:0">{icon} {title}</h3>
+          <div style="margin-top:6px">{body}</div>
+        </div>
+        """, unsafe_allow_html=True)
+        shown += 1
+
+    colp1, colp2, colp3 = st.columns([1,1,4])
+    with colp1:
+        if st.session_state["journal_offset"] > 0:
+            if st.button(T["newer"], key="jr_newer_v2"):
+                st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - 12); st.rerun()
+    with colp2:
+        if (start + shown) < len(rows):
+            if st.button(T["older"], key="jr_older_v2"):
+                st.session_state["journal_offset"] += 12; st.rerun()
+
+# Swap journal renderer
+render_journal = render_journal_v2
+
+# ---------- Include RECOVERY in AI’s journal summary ----------
+def get_recent_journal_context_v2(username: str, max_entries: int = 5) -> str:
+    try:
+        c = get_conn().cursor()
+        c.execute("""
+            SELECT date, entry FROM journal 
+            WHERE username=? ORDER BY date DESC LIMIT ?
+        """, (username, max_entries))
+        rows = c.fetchall()
+    except Exception:
+        rows = []
+    if not rows:
+        return "No recent journal entries."
+    lines = []
+    for dt, raw in rows:
+        try: entry = json.loads(raw)
+        except Exception: 
+            entry = {"type":"NOTE", "text":str(raw)}
+        t = entry.get("type","NOTE")
+        if t == "DAILY":
+            lines.append(f"Daily: mood={entry.get('mood','?')}, hydration={entry.get('hydration_glasses','?')}g, sleep={entry.get('sleep_hours','?')}h, fatigue={entry.get('fatigue','?')}")
+        elif t in ("ALERT","ALERT_AUTO"):
+            core = entry.get("core_temp") or entry.get("body_temp"); base = entry.get("baseline")
+            delta = f"+{round(core-base,1)}°C" if (core is not None and base is not None) else ""
+            lines.append(f"Alert: core={core}°C {delta}; reasons={entry.get('reasons',[])}; symptoms={entry.get('symptoms',[])}")
+        elif t == "PLAN":
+            lines.append(f"Plan: {entry.get('activity','?')} in {entry.get('city','?')} ({entry.get('start','?')}→{entry.get('end','?')})")
+        elif t == "RECOVERY":
+            from_s = entry.get("from_status","?"); to_s = entry.get("to_status","?")
+            acts = entry.get("actions",[])
+            core_b = entry.get("core_before"); core_a = entry.get("core_after")
+            d = None
+            try:
+                if core_a is not None and core_b is not None:
+                    d = round(core_a - core_b,1)
+            except Exception:
+                pass
+            tail = f" Δcore {d:+.1f}°C" if d is not None else ""
+            lines.append(f"Recovery: {from_s}→{to_s}; actions={acts}{tail}")
+        else:
+            note = (entry.get("text") or entry.get("note") or "").strip()
+            if note: lines.append("Note: " + note[:100] + ("..." if len(note)>100 else ""))
+    return "\n".join(lines[:10])
+
+# Swap the summary feeder
+get_recent_journal_context = get_recent_journal_context_v2
+
+# ---------- Trigger a rerun to apply swaps ----------
+if not st.session_state.get("_recovery_patch_applied_once"):
+    st.session_state["_recovery_patch_applied_once"] = True
+    st.rerun()
+# ================================
+# END PATCH
+# ================================
+
