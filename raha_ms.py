@@ -1669,7 +1669,7 @@ st.sidebar.image(logo_url, use_container_width=True)
 prev_lang = st.session_state.get("_prev_lang", None)
 
 # 2) Let the user pick the current language
-app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["🇺🇸 English", "🇸🇦 عربي"], key="language_selector")
+app_language = st.sidebar.selectbox("🌐 Language / اللغة", ["English", "عربي"], key="language_selector")
 # Then extract the language:
 app_language = "English" if "English" in app_language else "Arabic"
 
