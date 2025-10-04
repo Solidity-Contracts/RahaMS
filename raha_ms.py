@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# RAHA / TANZIM MS — Comprehensive App (EN/AR, RTL, Sensors Explainer, Recovery Learning, OpenAI+DeepSeek)
+# TANZIM MS — Comprehensive App (EN/AR, RTL, Sensors Explainer, Recovery Learning, OpenAI+DeepSeek)
 # -----------------------------------------------------------------------------------------
 # Built for people with MS in the Gulf: heat-aware planning, live monitoring, journal, AI companion.
 
