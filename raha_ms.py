@@ -2692,6 +2692,8 @@ elif page_id == "assistant":
                     "kuwait": "Kuwait City,KW", "الكويت": "Kuwait City,KW",
                     "dubai": "Dubai,AE", "دبي": "Dubai,AE", 
                     "oman": "Muscat,OM", "عمان": "Muscat,OM",
+                    "qatar": "Doha,QA", "قطر": "Doha,QA",  
+                    "doha": "Doha,QA", "الدوحة": "Doha,QA",  
                     # ... other cities
                 }
                 city_found = None
