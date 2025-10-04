@@ -1785,50 +1785,52 @@ elif page_id == "monitor":
     # TAB 1 — LIVE SENSOR DATA
     # =========================
     
-# =========================
-# SENSOR EXPLANATION SECTION
-# =========================
-    with st.expander("🌡️ " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=True):
-        if app_language == "English":
-            st.markdown("""
-            **We use medical-grade sensors connected to an ESP8266 microcontroller:**
-            
-            - **MAX30205**: Clinical-grade digital temperature sensor for **peripheral (skin) temperature** 
-              (measures with ±0.1°C accuracy, ideal for wearable health monitoring)
-            
-            - **MLX90614**: Infrared sensor for **core body temperature**
-              (non-contact measurement with ±0.5°C accuracy, estimates internal temperature)
-                          (non-contact measurement of surface temperature with ±0.5°C accuracy)
 
-            - **ESP8266 Microcontroller**: Reads both sensors and sends data to the cloud
-            
-            **What these temperatures mean:**
-            - **Core Temperature**: Your internal body temperature - the most important indicator of heat stress
-            - **Peripheral Temperature**: Your skin temperature - reacts quickly to environmental changes
-            - **Feels-like**: Combined effect of air temperature + humidity from weather data provided by **OpenWeather API**
-            - **Baseline**: Your personal normal temperature (**set in Settings**) used for alert thresholds
-            """)
-        else:
-            st.markdown("""
-            **نستخدم مستشعرات طبية لمراقبة درجة الحرارة بدقة:**
-            
-            - **MAX30205**: مستشعر رقمي بدرجة طبية لـ **درجة حرارة الجلد (الطرفية)**
-              (يقيس بدقة ±0.1°C، مثالي لمراقبة الصحة القابلة للارتداء)
-            
-            - **MLX90614**: مستشعر بالأشعة تحت الحمراء لـ **درجة حرارة الجسم الأساسية**
-              (قياس بدون تلامس بدقة ±0.5°C، يقدر درجة الحرارة الداخلية)
-
-            - **متحكم ESP8266 الدقيق**: يقرأ كلا المستشعرين ويرسل البيانات إلى السحابة
-            
-            **ماذا تعني هذه الدرجات:**
-            - **درجة الحرارة الأساسية**: درجة حرارة جسمك الداخلية - المؤشر الأهم للإجهاد الحراري
-            - **درجة الحرارة الطرفية**: درجة حرارة جلدك - تتفاعل بسرعة مع التغيرات البيئية
-            - **درجة الحرارة المحسوسة**: التأثير المشترك لدرجة حرارة الهواء والرطوبة من بيانات الطقس
-            - درجة الحرارة المحسوسة: التأثير المشترك لدرجة حرارة الهواء + الرطوبة من بيانات الطقس المقدمة من الطقس
-            - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (**تم ضبطها في الإعدادات**) تُستخدم لعتبات التنبيه
-            """)
     
     with tabs[0]:
+        # =========================
+# SENSOR EXPLANATION SECTION
+# =========================
+        with st.expander("🌡️ " + ("About Our Temperature Sensors" if app_language == "English" else "عن مستشعرات درجة الحرارة"), expanded=False):
+            if app_language == "English":
+                st.markdown("""
+                **We use medical-grade sensors connected to an ESP8266 microcontroller:**
+                
+                - **MAX30205**: Clinical-grade digital temperature sensor for **peripheral (skin) temperature** 
+                  (measures with ±0.1°C accuracy, ideal for wearable health monitoring)
+                
+                - **MLX90614**: Infrared sensor for **core body temperature**
+                  (non-contact measurement with ±0.5°C accuracy, estimates internal temperature)
+                              (non-contact measurement of surface temperature with ±0.5°C accuracy)
+    
+                - **ESP8266 Microcontroller**: Reads both sensors and sends data to the cloud
+                
+                **What these temperatures mean:**
+                - **Core Temperature**: Your internal body temperature - the most important indicator of heat stress
+                - **Peripheral Temperature**: Your skin temperature - reacts quickly to environmental changes
+                - **Feels-like**: Combined effect of air temperature + humidity from weather data provided by **OpenWeather API**
+                - **Baseline**: Your personal normal temperature (**set in Settings**) used for alert thresholds
+                """)
+            else:
+                st.markdown("""
+                **نستخدم مستشعرات طبية لمراقبة درجة الحرارة بدقة:**
+                
+                - **MAX30205**: مستشعر رقمي بدرجة طبية لـ **درجة حرارة الجلد (الطرفية)**
+                  (يقيس بدقة ±0.1°C، مثالي لمراقبة الصحة القابلة للارتداء)
+                
+                - **MLX90614**: مستشعر بالأشعة تحت الحمراء لـ **درجة حرارة الجسم الأساسية**
+                  (قياس بدون تلامس بدقة ±0.5°C، يقدر درجة الحرارة الداخلية)
+    
+                - **متحكم ESP8266 الدقيق**: يقرأ كلا المستشعرين ويرسل البيانات إلى السحابة
+                
+                **ماذا تعني هذه الدرجات:**
+                - **درجة الحرارة الأساسية**: درجة حرارة جسمك الداخلية - المؤشر الأهم للإجهاد الحراري
+                - **درجة الحرارة الطرفية**: درجة حرارة جلدك - تتفاعل بسرعة مع التغيرات البيئية
+                - **درجة الحرارة المحسوسة**: التأثير المشترك لدرجة حرارة الهواء والرطوبة من بيانات الطقس
+                - درجة الحرارة المحسوسة: التأثير المشترك لدرجة حرارة الهواء + الرطوبة من بيانات الطقس المقدمة من الطقس
+                - **خط الأساس**: درجة حرارتك الطبيعية الشخصية (**تم ضبطها في الإعدادات**) تُستخدم لعتبات التنبيه
+                """)
+            
         if app_language == "English":
             st.info("🔌 **Connected to real sensors** - Displaying live data from your MAX30205 and MLX90614 sensors")
         else:
