@@ -893,23 +893,23 @@ def render_about_page(lang: str = "English"):
     with c1:
         st.markdown("**📊 " + T_("Monitor", "المراقبة") + "**")
         st.caption(T_("Live temps vs baseline + alerts, written simply.", "قراءات مباشرة مقابل الأساس + تنبيهات، بشرح مبسط."))
-        if st.button(T_("Open Monitor", "افتح المراقبة"), key="go_monitor"): 
-            st.session_state["nav_radio"] = "monitor"; st.session_state["current_page"] = "monitor"; st.rerun()
+        #if st.button(T_("Open Monitor", "افتح المراقبة"), key="go_monitor"): 
+            #st.session_state["nav_radio"] = "monitor"; st.session_state["current_page"] = "monitor"; st.rerun()
     with c2:
         st.markdown("**🧭 " + T_("Planner", "المخطط") + "**")
         st.caption(T_("Safest 2‑hour windows for your city; instant tips.", "أفضل فترات لساعتين في مدينتك؛ نصائح فورية."))
-        if st.button(T_("Open Planner", "افتح المخطط"), key="go_planner"): 
-            st.session_state["nav_radio"] = "planner"; st.session_state["current_page"] = "planner"; st.rerun()
+        #if st.button(T_("Open Planner", "افتح المخطط"), key="go_planner"): 
+            #st.session_state["nav_radio"] = "planner"; st.session_state["current_page"] = "planner"; st.rerun()
     with c3:
         st.markdown("**📒 " + T_("Journal", "اليوميات") + "**")
         st.caption(T_("Quick daily logs; export to share with your clinician.", "تسجيلات يومية سريعة؛ تصدير للمشاركة مع طبيبك."))
-        if st.button(T_("Open Journal", "افتح اليوميات"), key="go_journal"): 
-            st.session_state["nav_radio"] = "journal"; st.session_state["current_page"] = "journal"; st.rerun()
+        #if st.button(T_("Open Journal", "افتح اليوميات"), key="go_journal"): 
+            #st.session_state["nav_radio"] = "journal"; st.session_state["current_page"] = "journal"; st.rerun()
     with c4:
         st.markdown("**🤖 " + T_("AI Companion", "المرافق الذكي") + "**")
         st.caption(T_("Personal, bilingual guidance; aware of your city & logs.", "إرشاد شخصي ثنائي اللغة؛ واعٍ بمدينتك وسجلّك."))
-        if st.button(T_("Open Companion", "افتح المساعد"), key="go_assistant"): 
-            st.session_state["nav_radio"] = "assistant"; st.session_state["current_page"] = "assistant"; st.rerun()
+        #if st.button(T_("Open Companion", "افتح المساعد"), key="go_assistant"): 
+            #st.session_state["nav_radio"] = "assistant"; st.session_state["current_page"] = "assistant"; st.rerun()
 
     st.markdown("---")
     st.caption(T_(
@@ -1335,9 +1335,418 @@ def render_monitor():
             st.info("No temperature history to chart yet." if app_language=="English" else "لا يوجد سجل درجات لعرضه.")
 
     with tabs[1]:
-        st.info("🎯 Practice recognizing patterns and cooling strategies." if app_language=="English"
-                else "🎯 تدرب على التعرف على الأنماط واستراتيجيات التبريد.")
-        st.write("Try scenarios and see how solutions (cooling vest, AC, hydration) change core/feels‑like.")
+        if app_language == "English":
+            st.info("🎯 **Interactive Learning** - Practice recognizing temperature patterns and learn effective cooling strategies")
+        else:
+            st.info("🎯 **تعلم تفاعلي** - تدرب على التعرف على أنماط درجة الحرارة وتعلم استراتيجيات التبريد الفعالة")
+        
+        # Initialize session state for simulator
+        if "sim" not in st.session_state:
+            st.session_state.sim = {"core": 36.6, "baseline": st.session_state.get("baseline", 36.8), "feels": 32.0}
+        if "sim_history" not in st.session_state:
+            st.session_state.sim_history = []
+        if "sim_live" not in st.session_state:
+            st.session_state.sim_live = False
+
+        # Scenarios with explanations
+        if app_language == "English":
+            scenarios = {
+                "Morning commute (Dubai summer)": {
+                    "core": 37.4, 
+                    "feels": 41.0,
+                    "desc": "Hot car, sun exposure through windows, limited airflow"
+                },
+                "Moderate exercise (humid day)": {
+                    "core": 37.9, 
+                    "feels": 39.0,
+                    "desc": "Physical activity + high humidity impairs cooling"
+                },
+                "Office AC failure": {
+                    "core": 37.8, 
+                    "feels": 35.0,
+                    "desc": "Indoor heat buildup without ventilation"
+                },
+                "Evening walk (cooler hours)": {
+                    "core": 37.0, 
+                    "feels": 34.0,
+                    "desc": "Better timing, but still warm"
+                },
+                "Fever at home": {
+                    "core": 38.2, 
+                    "feels": 28.0,
+                    "desc": "Internal rise despite cool environment"
+                },
+                "Car breakdown (direct sun)": {
+                    "core": 37.8, 
+                    "feels": 44.0,
+                    "desc": "Trapped heat, high radiant temperature"
+                },
+            }
+        else:
+            scenarios = {
+                "تنقل الصباح (صيف دبي)": {
+                    "core": 37.4, 
+                    "feels": 41.0,
+                    "desc": "سيارة ساخنة، تعرض للشمس من النوافذ، تدفق هواء محدود"
+                },
+                "تمارين متوسطة (يوم رطب)": {
+                    "core": 37.9, 
+                    "feels": 39.0,
+                    "desc": "نشاط بدني + رطوبة عالية تعيق التبريد"
+                },
+                "عطل في مكيف المكتب": {
+                    "core": 37.8, 
+                    "feels": 35.0,
+                    "desc": "تراكم الحرارة الداخلية بدون تهوية"
+                },
+                "مشي المساء (ساعات أكثر برودة)": {
+                    "core": 37.0, 
+                    "feels": 34.0,
+                    "desc": "توقيت أفضل، لكن لا يزال دافئًا"
+                },
+                "حمى في المنزل": {
+                    "core": 38.2, 
+                    "feels": 28.0,
+                    "desc": "ارتفاع داخلي رغم البيئة الباردة"
+                },
+                "عطل سيارة ( تحت الشمس المباشرة)": {
+                    "core": 37.8, 
+                    "feels": 44.0,
+                    "desc": "حرارة محبوسة، درجة حرارة إشعاعية عالية"
+                },
+            }
+
+        col1, col2 = st.columns([1, 1])
+        
+        with col1:
+            if app_language == "English":
+                st.subheader("🔍 Try Different Scenarios")
+                scenario_label = "Choose a scenario"
+                apply_label = "Apply Scenario"
+            else:
+                st.subheader("🔍 جرب سيناريوهات مختلفة")
+                scenario_label = "اختر سيناريو"
+                apply_label = "تطبيق السيناريو"
+                
+            pick = st.selectbox(scenario_label, list(scenarios.keys()))
+            
+            st.caption(scenarios[pick]["desc"])
+            
+            if st.button(apply_label, use_container_width=True):
+                st.session_state.sim["core"] = scenarios[pick]["core"]
+                st.session_state.sim["feels"] = scenarios[pick]["feels"]
+                st.session_state.sim_history.append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": float(st.session_state.sim["core"]),
+                    "baseline": float(st.session_state.sim["baseline"]),
+                    "feels": float(st.session_state.sim["feels"]),
+                })
+                st.rerun()
+
+        with col2:
+            if app_language == "English":
+                st.subheader("⚙️ Adjust Values")
+                core_label = "Core Temperature (°C)"
+                baseline_label = "Baseline (°C)"
+                feels_label = "Feels-like (°C)"
+                core_help = "Your internal body temperature"
+                baseline_help = "Your personal normal temperature"
+                feels_help = "Combined effect of temperature + humidity"
+            else:
+                st.subheader("⚙️ ضبط القيم")
+                core_label = "درجة الحرارة الأساسية (°م)"
+                baseline_label = "خط الأساس (°م)"
+                feels_label = "درجة الحرارة المحسوسة (°م)"
+                core_help = "درجة حرارة جسمك الداخلية"
+                baseline_help = "درجة حرارتك الطبيعية الشخصية"
+                feels_help = "التأثير المشترك لدرجة الحرارة والرطوبة"
+                
+            s = st.session_state.sim
+            
+            s["core"] = st.slider(core_label, 36.0, 39.5, float(s["core"]), 0.1, help=core_help)
+            s["baseline"] = st.slider(baseline_label, 36.0, 37.5, float(s["baseline"]), 0.1, help=baseline_help)
+            s["feels"] = st.slider(feels_label, 25.0, 50.0, float(s["feels"]), 1.0, help=feels_help)
+
+        # =========================
+        # INTERACTIVE SOLUTIONS
+        # =========================
+        st.markdown("---")
+        if app_language == "English":
+            st.subheader("🛠️ Try Cooling Solutions")
+            st.info("Click on solutions below to see how they affect your temperature:")
+        else:
+            st.subheader("🛠️ جرب حلول التبريد")
+            st.info("انقر على الحلول أدناه لترى كيف تؤثر على درجة حرارتك:")
+        
+        sol_col1, sol_col2, sol_col3, sol_col4 = st.columns(4)
+        
+        with sol_col1:
+            if app_language == "English":
+                btn_label = "❄️ Cooling Vest"
+                success_msg = "Cooling vest applied! Core ↓0.6°C, Feels-like ↓3°C"
+            else:
+                btn_label = "❄️ سترة تبريد"
+                success_msg = "تم تطبيق سترة التبريد! الأساسية ↓0.6°C, المحسوسة ↓3°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.6)
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 3.0)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col2:
+            if app_language == "English":
+                btn_label = "🏠 Move Indoors"
+                success_msg = "Moved to AC! Feels-like →26°C, Core ↓0.4°C"
+            else:
+                btn_label = "🏠 الانتقال للداخل"
+                success_msg = "انتقلت إلى المكيف! المحسوسة →26°C, الأساسية ↓0.4°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["feels"] = 26.0
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.4)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col3:
+            if app_language == "English":
+                btn_label = "💧 Hydrate"
+                success_msg = "Hydrated! Core ↓0.3°C"
+            else:
+                btn_label = "💧 ترطيب"
+                success_msg = "تم الترطيب! الأساسية ↓0.3°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.3)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col4:
+            if app_language == "English":
+                btn_label = "🌳 Rest in Shade"
+                success_msg = "Resting in shade! Feels-like ↓8°C, Core ↓0.5°C"
+            else:
+                btn_label = "🌳 الراحة في الظل"
+                success_msg = "الراحة في الظل! المحسوسة ↓8°C, الأساسية ↓0.5°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 8.0)
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.5)
+                st.success(success_msg)
+                st.rerun()
+
+        # Additional solutions
+        sol_col5, sol_col6, sol_col7, sol_col8 = st.columns(4)
+        
+        with sol_col5:
+            if app_language == "English":
+                btn_label = "🚿 Cool Shower"
+                success_msg = "Cool shower! Core ↓0.8°C, Feels-like ↓2°C"
+            else:
+                btn_label = "🚿 دش بارد"
+                success_msg = "دش بارد! الأساسية ↓0.8°C, المحسوسة ↓2°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.8)
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 2.0)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col6:
+            if app_language == "English":
+                btn_label = "🍃 Use Fan"
+                success_msg = "Fan running! Feels-like ↓4°C, Core ↓0.2°C"
+            else:
+                btn_label = "🍃 استخدام مروحة"
+                success_msg = "المروحة تعمل! المحسوسة ↓4°C, الأساسية ↓0.2°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["feels"] = max(25.0, st.session_state.sim["feels"] - 4.0)
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.2)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col7:
+            if app_language == "English":
+                btn_label = "⏰ Rest 30min"
+                success_msg = "Rested! Core ↓0.7°C"
+            else:
+                btn_label = "⏰ راحة 30 دقيقة"
+                success_msg = "تمت الراحة! الأساسية ↓0.7°C"
+                
+            if st.button(btn_label, use_container_width=True):
+                st.session_state.sim["core"] = max(st.session_state.sim["baseline"], 
+                                                 st.session_state.sim["core"] - 0.7)
+                st.success(success_msg)
+                st.rerun()
+                
+        with sol_col8:
+            if app_language == "English":
+                btn_label = "🔄 Reset"
+                success_msg = "Reset to normal values"
+            else:
+                btn_label = "🔄 إعادة تعيين"
+                success_msg = "تم إعادة التعيين إلى القيم الطبيعية"
+                
+            if st.button(btn_label, use_container_width=True, type="secondary"):
+                st.session_state.sim_history.clear()
+                st.session_state.sim = {"core": 36.6, "baseline": st.session_state.get("baseline", 36.8), "feels": 32.0}
+                st.success(success_msg)
+                st.rerun()
+
+        # =========================
+        # STATUS AND VISUALIZATION
+        # =========================
+        st.markdown("---")
+        
+        col_status, col_chart = st.columns([1, 2])
+        
+        with col_status:
+            if app_language == "English":
+                st.subheader("📊 Current Status")
+            else:
+                st.subheader("📊 الحالة الحالية")
+            
+            # Classification logic
+            def _classify(core, base, feels):
+                delta = core - base
+                level = 0
+                trig = []
+                if delta >= 0.5: 
+                    level = max(level, 1)
+                    trig.append(f"ΔCore +{delta:.1f}°C ≥ 0.5°C")
+                if core >= 38.5: 
+                    level = 3
+                    trig.append("Core ≥ 38.5°C")
+                elif core >= 38.0: 
+                    level = max(level, 2)
+                    trig.append("Core ≥ 38.0°C")
+                elif core >= 37.8: 
+                    level = max(level, 1)
+                    trig.append("Core ≥ 37.8°C")
+                if feels >= 42.0: 
+                    level = max(level, 2)
+                    trig.append("Feels-like ≥ 42°C")
+                elif feels >= 38.0: 
+                    level = max(level, 1)
+                    trig.append("Feels-like ≥ 38°C")
+                return ["safe", "caution", "high", "critical"][level], trig
+
+            key, trig = _classify(st.session_state.sim["core"], 
+                                st.session_state.sim["baseline"], 
+                                st.session_state.sim["feels"])
+            
+            colors = {"safe": "#E6F4EA", "caution": "#FFF8E1", "high": "#FFE0E0", "critical": "#FFCDD2"}
+            emojis = {"safe": "✅", "caution": "⚠️", "high": "🔴", "critical": "🚨"}
+            
+            if app_language == "English":
+                status_labels = {
+                    "safe": "Safe", "caution": "Caution", "high": "High Risk", "critical": "Critical"
+                }
+            else:
+                status_labels = {
+                    "safe": "آمن", "caution": "حذر", "high": "خطر مرتفع", "critical": "حرج"
+                }
+            
+            st.markdown(f"<div class='badge' style='background:{colors[key]}'>{emojis[key]} {status_labels[key]}</div>", 
+                       unsafe_allow_html=True)
+            
+            # Metrics
+            delta = st.session_state.sim["core"] - st.session_state.sim["baseline"]
+            
+            if app_language == "English":
+                core_label = "Core Temperature"
+                feels_label = "Feels-like"
+                baseline_label = "Baseline"
+            else:
+                core_label = "درجة الحرارة الأساسية"
+                feels_label = "درجة الحرارة المحسوسة"
+                baseline_label = "خط الأساس"
+                
+            st.metric(core_label, f"{st.session_state.sim['core']:.1f}°C", f"{delta:+.1f}°C")
+            st.metric(feels_label, f"{st.session_state.sim['feels']:.1f}°C")
+            st.metric(baseline_label, f"{st.session_state.sim['baseline']:.1f}°C")
+            
+            # Why this status
+            if app_language == "English":
+                expander_label = "Why this status?"
+            else:
+                expander_label = "لماذا هذه الحالة؟"
+                
+            with st.expander(expander_label, expanded=True):
+                if trig:
+                    for t in trig: 
+                        st.write("• " + t)
+                else:
+                    if app_language == "English":
+                        st.write("• No thresholds triggered yet")
+                    else:
+                        st.write("• لم يتم تفعيل أي عتبات بعد")
+
+        with col_chart:
+            if app_language == "English":
+                st.subheader("📈 Temperature Trend")
+                toggle_label = "Record changes automatically"
+                clear_label = "Clear Chart"
+                no_data_msg = "Apply a scenario or enable recording to see the chart"
+            else:
+                st.subheader("📈 اتجاه درجة الحرارة")
+                toggle_label = "تسجيل التغييرات تلقائيًا"
+                clear_label = "مسح الرسم البياني"
+                no_data_msg = "طبق سيناريو أو فعّل التسجيل لرؤية الرسم البياني"
+            
+            # Live tracking toggle
+            live_toggle = st.toggle(toggle_label, value=st.session_state.sim_live)
+            if live_toggle and not st.session_state.sim_live:
+                st.session_state.sim_live = True
+                st.session_state.sim_history.append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": float(st.session_state.sim["core"]),
+                    "baseline": float(st.session_state.sim["baseline"]),
+                    "feels": float(st.session_state.sim["feels"]),
+                })
+            st.session_state.sim_live = live_toggle
+            
+            # Removed "Add Manual Point" button as requested
+            
+            if st.button(clear_label):
+                st.session_state.sim_history.clear()
+                st.rerun()
+
+            # Plot
+            if not st.session_state.sim_history:
+                st.info(no_data_msg)
+            else:
+                df = pd.DataFrame(st.session_state.sim_history)
+                fig = go.Figure()
+                
+                if app_language == "English":
+                    feels_name = "Feels-like"
+                    core_name = "Core"
+                    baseline_name = "Baseline"
+                else:
+                    feels_name = "المحسوسة"
+                    core_name = "الأساسية"
+                    baseline_name = "خط الأساس"
+                    
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=feels_name))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=core_name))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=baseline_name))
+                
+                fig.update_layout(
+                    height=300, 
+                    margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", y=1.1), 
+                    xaxis_title="Time" if app_language == "English" else "الوقت", 
+                    yaxis_title="°C"
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
 # ================== JOURNAL (includes RECOVERY) ==================
 def render_journal():
