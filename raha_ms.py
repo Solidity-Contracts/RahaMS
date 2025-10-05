@@ -355,6 +355,28 @@ def fetch_latest_sensor_sample(device_id: str) -> dict | None:
     except Exception:
         return None
 
+@st.cache_data(ttl=30)
+def fetch_sensor_series(device_id: str, limit: int = 240):
+    """Pull last 'limit' rows for plotting (about 2–4 hours if posting every ~30s)."""
+    sb = get_supabase()
+    if not sb: return []
+    try:
+        res = (
+            sb.table("sensor_readings")
+              .select("core_c,peripheral_c,created_at")
+              .eq("device_id", device_id)
+              .order("created_at", desc=True)
+              .limit(limit)
+              .execute()
+        )
+        data = res.data or []
+        # Sort ascending by time for plotting
+        data = sorted(data, key=lambda r: r["created_at"])
+        return data
+    except Exception:
+        return []
+
+
 # ================== UTILS ==================
 def normalize_phone(s: str) -> str:
     if not s: return ""
@@ -1284,6 +1306,23 @@ def render_monitor():
                 html = "".join([f"<span class='chip'>{a} ×{n}</span>" for a,n in tops])
                 st.markdown(html, unsafe_allow_html=True)
 
+        series = fetch_sensor_series("esp8266-01", limit=240)
+        if series:
+            times   = [datetime.fromisoformat(r["created_at"].replace("Z","+00:00")).astimezone(TZ_DUBAI) for r in series]
+            core    = [float(r["core_c"]) if r["core_c"] is not None else None for r in series]
+            periph  = [float(r["peripheral_c"]) if r["peripheral_c"] is not None else None for r in series]
+        
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=times, y=core, mode="lines+markers", name="Core"))
+            fig.add_trace(go.Scatter(x=times, y=periph, mode="lines+markers", name="Peripheral"))
+            fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
+                              xaxis_title="Time (Dubai)", yaxis_title="°C",
+                              legend=dict(orientation="h", y=1.1))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.")
+
+        
         # Trend chart with sampling interval
         st.markdown("---"); st.subheader(T["temperature_trend"])
         label_mode = st.radio(("X‑axis" if app_language=="English" else "المحور السيني"),
