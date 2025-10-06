@@ -152,6 +152,7 @@ TEXTS = {
         "assistant_title": "Your AI Companion",
         "assistant_hint": "Ask about cooling, pacing, safe windows, fasting/prayer, travel, etc.",
         "home_city": "Home City",
+        "status": "Status",
         "timezone": "Timezone (optional)"
     },
     "Arabic": {
@@ -217,6 +218,7 @@ TEXTS = {
         "assistant_title": "مرافقك الذكي",
         "assistant_hint": "اسأل عن التبريد، تنظيم الجهد، النوافذ الآمنة، الصيام/الصلاة، السفر…",
         "home_city": "المدينة الأساسية",
+        "status": "الحالة",
         "timezone": "المنطقة الزمنية (اختياري)"
     }
 }
@@ -331,12 +333,6 @@ def init_db():
 init_db()
 
 # ================== SUPABASE ==================
-# ================== SUPABASE (robust) ==================
-from supabase import create_client
-
-SUPABASE_URL      = st.secrets["SUPABASE_URL"]
-SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
-
 @st.cache_resource
 def get_supabase(url: str, key: str):
     return create_client(url, key)
