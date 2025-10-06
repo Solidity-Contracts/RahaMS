@@ -1173,7 +1173,7 @@ def compute_risk_minimal(feels_like, humidity, core, baseline):
     Risk score uses only environment + ΔCore (Uhthoff).
     Status thresholds: Safe <3; Caution 3–4.5; High 5–6.5; Danger ≥7.
     """
-    score = 0
+    score = 0.0
 
     # Environment (feels-like tiers)
     if feels_like is not None:
@@ -1252,11 +1252,36 @@ def update_uhthoff_latch(core: float | None, baseline: float | None):
         st.session_state["_uhthoff_started_iso"] = None
         st.session_state["_uhthoff_alert_journaled"] = False
 
+# ---------- Friendly status label ----------
+def _status_label():
+    return T.get("status", "الحالة" if app_language=="Arabic" else "Status")
+
+# ---------- Trigger labels with your context fix ----------
+def _triggers_for_ui(lang: str):
+    """Return trigger list with contextual wording for long prayer standing."""
+    if lang == "Arabic":
+        base = list(TRIGGERS_AR)
+        # Replace if present
+        if "وقوف طويل في الصلاة" in base:
+            i = base.index("وقوف طويل في الصلاة")
+            base[i] = "وقوف طويل للصلاة في الحر (خارج المسجد)"
+        else:
+            base.append("وقوف طويل للصلاة في الحر (خارج المسجد)")
+        return base
+    else:
+        base = list(TRIGGERS_EN)
+        if "Long prayer standing" in base:
+            i = base.index("Long prayer standing")
+            base[i] = "Long prayer standing in heat (outdoor)"
+        else:
+            base.append("Long prayer standing in heat (outdoor)")
+        return base
+
 
 def render_monitor():
     st.title("☀️ " + T["risk_dashboard"])
     if "user" not in st.session_state:
-        st.warning(T["login_first"]); 
+        st.warning(T["login_first"])
         return
 
     tabs = st.tabs([
@@ -1273,13 +1298,13 @@ def render_monitor():
                 st.markdown(
                     "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
                     "- **Peripheral** ≈ skin/ambient; **Feels‑like & Humidity** from weather.\n"
-                    "- We auto‑log an **Alert** on Uhthoff; when improved, you can log a **Recovery**."
+                    "- We auto‑log an **Alert** when Uhthoff first triggers; on improvement, you can log a **Recovery**."
                 )
             else:
                 st.markdown(
                     "- **الأساسية مقابل الأساس (ΔCore)** — تنبيه أوتهوف عند **+0.5°م**.\n"
                     "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة والرطوبة** من الطقس.\n"
-                    "- نسجّل **تنبيهًا** تلقائيًا عند أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
+                    "- نسجّل **تنبيهًا** تلقائيًا عند بداية أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
                 )
 
         # ---- City / Weather ----
@@ -1331,10 +1356,8 @@ def render_monitor():
             st.metric("Humidity", f"{int(hum)}%" if hum is not None else "—")
         with colD:
             if st.button(T.get("refresh_weather","🔄 Refresh weather now")):
-                try:
-                    get_weather.clear()
-                except Exception:
-                    pass
+                try: get_weather.clear()
+                except Exception: pass
                 st.session_state["_weather_cache"] = {}
                 st.rerun()
 
@@ -1355,10 +1378,7 @@ def render_monitor():
             else:
                 st.info("Peripheral: —")
         with col3:
-            if core_val is not None:
-                st.caption(f"ΔCore from baseline: {core_val - baseline:+.1f}°C")
-            else:
-                st.caption("ΔCore: —")
+            st.caption(f"ΔCore from baseline: {core_val - baseline:+.1f}°C" if core_val is not None else "ΔCore: —")
         with col4:
             st.success("Live") if not is_stale else st.error("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.")
 
@@ -1369,7 +1389,7 @@ def render_monitor():
             risk = apply_uhthoff_floor(risk, core_val, baseline)
             st.markdown(f"""
             <div class="big-card" style="--left:{risk['color']}">
-              <h3>{risk['icon']} <strong>{T.get('status', 'Status' if app_language=='English' else 'الحالة')}: {risk['status']}</strong></h3>
+              <h3>{risk['icon']} <strong>{_status_label()}: {risk['status']}</strong></h3>
               <p style="margin:6px 0 0 0">{risk['advice']}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -1394,7 +1414,7 @@ def render_monitor():
 
             # ---- Alert details (dropdowns; journaling only) ----
             sym_opts  = SYMPTOMS_AR if app_language=="Arabic" else SYMPTOMS_EN
-            trig_opts = TRIGGERS_AR if app_language=="Arabic" else TRIGGERS_EN
+            trig_opts = _triggers_for_ui(app_language)
             if st.session_state["_uhthoff_active"]:
                 with st.expander("Add symptoms/notes to this alert" if app_language=="English" else "أضف أعراض/ملاحظات لهذا التنبيه"):
                     sel_sym = st.multiselect("Symptoms" if app_language=="English" else "الأعراض", sym_opts, key="alert_sym_ms")
@@ -1417,7 +1437,7 @@ def render_monitor():
 
         # ---- Manual alert (journaling only) ----
         sym_opts  = SYMPTOMS_AR if app_language=="Arabic" else SYMPTOMS_EN
-        trig_opts = TRIGGERS_AR if app_language=="Arabic" else TRIGGERS_EN
+        trig_opts = _triggers_for_ui(app_language)
         with st.expander("Log alert manually" if app_language=="English" else "سجّل تنبيهًا يدويًا"):
             sel_sym = st.multiselect("Symptoms" if app_language=="English" else "الأعراض", sym_opts, key="man_sym_ms")
             sym_other = st.text_input("Other symptom (optional)" if app_language=="English" else "أعراض أخرى (اختياري)", key="man_sym_other")
@@ -1460,7 +1480,7 @@ def render_monitor():
             if prev and (curr["level"] < prev["level"]):
                 st.success(f"✅ Improved: {prev['status']} → {curr['status']}. What helped?")
                 with st.form("recovery_form_live", clear_on_submit=True):
-                    acts = st.multiselect("Actions", (TRIGGERS_AR if app_language=="Arabic" else TRIGGERS_EN))
+                    acts = st.multiselect("Actions", _triggers_for_ui(app_language))
                     note = st.text_area("Details (optional)" if app_language=="English" else "تفاصيل (اختياري)", height=70)
                     saved = st.form_submit_button("Save Recovery" if app_language=="English" else "حفظ التعافي")
                     if saved:
@@ -1494,16 +1514,27 @@ def render_monitor():
             times  = [datetime.fromisoformat(r["created_at"].replace("Z","+00:00")).astimezone(active_tz) for r in series]
             core_s = [float(r["core_c"]) if r.get("core_c") is not None else None for r in series]
             peri_s = [float(r["peripheral_c"]) if r.get("peripheral_c") is not None else None for r in series]
+            # Per-row feels_like if your table already has it (future-proof)
+            fl_s   = [float(r["feels_like"]) if ("feels_like" in r and r["feels_like"] is not None) else None for r in series]
 
             # Chart 1: Core & Peripheral (Live)
             st.subheader("Core & Peripheral (Live)")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name="Core"))
-            fig.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name="Peripheral"))
-            fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                              xaxis_title="Time (Local)", yaxis_title="Temperature (°C)",
-                              legend=dict(orientation="h", y=1.1))
-            st.plotly_chart(fig, use_container_width=True)
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name="Core"))
+            fig1.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name="Peripheral"))
+            fig1.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
+                               xaxis_title="Time (Local)", yaxis_title="Temperature (°C)",
+                               legend=dict(orientation="h", y=1.1))
+            st.plotly_chart(fig1, use_container_width=True)
+
+            # Raw data directly after Chart 1
+            with st.expander("Raw data" if app_language=="English" else "البيانات الخام", expanded=False):
+                df = pd.DataFrame({
+                    "Time (Local)": [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
+                    "Core (°C)": core_s,
+                    "Peripheral (°C)": peri_s,
+                })
+                st.dataframe(df.iloc[::-1], use_container_width=True)
 
             # Sampling cadence + window
             try:
@@ -1521,24 +1552,26 @@ def render_monitor():
             fig2 = go.Figure()
             fig2.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name="Core"))
             fig2.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name="Peripheral"))
-            if weather and times:
-                # Context-only dashed line at current feels-like (best: store per-row feels_like in DB)
-                fl_series = [float(weather["feels_like"])] * len(times)
-                fig2.add_trace(go.Scatter(x=times, y=fl_series, mode="lines", name="Feels‑like",
-                                          line=dict(dash="dash")))
+
+            # Preferred: plot per-row feels_like if present (works automatically once you store it)
+            if any(v is not None for v in fl_s):
+                fig2.add_trace(go.Scatter(x=times, y=fl_s, mode="lines+markers", name="Feels‑like"))
+            else:
+                # Fallback: dashed constant line using current weather feels-like
+                fl_now = float(weather["feels_like"]) if (weather and weather.get("feels_like") is not None) else None
+                if fl_now is not None and len(times) > 0:
+                    fig2.add_trace(
+                        go.Scatter(
+                            x=times, y=[fl_now]*len(times), mode="lines",
+                            name="Feels‑like (current)", line=dict(dash="dash")
+                        )
+                    )
+
             fig2.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
                                xaxis_title="Time (Local)", yaxis_title="Temperature (°C)",
                                legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig2, use_container_width=True)
 
-            # Raw data table
-            with st.expander("Raw data" if app_language=="English" else "البيانات الخام"):
-                df = pd.DataFrame({
-                    "Time (Local)": [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
-                    "Core (°C)": core_s,
-                    "Peripheral (°C)": peri_s,
-                })
-                st.dataframe(df.iloc[::-1], use_container_width=True)
         else:
             st.info("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.")
 
@@ -1590,7 +1623,7 @@ def render_monitor():
             st.subheader("Status")
             st.markdown(f"""
             <div class="big-card" style="--left:{sim_risk['color']}">
-              <h3>{sim_risk['icon']} <strong>{T.get('status', 'Status' if app_language=='English' else 'الحالة')}: {sim_risk['status']}</strong></h3>
+              <h3>{sim_risk['icon']} <strong>{_status_label()}: {sim_risk['status']}</strong></h3>
               <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
             </div>
             """, unsafe_allow_html=True)
@@ -1616,7 +1649,7 @@ def render_monitor():
             fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name="Baseline"))
             fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
                               legend=dict(orientation="h", y=1.1),
-                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)")
+                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)"))
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Adjust the sliders (and enable recording) to see the chart.")
@@ -1630,6 +1663,7 @@ def render_monitor():
                 }
                 insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
                 st.success("Saved a demo snapshot to Journal")
+            
 
 # ================== JOURNAL (includes RECOVERY) ==================
 def render_journal():
