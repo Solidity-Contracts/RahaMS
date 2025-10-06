@@ -1579,9 +1579,7 @@ def render_monitor():
     # TAB 2 — DEMO / LEARN (simulation only; no journaling)
     # =========================================================
     with tabs[1]:
-        st.info("Adjust the Core body temperature, Baseline, and Feels‑like temperature settings. 
-        The risk assessment uses the same calculation method as the Live monitor. 
-        Humidity settings are available under Advanced options. Note: Demo mode does not save entries to your Journal.")
+        st.info("Adjust the Core body temperature, Baseline, and Feels‑like temperature settings. The risk assessment uses the same calculation method as the Live monitor. Humidity settings are available under Advanced options. Note: Demo mode does not save entries to your Journal.")
         st.session_state.setdefault("sim_core", 36.8)
         st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
         st.session_state.setdefault("sim_feels", 32.0)
