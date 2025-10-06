@@ -19,10 +19,12 @@ from matplotlib.font_manager import FontProperties
 import pandas as pd
 import plotly.graph_objects as go
 
-try:
-    from supabase import create_client, Client
-except Exception:
-    create_client, Client = None, None
+#try:
+#    from supabase import create_client, Client
+#except Exception:
+#    create_client, Client = None, None
+
+from supabase import create_client
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Tanzim MS", page_icon="🌡️", layout="wide")
@@ -340,9 +342,11 @@ def get_supabase():
         return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
     except Exception:
         return None
+        
+sb = get_supabase()
 
 def fetch_latest_sensor_sample(device_id: str) -> dict | None:
-    sb = get_supabase()
+    #sb = get_supabase()
     if not sb or not device_id:
         return None
     try:
