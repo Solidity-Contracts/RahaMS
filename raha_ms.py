@@ -1574,126 +1574,214 @@ def render_monitor():
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.info("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.")
-
-    # =========================================================
-    # TAB 2 — DEMO / LEARN (simulation only; no journaling)
-    # =========================================================
-    with tabs[1]:
-        st.info("Adjust the Core body temperature, Baseline, and Feels‑like temperature settings. The risk assessment uses the same calculation method as the Live monitor. Humidity settings are available under Advanced options. Note: Demo mode does not save entries to your Journal.")
-        st.session_state.setdefault("sim_core", 36.8)
-        st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
-        st.session_state.setdefault("sim_feels", 32.0)
-        st.session_state.setdefault("sim_hum", 50.0)  # used for risk only
-        st.session_state.setdefault("sim_history", [])
-        st.session_state.setdefault("sim_live", False)
-        st.session_state.setdefault("_demo_risk_track", None)
-        st.session_state.setdefault("_demo_uhthoff_active", False)
-
-        colL, colR = st.columns([1,1])
-        with colL:
-            st.subheader("Inputs")
-            st.session_state["sim_core"]  = st.slider("Core (°C)", 36.0, 39.5, float(st.session_state["sim_core"]), 0.1)
-            st.session_state["sim_base"]  = st.slider("Baseline (°C)", 36.0, 37.5, float(st.session_state["sim_base"]), 0.1)
-            st.session_state["sim_feels"] = st.slider("Feels‑like (°C)", 25.0, 50.0, float(st.session_state["sim_feels"]), 0.5)
-            with st.expander("Advanced (Humidity)"):
-                st.session_state["sim_hum"] = st.slider("Humidity (%)", 10, 95, int(st.session_state["sim_hum"]), 1)
-
-            live_toggle = st.toggle("Record changes automatically", value=st.session_state["sim_live"])
-            if live_toggle and not st.session_state["sim_live"]:
-                st.session_state["sim_history"].append({
-                    "ts": datetime.now().strftime("%H:%M:%S"),
-                    "core": float(st.session_state["sim_core"]),
-                    "baseline": float(st.session_state["sim_base"]),
-                    "feels": float(st.session_state["sim_feels"])
-                })
-            st.session_state["sim_live"] = live_toggle
-
-            if st.button("Clear chart"):
-                st.session_state["sim_history"].clear()
-                st.success("Cleared")
-
-        with colR:
-            # SAME risk pipeline as Live
-            sim_core   = float(st.session_state["sim_core"])
-            sim_base   = float(st.session_state["sim_base"])
-            sim_feels  = float(st.session_state["sim_feels"])
-            sim_hum    = float(st.session_state["sim_hum"])
-            sim_risk   = compute_risk_minimal(sim_feels, sim_hum, sim_core, sim_base)
-            sim_risk   = apply_uhthoff_floor(sim_risk, sim_core, sim_base)
-
-            st.subheader("Status")
-            st.markdown(f"""
-            <div class="big-card" style="--left:{sim_risk['color']}">
-              <h3>{sim_risk['icon']} <strong>{_status_label()}: {sim_risk['status']}</strong></h3>
-              <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
-            </div>
-            """, unsafe_allow_html=True)
-            st.caption(f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C  •  Humidity (demo): {int(sim_hum)}%")
-
-            # Demo latch + risk tracking (NO journaling)
-            update_demo_uhthoff_latch(sim_core, sim_base)
-            curr_demo = {
-                "status": sim_risk["status"],
-                "level": _STATUS_LEVEL.get(sim_risk["status"], 0),
-                "time_iso": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
-                "core": sim_core, "feels": sim_feels, "humidity": sim_hum
-            }
-            prev_demo = st.session_state.get("_demo_risk_track")
-            st.session_state["_demo_risk_track"] = curr_demo
-
-            # DEMO: Alert details UI (no save)
-            if st.session_state["_demo_uhthoff_active"]:
-                sym_opts  = _symptoms_for_ui(app_language)
-                trig_opts = _triggers_for_ui(app_language)
-                with st.expander("Alert details (demo — not saved)" if app_language=="English" else "تفاصيل التنبيه (تجريبي — لا يُحفَظ)"):
-                    sel_sym = st.multiselect("Symptoms" if app_language=="English" else "الأعراض", sym_opts, key="demo_alert_sym_ms")
-                    sym_other = st.text_input("Other symptom (optional)" if app_language=="English" else "أعراض أخرى (اختياري)", key="demo_alert_sym_other")
-                    sel_trig = st.multiselect("Triggers / Activity" if app_language=="English" else "محفزات / نشاط", trig_opts, key="demo_alert_trig_ms")
-                    trig_other = st.text_input("Other trigger/activity (optional)" if app_language=="English" else "محفز/نشاط آخر (اختياري)", key="demo_alert_trig_other")
-                    note = st.text_area("Notes (optional)" if app_language=="English" else "ملاحظات (اختياري)", height=60, key="demo_alert_note")
-                    if st.button("Simulate append (not saved)" if app_language=="English" else "محاكاة إضافة (لن تُحفَظ)", key="demo_alert_append_btn"):
-                        st.info("Demo: In Live, this would append to the active alert in Journal.")
-
-            # DEMO: Recovery form (show on improvement) — no save
-            if prev_demo and (curr_demo["level"] < prev_demo["level"]):
-                st.success("✅ Improved (demo). What helped?")
-                with st.form("recovery_form_demo", clear_on_submit=True):
-                    acts = st.multiselect(
-                        "Cooling actions used" if app_language=="English" else "إجراءات التبريد التي استُخدمت",
-                        _actions_for_ui(app_language)
-                    )
-                    act_other = st.text_input("Other action (optional)" if app_language=="English" else "إجراء آخر (اختياري)")
-                    note = st.text_area("Details (optional)" if app_language=="English" else "تفاصيل (اختياري)", height=70)
-                    saved_demo = st.form_submit_button("Simulate save (not saved)" if app_language=="English" else "حفظ تجريبي (لن يُحفَظ)")
-                if saved_demo:
-                    st.info("Demo: In Live, this would save a RECOVERY entry with your actions and notes.")
-
-            # Record point if tracking
-            if st.session_state["sim_live"]:
-                st.session_state["sim_history"].append({
-                    "ts": datetime.now().strftime("%H:%M:%S"),
-                    "core": sim_core,
-                    "baseline": sim_base,
-                    "feels": sim_feels
-                })
-
-        # Demo chart: Core, Feels‑like & Baseline (Demo)
-        st.markdown("---")
-        if st.session_state["sim_history"]:
-            df = pd.DataFrame(st.session_state["sim_history"])
-            st.subheader("Core, Feels‑like & Baseline (Demo)")
-            fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name="Core"))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name="Feels‑like"))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name="Baseline"))
-            fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                              legend=dict(orientation="h", y=1.1),
-                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)")
-            st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Adjust the sliders (and enable recording) to see the chart.")
-
             
+        # =========================================================
+        # TAB 2 — DEMO / LEARN (simulation only; no journaling)
+        # =========================================================
+        with tabs[1]:
+            is_ar = (app_language == "Arabic")
+    
+            # Top info
+            info_text = (
+                "Adjust the Core body temperature, Baseline, and Feels‑like temperature settings. "
+                "The risk assessment uses the same calculation method as the Live monitor. "
+                "Humidity settings are available under Advanced options. "
+                "Note: Demo mode does not save entries to your Journal."
+                if not is_ar else
+                "اضبط درجة الحرارة الأساسية للجسم، خط الأساس، ودرجة الحرارة المحسوسة. "
+                "يستخدم التقييم نفس المنطق في الوضع المباشر. "
+                "إعدادات الرطوبة ضمن الخيارات المتقدمة. "
+                "ملاحظة: وضع العرض التجريبي لا يحفظ أي بيانات في اليوميات."
+            )
+            st.info(info_text)
+    
+            # Demo state
+            st.session_state.setdefault("sim_core", 36.8)
+            st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
+            st.session_state.setdefault("sim_feels", 32.0)
+            st.session_state.setdefault("sim_hum", 50.0)  # used for risk only
+            st.session_state.setdefault("sim_history", [])
+            st.session_state.setdefault("sim_live", False)
+            st.session_state.setdefault("_demo_risk_track", None)
+            st.session_state.setdefault("_demo_uhthoff_active", False)
+    
+            # Layout
+            colL, colR = st.columns([1, 1])
+    
+            # ---------------- Left column: Inputs + recording ----------------
+            with colL:
+                st.subheader("Inputs" if not is_ar else "المدخلات")
+    
+                st.session_state["sim_core"]  = st.slider(
+                    "Core (°C)" if not is_ar else "الأساسية (°م)",
+                    36.0, 39.5, float(st.session_state["sim_core"]), 0.1
+                )
+                st.session_state["sim_base"]  = st.slider(
+                    "Baseline (°C)" if not is_ar else "خط الأساس (°م)",
+                    36.0, 37.5, float(st.session_state["sim_base"]), 0.1
+                )
+                st.session_state["sim_feels"] = st.slider(
+                    "Feels‑like (°C)" if not is_ar else "المحسوسة (°م)",
+                    25.0, 50.0, float(st.session_state["sim_feels"]), 0.5
+                )
+    
+                with st.expander("Advanced (Humidity)" if not is_ar else "خيارات متقدمة (الرطوبة)"):
+                    st.session_state["sim_hum"] = st.slider(
+                        "Humidity (%)" if not is_ar else "الرطوبة (%)",
+                        10, 95, int(st.session_state["sim_hum"]), 1
+                    )
+    
+                live_toggle = st.toggle(
+                    "Record changes automatically" if not is_ar else "تسجيل التغييرات تلقائيًا",
+                    value=st.session_state["sim_live"]
+                )
+                if live_toggle and not st.session_state["sim_live"]:
+                    st.session_state["sim_history"].append({
+                        "ts": datetime.now().strftime("%H:%M:%S"),
+                        "core": float(st.session_state["sim_core"]),
+                        "baseline": float(st.session_state["sim_base"]),
+                        "feels": float(st.session_state["sim_feels"])
+                    })
+                st.session_state["sim_live"] = live_toggle
+    
+                if st.button("Clear chart" if not is_ar else "مسح الرسم"):
+                    st.session_state["sim_history"].clear()
+                    st.success("Cleared" if not is_ar else "تم المسح")
+    
+            # ---------------- Right column: Status + demo UI (no saves) ----------------
+            with colR:
+                # SAME risk pipeline as Live
+                sim_core   = float(st.session_state["sim_core"])
+                sim_base   = float(st.session_state["sim_base"])
+                sim_feels  = float(st.session_state["sim_feels"])
+                sim_hum    = float(st.session_state["sim_hum"])
+    
+                sim_risk   = compute_risk_minimal(sim_feels, sim_hum, sim_core, sim_base)
+                sim_risk   = apply_uhthoff_floor(sim_risk, sim_core, sim_base)
+    
+                st.subheader("Status" if not is_ar else "الحالة")
+                st.markdown(f"""
+                <div class="big-card" style="--left:{sim_risk['color']}">
+                  <h3>{sim_risk['icon']} <strong>{_status_label()}: {sim_risk['status']}</strong></h3>
+                  <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
+                </div>
+                """, unsafe_allow_html=True)
+    
+                st.caption(
+                    f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C  •  Humidity (demo): {int(sim_hum)}%"
+                    if not is_ar else
+                    f"Δالأساسية عن الأساس: {sim_core - sim_base:+.1f}°م  •  الرطوبة (تجريبي): {int(sim_hum)}%"
+                )
+    
+                # Demo latch + risk tracking (NO journaling)
+                update_demo_uhthoff_latch(sim_core, sim_base)
+                curr_demo = {
+                    "status": sim_risk["status"],
+                    "level": _STATUS_LEVEL.get(sim_risk["status"], 0),
+                    "time_iso": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
+                    "core": sim_core, "feels": sim_feels, "humidity": sim_hum
+                }
+                prev_demo = st.session_state.get("_demo_risk_track")
+                st.session_state["_demo_risk_track"] = curr_demo
+    
+                # DEMO: Alert details UI (no save)
+                if st.session_state["_demo_uhthoff_active"]:
+                    sym_opts  = _symptoms_for_ui(app_language)
+                    trig_opts = _triggers_for_ui(app_language)
+                    with st.expander(
+                        "Alert details (demo — not saved)" if not is_ar else "تفاصيل التنبيه (تجريبي — لا يُحفَظ)"
+                    ):
+                        sel_sym = st.multiselect(
+                            "Symptoms" if not is_ar else "الأعراض",
+                            sym_opts, key="demo_alert_sym_ms"
+                        )
+                        sym_other = st.text_input(
+                            "Other symptom (optional)" if not is_ar else "أعراض أخرى (اختياري)",
+                            key="demo_alert_sym_other"
+                        )
+                        sel_trig = st.multiselect(
+                            "Triggers / Activity" if not is_ar else "محفزات / نشاط",
+                            trig_opts, key="demo_alert_trig_ms"
+                        )
+                        trig_other = st.text_input(
+                            "Other trigger/activity (optional)" if not is_ar else "محفز/نشاط آخر (اختياري)",
+                            key="demo_alert_trig_other"
+                        )
+                        note = st.text_area(
+                            "Notes (optional)" if not is_ar else "ملاحظات (اختياري)",
+                            height=60, key="demo_alert_note"
+                        )
+                        if st.button(
+                            "Simulate append (not saved)" if not is_ar else "محاكاة إضافة (لن تُحفَظ)",
+                            key="demo_alert_append_btn"
+                        ):
+                            st.info(
+                                "Demo: In Live, this would append to the active alert in Journal."
+                                if not is_ar else
+                                "تجريبي: في الوضع المباشر سيتم إلحاق التفاصيل بتنبيه اليوميات الحالي."
+                            )
+    
+                # DEMO: Recovery form (show on improvement) — no save
+                if prev_demo and (curr_demo["level"] < prev_demo["level"]):
+                    st.success(
+                        "✅ Improved (demo). What helped?" if not is_ar else "✅ تحسّن (تجريبي). ما الذي ساعد؟"
+                    )
+                    with st.form("recovery_form_demo", clear_on_submit=True):
+                        acts = st.multiselect(
+                            "Cooling actions used" if not is_ar else "إجراءات التبريد التي استُخدمت",
+                            _actions_for_ui(app_language)
+                        )
+                        act_other = st.text_input(
+                            "Other action (optional)" if not is_ar else "إجراء آخر (اختياري)"
+                        )
+                        note = st.text_area(
+                            "Details (optional)" if not is_ar else "تفاصيل (اختياري)",
+                            height=70
+                        )
+                        saved_demo = st.form_submit_button(
+                            "Simulate save (not saved)" if not is_ar else "حفظ تجريبي (لن يُحفَظ)"
+                        )
+                    if saved_demo:
+                        st.info(
+                            "Demo: In Live, this would save a RECOVERY entry with your actions and notes."
+                            if not is_ar else
+                            "تجريبي: في الوضع المباشر سيتم حفظ مدخلة تعافٍ بهذه الإجراءات والملاحظات."
+                        )
+    
+                # Record point if tracking
+                if st.session_state["sim_live"]:
+                    st.session_state["sim_history"].append({
+                        "ts": datetime.now().strftime("%H:%M:%S"),
+                        "core": sim_core,
+                        "baseline": sim_base,
+                        "feels": sim_feels
+                    })
+    
+            # Demo chart: Core, Feels‑like & Baseline (Demo)
+            st.markdown("---")
+            if st.session_state["sim_history"]:
+                df = pd.DataFrame(st.session_state["sim_history"])
+                st.subheader(
+                    "Core, Feels‑like & Baseline (Demo)" if not is_ar else "الأساسية، المحسوسة، وخط الأساس (تجريبي)"
+                )
+                fig = go.Figure()
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=("Core" if not is_ar else "الأساسية")))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=("Feels‑like" if not is_ar else "المحسوسة")))
+                fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=("Baseline" if not is_ar else "خط الأساس")))
+                fig.update_layout(
+                    height=300, margin=dict(l=10, r=10, t=10, b=10),
+                    legend=dict(orientation="h", y=1.1),
+                    xaxis_title=("Time (Demo session)" if not is_ar else "الوقت (جلسة تجريبية)"),
+                    yaxis_title=("Temperature (°C)" if not is_ar else "درجة الحرارة (°م)")
+                )
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info(
+                    "Adjust the sliders (and enable recording) to see the chart."
+                    if not is_ar else
+                    "حرّك المنزلقات (وفعِّل التسجيل) لرؤية الرسم."
+                )
+
 
 # ================== JOURNAL (includes RECOVERY) ==================
 def render_journal():
