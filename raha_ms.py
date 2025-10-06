@@ -331,6 +331,12 @@ def init_db():
 init_db()
 
 # ================== SUPABASE ==================
+# ================== SUPABASE (robust) ==================
+from supabase import create_client
+
+SUPABASE_URL      = st.secrets["SUPABASE_URL"]
+SUPABASE_ANON_KEY = st.secrets["SUPABASE_ANON_KEY"]
+
 @st.cache_resource
 def get_supabase(url: str, key: str):
     return create_client(url, key)
@@ -369,11 +375,10 @@ if st.sidebar.button("Run Supabase check"):
     _debug_supabase_check()
 
 
-
+# ================== Your fetchers (no silent fails) ==================
 def fetch_latest_sensor_sample(device_id: str) -> dict | None:
-    sb = get_supabase()
-    if not sb or not device_id:
-        return None
+    if not device_id:
+        st.error("Device id missing"); return None
     try:
         res = (sb.table("sensor_readings")
                  .select("core_c,peripheral_c,created_at")
@@ -381,18 +386,24 @@ def fetch_latest_sensor_sample(device_id: str) -> dict | None:
                  .order("created_at", desc=True)
                  .limit(1)
                  .execute())
-        data = (res.data or [])
-        if not data: return None
-        row = data[0]
-        return {"core": float(row.get("core_c")), "peripheral": float(row.get("peripheral_c")), "at": row.get("created_at")}
-    except Exception:
+        rows = res.data or []
+        if not rows:
+            return None
+        row = rows[0]
+        core = row.get("core_c")
+        per  = row.get("peripheral_c")
+        return {
+            "core": float(core) if core is not None else None,
+            "peripheral": float(per) if per is not None else None,
+            "at": row.get("created_at"),
+        }
+    except Exception as e:
+        # Show the actual cause instead of pretending "no data"
+        st.error(f"Supabase error while fetching latest sample: {e}")
         return None
 
 @st.cache_data(ttl=30)
 def fetch_sensor_series(device_id: str, limit: int = 240):
-    """Pull last 'limit' rows for plotting (about 2–4 hours if posting every ~30s)."""
-    sb = get_supabase()
-    if not sb: return []
     try:
         res = (
             sb.table("sensor_readings")
@@ -403,10 +414,10 @@ def fetch_sensor_series(device_id: str, limit: int = 240):
               .execute()
         )
         data = res.data or []
-        # Sort ascending by time for plotting
         data = sorted(data, key=lambda r: r["created_at"])
         return data
-    except Exception:
+    except Exception as e:
+        st.error(f"Supabase error while fetching series: {e}")
         return []
 
 
