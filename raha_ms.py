@@ -1134,22 +1134,47 @@ def render_planner():
 # ---------- Status scale ----------
 _STATUS_LEVEL = {"Safe": 0, "Caution": 1, "High": 2, "Danger": 3}
 
+# ---------- Utilities ----------
+def _is_ar() -> bool:
+    return (app_language == "Arabic")
+
+def _L(en: str, ar: str) -> str:
+    return ar if _is_ar() else en
+
+def _status_label() -> str:
+    # Uses your T dict if available; otherwise localized fallback.
+    return T.get("status", _L("Status", "الحالة"))
+
+def get_active_tz():
+    """Use user's saved timezone if available; fallback to Asia/Dubai; then UTC."""
+    tz_code = None
+    try:
+        if "user" in st.session_state:
+            prefs = load_user_prefs(st.session_state["user"]) or {}
+            tz_code = prefs.get("timezone") or st.session_state.get("settings_tz")
+    except Exception:
+        pass
+    try:
+        return ZoneInfo(tz_code) if tz_code else ZoneInfo("Asia/Dubai")
+    except Exception:
+        # Fallbacks if zoneinfo not available or invalid code
+        try:
+            return TZ_DUBAI   # if you defined it elsewhere
+        except Exception:
+            return timezone.utc
+
 # ---------- Cooling actions (use app lists if present; else defaults) ----------
 def _actions_for_ui(lang: str):
-    ae = globals().get("ACTIONS_EN")
-    aa = globals().get("ACTIONS_AR")
-    if ae is None:
-        ae = [
-            "Move indoors / AC","Cooling vest","Cool shower","Hydrate (water)","Electrolyte drink",
-            "Rest 15–20 min","Fan airflow","Shade / umbrella","Cooling towel/scarf",
-            "Wrist/forearm cooling","Ice pack","Light clothing","Pre‑cool car","Misting water"
-        ]
-    if aa is None:
-        aa = [
-            "الانتقال للداخل/مكيّف","سترة تبريد","دش بارد","ترطيب (ماء)","مشروب إلكتروليت",
-            "راحة 15–20 دقيقة","مروحة هواء","ظل/مظلة","منشفة/وشاح تبريد",
-            "تبريد المعصم/الساعد","كمادة ثلج","ملابس خفيفة","تبريد السيارة مسبقًا","رذاذ ماء"
-        ]
+    ae = list(globals().get("ACTIONS_EN", [])) or [
+        "Move indoors / AC","Cooling vest","Cool shower","Hydrate (water)","Electrolyte drink",
+        "Rest 15–20 min","Fan airflow","Shade / umbrella","Cooling towel/scarf",
+        "Wrist/forearm cooling","Ice pack","Light clothing","Pre‑cool car","Misting water"
+    ]
+    aa = list(globals().get("ACTIONS_AR", [])) or [
+        "الانتقال للداخل/مكيّف","سترة تبريد","دش بارد","ترطيب (ماء)","مشروب إلكتروليت",
+        "راحة 15–20 دقيقة","مروحة هواء","ظل/مظلة","منشفة/وشاح تبريد",
+        "تبريد المعصم/الساعد","كمادة ثلج","ملابس خفيفة","تبريد السيارة مسبقًا","رذاذ ماء"
+    ]
     return aa if lang == "Arabic" else ae
 
 # ---------- Triggers wording with your context fix ----------
@@ -1185,10 +1210,11 @@ def _symptoms_for_ui(lang: str):
         ]))
 
 # ---------- Minimal risk model: Environment (FL/H) + ΔCore only ----------
-def compute_risk_minimal(feels_like, humidity, core, baseline):
+def compute_risk_minimal(feels_like, humidity, core, baseline, lang: str = "English") -> Dict[str, Any]:
     """
     Score uses only environment + ΔCore (Uhthoff).
     Status: Safe <3; Caution 3–4.5; High 5–6.5; Danger ≥7.
+    Localized advice.
     """
     score = 0.0
 
@@ -1211,23 +1237,44 @@ def compute_risk_minimal(feels_like, humidity, core, baseline):
         if   delta >= 1.0: score += 2
         elif delta >= 0.5: score += 1
 
-    # Map to status
+    # Localized advice text
+    texts = {
+        "Danger": {
+            "en": "High risk: move to AC, stop exertion, active cooling, hydrate; seek care if severe.",
+            "ar": "خطر مرتفع: انتقل إلى المكيّف، أوقف الجهد، استخدم تبريدًا نشطًا، رطّب؛ اطلب رعاية عند الأعراض الشديدة."
+        },
+        "High": {
+            "en": "Elevated: limit outdoor time, pre‑cool, frequent rests, hydrate.",
+            "ar": "مرتفع: قلّل الوقت خارجًا، برّد مسبقًا، خذ فترات راحة متكررة، ورطّب."
+        },
+        "Caution": {
+            "en": "Mild risk: hydrate, pace yourself, prefer shade/AC.",
+            "ar": "حذر: رطّب، نظّم جهدك، فضّل الظل/المكيّف."
+        },
+        "Safe": {
+            "en": "Safe window. Keep cool and hydrated.",
+            "ar": "فترة آمنة. ابقَ باردًا ورطّب جيدًا."
+        }
+    }
     if score >= 7:
         return {"score": score, "status": "Danger", "color": "red", "icon": "🔴",
-                "advice": "High risk: move to AC, stop exertion, active cooling, hydrate; seek care if severe."}
+                "advice": texts["Danger"]["ar" if lang=="Arabic" else "en"]}
     elif score >= 5:
         return {"score": score, "status": "High", "color": "orangered", "icon": "🟠",
-                "advice": "Elevated: limit outdoor time, pre‑cool, frequent rests, hydrate."}
+                "advice": texts["High"]["ar" if lang=="Arabic" else "en"]}
     elif score >= 3:
         return {"score": score, "status": "Caution", "color": "orange", "icon": "🟡",
-                "advice": "Mild risk: hydrate, pace yourself, prefer shade/AC."}
+                "advice": texts["Caution"]["ar" if lang=="Arabic" else "en"]}
     else:
         return {"score": score, "status": "Safe", "color": "green", "icon": "🟢",
-                "advice": "Safe window. Keep cool and hydrated."}
+                "advice": texts["Safe"]["ar" if lang=="Arabic" else "en"]}
 
 # ---------- Uhthoff floor: enforce minimum severity from ΔCore ----------
-def apply_uhthoff_floor(risk: dict, core: float | None, baseline: float | None) -> dict:
-    """ΔCore ≥0.5°C => ≥Caution; ΔCore ≥1.0°C => ≥High; never lowers severity."""
+def apply_uhthoff_floor(risk: Dict[str, Any],
+                        core: Optional[float],
+                        baseline: Optional[float],
+                        lang: str = "English") -> Dict[str, Any]:
+    """ΔCore ≥0.5°C => ≥Caution; ΔCore ≥1.0°C => ≥High; never lowers severity. Localized advice."""
     if core is None or baseline is None:
         return risk
     try:
@@ -1235,16 +1282,27 @@ def apply_uhthoff_floor(risk: dict, core: float | None, baseline: float | None) 
     except Exception:
         return risk
 
+    texts = {
+        "High": {
+            "en": "Core ≥ 1.0°C above baseline (Uhthoff). Move to AC, pre‑cool, hydrate, rest 15–20 min.",
+            "ar": "الأساسية ≥ 1.0°م فوق الأساس (أوتهوف). انتقل للمكيّف، برّد مسبقًا، رطّب، استرح 15–20 دقيقة."
+        },
+        "Caution": {
+            "en": "Core ≥ 0.5°C above baseline (Uhthoff). Pre‑cool, limit exertion, hydrate, rest 15–20 min.",
+            "ar": "الأساسية ≥ 0.5°م فوق الأساس (أوتهوف). برّد مسبقًا، قلّل الجهد، رطّب، واسترح 15–20 دقيقة."
+        }
+    }
+
     level = _STATUS_LEVEL.get(risk.get("status", "Safe"), 0)
     if delta >= 1.0 and level < _STATUS_LEVEL["High"]:
         risk.update({
             "status": "High", "color": "orangered", "icon": "🟠",
-            "advice": "Core ≥ 1.0°C above baseline (Uhthoff). Move to AC, pre‑cool, hydrate, rest 15–20 min."
+            "advice": texts["High"]["ar" if lang=="Arabic" else "en"]
         })
     elif delta >= 0.5 and level < _STATUS_LEVEL["Caution"]:
         risk.update({
             "status": "Caution", "color": "orange", "icon": "🟡",
-            "advice": "Core ≥ 0.5°C above baseline (Uhthoff). Pre‑cool, limit exertion, hydrate, rest 15–20 min."
+            "advice": texts["Caution"]["ar" if lang=="Arabic" else "en"]
         })
     return risk
 
@@ -1252,12 +1310,13 @@ def apply_uhthoff_floor(risk: dict, core: float | None, baseline: float | None) 
 UHTHOFF_RAISE = 0.5  # raise at +0.5°C
 UHTHOFF_CLEAR = 0.3  # clear only once below +0.3°C
 
-def update_uhthoff_latch(core: float | None, baseline: float | None):
+def update_uhthoff_latch(core: Optional[float], baseline: Optional[float]):
     """Live tab latch."""
     st.session_state.setdefault("_uhthoff_active", False)
     st.session_state.setdefault("_uhthoff_started_iso", None)
     st.session_state.setdefault("_uhthoff_alert_journaled", False)
-    if core is None or baseline is None: return
+    if core is None or baseline is None:
+        return
     delta = float(core) - float(baseline)
     active_prev = st.session_state["_uhthoff_active"]
     if (not active_prev) and (delta >= UHTHOFF_RAISE):
@@ -1269,49 +1328,73 @@ def update_uhthoff_latch(core: float | None, baseline: float | None):
         st.session_state["_uhthoff_started_iso"] = None
         st.session_state["_uhthoff_alert_journaled"] = False
 
-def update_demo_uhthoff_latch(core: float | None, baseline: float | None):
+def update_demo_uhthoff_latch(core: Optional[float], baseline: Optional[float]):
     """Demo tab latch (no journaling)."""
     st.session_state.setdefault("_demo_uhthoff_active", False)
-    if core is None or baseline is None: return
+    if core is None or baseline is None:
+        return
     delta = float(core) - float(baseline)
     if (not st.session_state["_demo_uhthoff_active"]) and (delta >= UHTHOFF_RAISE):
         st.session_state["_demo_uhthoff_active"] = True
     if st.session_state["_demo_uhthoff_active"] and (delta < UHTHOFF_CLEAR):
         st.session_state["_demo_uhthoff_active"] = False
 
-def _status_label():
-    return T.get("status", "الحالة" if app_language=="Arabic" else "Status")
-
-
+# ---------- Page ----------
 def render_monitor():
     st.title("☀️ " + T["risk_dashboard"])
     if "user" not in st.session_state:
-        st.warning(T["login_first"]); return
-        
-    tabs = st.tabs([
-        "📡 Live Sensor Data" if app_language=="English" else "📡 بيانات مباشرة",
-        "🔬 Learn & Practice" if app_language=="English" else "🔬 تعلّم وتدرّب"
-    ])
+        st.warning(T["login_first"])
+        return
 
-    # =========================================================
-    # TAB 1 — LIVE SENSOR DATA
-    # =========================================================
-    with tabs[0]:
-        with st.expander("🔎 About sensors & temperatures" if app_language=="English" else "🔎 عن المستشعرات والقراءات", expanded=False):
-            if app_language=="English":
-                st.markdown(
-                    "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
-                    "- **Peripheral** ≈ skin/ambient; **Feels‑like & Humidity** from weather.\n"
-                    "- We auto‑log an **Alert** when Uhthoff first triggers; on improvement, you can log a **Recovery**."
-                )
-            else:
-                st.markdown(
-                    "- **الأساسية مقابل الأساس (ΔCore)** — تنبيه أوتهوف عند **+0.5°م**.\n"
-                    "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة والرطوبة** من الطقس.\n"
-                    "- نسجّل **تنبيهًا** تلقائيًا عند بداية أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
-                )
+    # Persist selected tab (live/demo) across reruns & language changes
+    st.session_state.setdefault("monitor_tab", "live")
+    tab_options = ["live", "demo"]
+    tab_labels = {
+        "live": _L("📡 Live Sensor Data", "📡 بيانات مباشرة"),
+        "demo": _L("🔬 Learn & Practice", "🔬 تعلّم وتدرّب")
+    }
+    selected = st.radio(
+        label=_L("View", "العرض"),
+        options=tab_options,
+        format_func=lambda k: tab_labels[k],
+        horizontal=True,
+        key="monitor_tab"
+    )
 
-        # ---- City / Weather ----
+    # Common labels (localized)
+    LBL_SENSOR_HUB = _L("🔌 Sensor Hub", "🔌 محور المستشعرات")
+    LBL_DEVICE     = _L("Device", "الجهاز")
+    LBL_LAST       = _L("Last", "آخر تحديث")
+    LBL_STALE      = _L("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.", "⚠️ القراءات قديمة (>3 دقائق). تحقق من الطاقة/الواي فاي.")
+    LBL_LIVE       = _L("Live", "مباشر")
+    LBL_FEELS      = _L("Feels‑like", "المحسوسة")
+    LBL_HUM        = _L("Humidity", "الرطوبة")
+    LBL_BASELINE   = _L("Baseline", "خط الأساس")
+    LBL_CORE       = _L("Core", "الأساسية")
+    LBL_PERI       = _L("Peripheral", "الطرفية")
+    LBL_DELTA      = _L("ΔCore from baseline", "Δالأساسية عن الأساس")
+    LBL_RAW        = _L("Raw data", "البيانات الخام")
+    LBL_TIME_LOCAL = _L("Time (Local)", "الوقت (المحلي)")
+    LBL_TEMP_Y     = _L("Temperature (°C)", "درجة الحرارة (°م)")
+    LBL_SAMPLING   = _L("Sampling: ~{m:.1f} min between points • Window: ~{h:.1f} h",
+                        "التقاط: ~{m:.1f} دقيقة بين النقاط • نافذة: ~{h:.1f} ساعة")
+
+    # ----------------------------
+    # LIVE TAB
+    # ----------------------------
+    if selected == "live":
+        # Intro expander
+        with st.expander(_L("🔎 About sensors & temperatures", "🔎 عن المستشعرات والقراءات"), expanded=False):
+            st.markdown(_L(
+                "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
+                "- **Peripheral** ≈ skin/ambient; **Feels‑like & Humidity** from weather.\n"
+                "- We auto‑log an **Alert** when Uhthoff first triggers; on improvement, you can log a **Recovery**.",
+                "- **الأساسية مقابل الأساس (ΔCore)** — تنبيه أوتهوف عند **+0.5°م**.\n"
+                "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة والرطوبة** من الطقس.\n"
+                "- نسجّل **تنبيهًا** تلقائيًا عند بداية أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
+            ))
+
+        # City / Weather
         default_city = st.session_state.get("current_city")
         if not default_city:
             prefs = load_user_prefs(st.session_state["user"])
@@ -1324,73 +1407,74 @@ def render_monitor():
             st.session_state["current_city"] = city
         with col_dev:
             st.session_state.setdefault("device_id", "esp8266-01")
-            st.session_state["device_id"] = st.text_input("🔌 Device ID", st.session_state["device_id"])
+            st.session_state["device_id"] = st.text_input(_L("🔌 Device ID", "🔌 معرّف الجهاز"),
+                                                          st.session_state["device_id"])
 
         weather, w_err, _ = get_weather_cached(city)
         baseline = float(st.session_state.get("baseline", 37.0))
-        st.caption(f"Baseline: **{baseline:.1f}°C**")
+        st.caption(f"{LBL_BASELINE}: **{baseline:.1f}°C**")
 
-        # ---- Latest sample & series ----
+        # Latest sample & series
         device_id = st.session_state["device_id"]
         sample = fetch_latest_sensor_sample(device_id)
         series = fetch_sensor_series(device_id, limit=240)
 
-        # ---- Recency / stale ----
+        # Recency
         last_update_label, is_stale = "—", True
         active_tz = get_active_tz()
         if sample and sample.get("at"):
             try:
                 dt = datetime.fromisoformat(sample["at"].replace("Z","+00:00"))
                 mins = int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
-                last_update_label = dt.astimezone(active_tz).strftime("%Y-%m-%d %H:%M") + f" • {mins}m ago"
+                last_update_label = dt.astimezone(active_tz).strftime("%Y-%m-%d %H:%M") + _L(f" • {mins}m ago", f" • قبل {mins} دقيقة")
                 is_stale = mins >= 3
             except Exception:
                 pass
 
-        # ---- Top strip ----
+        # Top strip
         colA, colB, colC, colD = st.columns([1.6,1,1,1.4])
         with colA:
-            st.markdown("**🔌 Sensor Hub**")
-            st.caption(f"Device: {device_id} • Last: {last_update_label}" + (" • ⚠️ stale" if is_stale else ""))
+            st.markdown(f"**{LBL_SENSOR_HUB}**")
+            st.caption(f"{LBL_DEVICE}: {device_id} • {LBL_LAST}: {last_update_label}" + (f" • {LBL_STALE}" if is_stale else ""))
         with colB:
             fl = weather.get("feels_like") if weather else None
-            st.metric("Feels‑like", f"{fl:.1f}°C" if fl is not None else "—")
+            st.metric(LBL_FEELS, f"{fl:.1f}°C" if fl is not None else "—")
         with colC:
             hum = weather.get("humidity") if weather else None
-            st.metric("Humidity", f"{int(hum)}%" if hum is not None else "—")
+            st.metric(LBL_HUM, f"{int(hum)}%" if hum is not None else "—")
         with colD:
-            if st.button(T.get("refresh_weather","🔄 Refresh weather now")):
+            if st.button(T.get("refresh_weather", _L("🔄 Refresh weather now", "🔄 تحديث الطقس الآن"))):
                 try: get_weather.clear()
                 except Exception: pass
                 st.session_state["_weather_cache"] = {}
                 st.rerun()
 
-        # ---- Metrics row (+ ΔCore) ----
+        # Metrics row (+ ΔCore)
         col1, col2, col3, col4 = st.columns(4)
         core_val = sample.get("core") if sample else None
         peri_val = sample.get("peripheral") if sample else None
         with col1:
             if core_val is not None:
                 delta = core_val - baseline
-                st.metric("Core", f"{core_val:.1f}°C", f"{delta:+.1f}°C",
+                st.metric(LBL_CORE, f"{core_val:.1f}°C", f"{delta:+.1f}°C",
                           delta_color="inverse" if delta >= 0.5 else "normal")
             else:
-                st.info("Core: —")
+                st.info(f"{LBL_CORE}: —")
         with col2:
             if peri_val is not None:
-                st.metric("Peripheral", f"{peri_val:.1f}°C")
+                st.metric(LBL_PERI, f"{peri_val:.1f}°C")
             else:
-                st.info("Peripheral: —")
+                st.info(f"{LBL_PERI}: —")
         with col3:
-            st.caption(f"ΔCore from baseline: {core_val - baseline:+.1f}°C" if core_val is not None else "ΔCore: —")
+            st.caption(f"{LBL_DELTA}: {core_val - baseline:+.1f}°C" if core_val is not None else f"{LBL_DELTA}: —")
         with col4:
-            st.success("Live") if not is_stale else st.error("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.")
+            (st.success(LBL_LIVE) if not is_stale else st.error(LBL_STALE))
 
-        # ---- Risk + Uhthoff floor + latch + auto‑journal ----
+        # Risk + Uhthoff floor + latch + auto‑journal
         risk = None
         if weather and (core_val is not None):
-            risk = compute_risk_minimal(weather["feels_like"], weather["humidity"], core_val, baseline)
-            risk = apply_uhthoff_floor(risk, core_val, baseline)
+            risk = compute_risk_minimal(weather["feels_like"], weather["humidity"], core_val, baseline, app_language)
+            risk = apply_uhthoff_floor(risk, core_val, baseline, app_language)
             st.markdown(f"""
             <div class="big-card" style="--left:{risk['color']}">
               <h3>{risk['icon']} <strong>{_status_label()}: {risk['status']}</strong></h3>
@@ -1398,7 +1482,7 @@ def render_monitor():
             </div>
             """, unsafe_allow_html=True)
 
-            # Latch + auto‑journal on first Uhthoff trigger
+            # Latch + auto-journal on first Uhthoff trigger
             update_uhthoff_latch(core_val, baseline)
             if st.session_state["_uhthoff_active"] and not st.session_state["_uhthoff_alert_journaled"]:
                 entry = {
@@ -1414,43 +1498,46 @@ def render_monitor():
                 }
                 insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
                 st.session_state["_uhthoff_alert_journaled"] = True
-                st.warning("⚠️ Uhthoff trigger logged to Journal")
+                st.warning(_L("⚠️ Uhthoff trigger logged to Journal", "⚠️ تم تسجيل تنبيه أوتهوف في اليوميات"))
 
-            # ---- Alert details (dropdowns; journaling only) ----
+            # Alert details (dropdowns; journaling only)
             sym_opts  = _symptoms_for_ui(app_language)
             trig_opts = _triggers_for_ui(app_language)
             if st.session_state["_uhthoff_active"]:
-                with st.expander("Add symptoms/notes to this alert" if app_language=="English" else "أضف أعراض/ملاحظات لهذا التنبيه"):
-                    sel_sym = st.multiselect("Symptoms" if app_language=="English" else "الأعراض", sym_opts, key="alert_sym_ms")
-                    sym_other = st.text_input("Other symptom (optional)" if app_language=="English" else "أعراض أخرى (اختياري)", key="alert_sym_other")
-                    sel_trig = st.multiselect("Triggers / Activity" if app_language=="English" else "محفزات / نشاط", trig_opts, key="alert_trig_ms")
-                    trig_other = st.text_input("Other trigger/activity (optional)" if app_language=="English" else "محفز/نشاط آخر (اختياري)", key="alert_trig_other")
-                    note = st.text_area("Notes (optional)" if app_language=="English" else "ملاحظات (اختياري)", height=60, key="alert_note")
-                    if st.button("Append to Journal alert" if app_language=="English" else "إضافة إلى اليوميات", key="alert_append_btn"):
-                        symptoms_final = sel_sym + ([f"Other: {sym_other.strip()}"] if sym_other.strip() else [])
-                        triggers_final = sel_trig + ([f"Other: {trig_other.strip()}"] if trig_other.strip() else [])
+                with st.expander(_L("Add symptoms/notes to this alert", "أضف أعراض/ملاحظات لهذا التنبيه")):
+                    sel_sym = st.multiselect(_L("Symptoms", "الأعراض"), sym_opts, key="alert_sym_ms")
+                    sym_other = st.text_input(_L("Other symptom (optional)", "أعراض أخرى (اختياري)"), key="alert_sym_other")
+                    sel_trig = st.multiselect(_L("Triggers / Activity", "محفزات / نشاط"), trig_opts, key="alert_trig_ms")
+                    trig_other = st.text_input(_L("Other trigger/activity (optional)", "محفز/نشاط آخر (اختياري)"), key="alert_trig_other")
+                    note = st.text_area(_L("Notes (optional)", "ملاحظات (اختياري)"), height=60, key="alert_note")
+                    if st.button(_L("Append to Journal alert", "إضافة إلى اليوميات"), key="alert_append_btn"):
+                        symptoms_final = sel_sym + ([f"{_L('Other','أخرى')}: {sym_other.strip()}"] if sym_other.strip() else [])
+                        triggers_final = sel_trig + ([f"{_L('Other','أخرى')}: {trig_other.strip()}"] if trig_other.strip() else [])
                         insert_journal(
                             st.session_state.get("user","guest"), utc_iso_now(),
                             {"type":"NOTE","at": utc_iso_now(),
-                             "text": f"Alert details — Symptoms: {symptoms_final}; Triggers/Activity: {triggers_final}; Note: {note.strip()}"}
+                             "text": _L(
+                                 f"Alert details — Symptoms: {symptoms_final}; Triggers/Activity: {triggers_final}; Note: {note.strip()}",
+                                 f"تفاصيل التنبيه — الأعراض: {symptoms_final}; المحفزات/النشاط: {triggers_final}; ملاحظة: {note.strip()}"
+                             )}
                         )
-                        st.success("Added to Journal" if app_language=="English" else "تمت الإضافة")
+                        st.success(_L("Added to Journal", "تمت الإضافة"))
 
         elif not weather:
             st.error(f"{T['weather_fail']}: {w_err or '—'}")
 
-        # ---- Manual alert (journaling only) ----
+        # Manual alert (journaling only)
         sym_opts  = _symptoms_for_ui(app_language)
         trig_opts = _triggers_for_ui(app_language)
-        with st.expander("Log alert manually" if app_language=="English" else "سجّل تنبيهًا يدويًا"):
-            sel_sym = st.multiselect("Symptoms" if app_language=="English" else "الأعراض", sym_opts, key="man_sym_ms")
-            sym_other = st.text_input("Other symptom (optional)" if app_language=="English" else "أعراض أخرى (اختياري)", key="man_sym_other")
-            sel_trig = st.multiselect("Triggers / Activity" if app_language=="English" else "محفزات / نشاط", trig_opts, key="man_trig_ms")
-            trig_other = st.text_input("Other trigger/activity (optional)" if app_language=="English" else "محفز/نشاط آخر (اختياري)", key="man_trig_other")
-            mnote = st.text_area("Notes", height=70, key="man_note")
-            if st.button("Save manual alert" if app_language=="English" else "حفظ التنبيه", key="man_alert_btn"):
-                symptoms_final = sel_sym + ([f"Other: {sym_other.strip()}"] if sym_other.strip() else [])
-                triggers_final = sel_trig + ([f"Other: {trig_other.strip()}"] if trig_other.strip() else [])
+        with st.expander(_L("Log alert manually", "سجّل تنبيهًا يدويًا")):
+            sel_sym = st.multiselect(_L("Symptoms", "الأعراض"), sym_opts, key="man_sym_ms")
+            sym_other = st.text_input(_L("Other symptom (optional)", "أعراض أخرى (اختياري)"), key="man_sym_other")
+            sel_trig = st.multiselect(_L("Triggers / Activity", "محفزات / نشاط"), trig_opts, key="man_trig_ms")
+            trig_other = st.text_input(_L("Other trigger/activity (optional)", "محفز/نشاط آخر (اختياري)"), key="man_trig_other")
+            mnote = st.text_area(_L("Notes", "ملاحظات"), height=70, key="man_note")
+            if st.button(_L("Save manual alert", "حفظ التنبيه"), key="man_alert_btn"):
+                symptoms_final = sel_sym + ([f"{_L('Other','أخرى')}: {sym_other.strip()}"] if sym_other.strip() else [])
+                triggers_final = sel_trig + ([f"{_L('Other','أخرى')}: {trig_other.strip()}"] if trig_other.strip() else [])
                 entry = {
                     "type":"ALERT","at": utc_iso_now(),
                     "core_temp": round(core_val,2) if core_val is not None else None,
@@ -1465,10 +1552,10 @@ def render_monitor():
                     "device_id": device_id
                 }
                 insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                st.success("Saved" if app_language=="English" else "تم الحفظ")
+                st.success(_L("Saved", "تم الحفظ"))
 
-        # ---- Recovery logging when status improves ----
-        if weather and (risk is not None):
+        # Recovery logging when status improves
+        if weather and ("risk" in locals() and risk is not None):
             curr = {
                 "status": risk["status"],
                 "level": _STATUS_LEVEL.get(risk["status"], 0),
@@ -1482,17 +1569,18 @@ def render_monitor():
             prev = st.session_state.get("_risk_track")
             st.session_state["_risk_track"] = curr
             if prev and (curr["level"] < prev["level"]):
-                st.success(f"✅ Improved: {prev['status']} → {curr['status']}. What helped?")
+                st.success(_L(f"✅ Improved: {prev['status']} → {curr['status']}. What helped?",
+                              f"✅ تحسّن: {prev['status']} → {curr['status']}. ما الذي ساعد؟"))
                 with st.form("recovery_form_live", clear_on_submit=True):
                     acts = st.multiselect(
-                        "Cooling actions used" if app_language=="English" else "إجراءات التبريد التي استُخدمت",
+                        _L("Cooling actions used", "إجراءات التبريد التي استُخدمت"),
                         _actions_for_ui(app_language)
                     )
-                    act_other = st.text_input("Other action (optional)" if app_language=="English" else "إجراء آخر (اختياري)")
-                    note = st.text_area("Details (optional)" if app_language=="English" else "تفاصيل (اختياري)", height=70)
-                    saved = st.form_submit_button("Save Recovery" if app_language=="English" else "حفظ التعافي")
+                    act_other = st.text_input(_L("Other action (optional)", "إجراء آخر (اختياري)"))
+                    note = st.text_area(_L("Details (optional)", "تفاصيل (اختياري)"), height=70)
+                    saved = st.form_submit_button(_L("Save Recovery", "حفظ التعافي"))
                 if saved:
-                    actions_final = acts + ([f"Other: {act_other.strip()}"] if act_other.strip() else [])
+                    actions_final = acts + ([f"{_L('Other','أخرى')}: {act_other.strip()}"] if act_other.strip() else [])
                     try:
                         t1 = datetime.fromisoformat(prev["time_iso"].replace("Z","+00:00"))
                         t2 = datetime.fromisoformat(curr["time_iso"].replace("Z","+00:00"))
@@ -1514,272 +1602,192 @@ def render_monitor():
                         "city": city, "duration_min": dur
                     }
                     insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
-                    st.success("Recovery saved" if app_language=="English" else "تم حفظ التعافي")
+                    st.success(_L("Recovery saved", "تم حفظ التعافي"))
 
-        # ---- Charts (Live) ----
+        # Charts (Live)
         st.markdown("---")
         if series:
             times  = [datetime.fromisoformat(r["created_at"].replace("Z","+00:00")).astimezone(active_tz) for r in series]
             core_s = [float(r["core_c"]) if r.get("core_c") is not None else None for r in series]
             peri_s = [float(r["peripheral_c"]) if r.get("peripheral_c") is not None else None for r in series]
-            # per-row feels_like if present (future-proof)
             fl_s   = [float(r["feels_like"]) if ("feels_like" in r and r["feels_like"] is not None) else None for r in series]
 
             # Chart 1: Core & Peripheral (Live)
-            st.subheader("Core & Peripheral (Live)")
+            st.subheader(_L("Core & Peripheral (Live)", "الأساسية والطرفية (مباشر)"))
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name="Core"))
-            fig1.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name="Peripheral"))
+            fig1.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=LBL_CORE))
+            fig1.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=LBL_PERI))
             fig1.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                               xaxis_title="Time (Local)", yaxis_title="Temperature (°C)",
+                               xaxis_title=LBL_TIME_LOCAL, yaxis_title=LBL_TEMP_Y,
                                legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig1, use_container_width=True)
 
-            # Raw data directly after Chart 1
-            with st.expander("Raw data" if app_language=="English" else "البيانات الخام", expanded=False):
+            # Raw data (after chart 1)
+            with st.expander(LBL_RAW, expanded=False):
                 df = pd.DataFrame({
-                    "Time (Local)": [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
-                    "Core (°C)": core_s,
-                    "Peripheral (°C)": peri_s,
+                    LBL_TIME_LOCAL: [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
+                    f"{LBL_CORE} (°C)": core_s,
+                    f"{LBL_PERI} (°C)": peri_s,
                 })
                 st.dataframe(df.iloc[::-1], use_container_width=True)
 
-            # Sampling cadence + window
+            # Sampling caption
             if len(times) >= 2:
                 gaps_sec = [(times[i]-times[i-1]).total_seconds() for i in range(1, len(times))]
                 med_gap = statistics.median(gaps_sec)
                 hours = (times[-1] - times[0]).total_seconds() / 3600
-                st.caption(f"Sampling: ~{med_gap/60:.1f} min between points • Window: ~{hours:.1f} h")
+                st.caption(LBL_SAMPLING.format(m=med_gap/60, h=hours))
 
             # Chart 2: Core, Peripheral & Feels‑like (Live)
-            st.subheader("Core, Peripheral & Feels‑like (Live)")
+            st.subheader(_L("Core, Peripheral & Feels‑like (Live)", "الأساسية، الطرفية والمحسوسة (مباشر)"))
             fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name="Core"))
-            fig2.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name="Peripheral"))
-            # Preferred: plot per-row feels_like if present
+            fig2.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=LBL_CORE))
+            fig2.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=LBL_PERI))
             if any(v is not None for v in fl_s):
-                fig2.add_trace(go.Scatter(x=times, y=fl_s, mode="lines+markers", name="Feels‑like"))
+                fig2.add_trace(go.Scatter(x=times, y=fl_s, mode="lines+markers", name=LBL_FEELS))
             else:
-                # Fallback: dashed constant current feels-like
                 fl_now = float(weather["feels_like"]) if (weather and weather.get("feels_like") is not None) else None
                 if fl_now is not None and len(times) > 0:
                     fig2.add_trace(go.Scatter(
                         x=times, y=[fl_now]*len(times), mode="lines",
-                        name="Feels‑like (current)", line=dict(dash="dash")
+                        name=_L("Feels‑like (current)", "المحسوسة (الحالية)"),
+                        line=dict(dash="dash")
                     ))
             fig2.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                               xaxis_title="Time (Local)", yaxis_title="Temperature (°C)",
+                               xaxis_title=LBL_TIME_LOCAL, yaxis_title=LBL_TEMP_Y,
                                legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig2, use_container_width=True)
         else:
-            st.info("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.")
-            
-        # =========================================================
-        # TAB 2 — DEMO / LEARN (simulation only; no journaling)
-        # =========================================================
-        with tabs[1]:
-            is_ar = (app_language == "Arabic")
-    
-            # Top info
-            info_text = (
-                "Adjust the Core body temperature, Baseline, and Feels‑like temperature settings. "
-                "The risk assessment uses the same calculation method as the Live monitor. "
-                "Humidity settings are available under Advanced options. "
-                "Note: Demo mode does not save entries to your Journal."
-                if not is_ar else
-                "اضبط درجة الحرارة الأساسية للجسم، خط الأساس، ودرجة الحرارة المحسوسة. "
-                "يستخدم التقييم نفس المنطق في الوضع المباشر. "
-                "إعدادات الرطوبة ضمن الخيارات المتقدمة. "
-                "ملاحظة: وضع العرض التجريبي لا يحفظ أي بيانات في اليوميات."
+            st.info(_L("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.",
+                       "لا توجد قراءات حديثة من Supabase بعد. عند رفع الجهاز للبيانات ستظهر الرسوم هنا."))
+
+    # ----------------------------
+    # DEMO TAB (no journaling)
+    # ----------------------------
+    else:
+        st.info(_L(
+            "Adjust the Core body temperature, Baseline, and Feels‑like temperature. "
+            "The risk assessment uses the same calculation method as Live. "
+            "Humidity is under Advanced options. Demo does not save to Journal.",
+            "اضبط الحرارة الأساسية، خط الأساس، والمحسوسة. "
+            "يعتمد التقييم على نفس منطق الوضع المباشر. "
+            "الرطوبة ضمن الخيارات المتقدمة. الوضع التجريبي لا يحفظ في اليوميات."
+        ))
+
+        st.session_state.setdefault("sim_core", 36.8)
+        st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
+        st.session_state.setdefault("sim_feels", 32.0)
+        st.session_state.setdefault("sim_hum", 50.0)
+        st.session_state.setdefault("sim_history", [])
+        st.session_state.setdefault("sim_live", False)
+        st.session_state.setdefault("_demo_risk_track", None)
+        st.session_state.setdefault("_demo_uhthoff_active", False)
+
+        colL, colR = st.columns([1,1])
+        with colL:
+            st.subheader(_L("Inputs", "المدخلات"))
+            st.session_state["sim_core"]  = st.slider(_L("Core (°C)", "الأساسية (°م)"), 36.0, 39.5, float(st.session_state["sim_core"]), 0.1)
+            st.session_state["sim_base"]  = st.slider(_L("Baseline (°C)", "خط الأساس (°م)"), 36.0, 37.5, float(st.session_state["sim_base"]), 0.1)
+            st.session_state["sim_feels"] = st.slider(_L("Feels‑like (°C)", "المحسوسة (°م)"), 25.0, 50.0, float(st.session_state["sim_feels"]), 0.5)
+            with st.expander(_L("Advanced (Humidity)", "خيارات متقدمة (الرطوبة)")):
+                st.session_state["sim_hum"] = st.slider(_L("Humidity (%)", "الرطوبة (%)"), 10, 95, int(st.session_state["sim_hum"]), 1)
+
+            live_toggle = st.toggle(_L("Record changes automatically", "تسجيل التغييرات تلقائيًا"), value=st.session_state["sim_live"])
+            if live_toggle and not st.session_state["sim_live"]:
+                st.session_state["sim_history"].append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": float(st.session_state["sim_core"]),
+                    "baseline": float(st.session_state["sim_base"]),
+                    "feels": float(st.session_state["sim_feels"])
+                })
+            st.session_state["sim_live"] = live_toggle
+
+            if st.button(_L("Clear chart", "مسح الرسم")):
+                st.session_state["sim_history"].clear()
+                st.success(_L("Cleared", "تم المسح"))
+
+        with colR:
+            sim_core   = float(st.session_state["sim_core"])
+            sim_base   = float(st.session_state["sim_base"])
+            sim_feels  = float(st.session_state["sim_feels"])
+            sim_hum    = float(st.session_state["sim_hum"])
+            sim_risk   = compute_risk_minimal(sim_feels, sim_hum, sim_core, sim_base, app_language)
+            sim_risk   = apply_uhthoff_floor(sim_risk, sim_core, sim_base, app_language)
+
+            st.subheader(_status_label())
+            st.markdown(f"""
+            <div class="big-card" style="--left:{sim_risk['color']}">
+              <h3>{sim_risk['icon']} <strong>{_status_label()}: {sim_risk['status']}</strong></h3>
+              <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
+            </div>
+            """, unsafe_allow_html=True)
+            st.caption(_L(
+                f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C  •  Humidity (demo): {int(sim_hum)}%",
+                f"Δالأساسية عن الأساس: {sim_core - sim_base:+.1f}°م  •  الرطوبة (تجريبي): {int(sim_hum)}%"
+            ))
+
+            update_demo_uhthoff_latch(sim_core, sim_base)
+            curr_demo = {
+                "status": sim_risk["status"],
+                "level": _STATUS_LEVEL.get(sim_risk["status"], 0),
+                "time_iso": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
+                "core": sim_core, "feels": sim_feels, "humidity": sim_hum
+            }
+            prev_demo = st.session_state.get("_demo_risk_track")
+            st.session_state["_demo_risk_track"] = curr_demo
+
+            # Show same UI affordances (no saves)
+            if st.session_state["_demo_uhthoff_active"]:
+                sym_opts  = _symptoms_for_ui(app_language)
+                trig_opts = _triggers_for_ui(app_language)
+                with st.expander(_L("Alert details (demo — not saved)", "تفاصيل التنبيه (تجريبي — لا يُحفَظ)")):
+                    st.multiselect(_L("Symptoms", "الأعراض"), sym_opts, key="demo_alert_sym_ms")
+                    st.text_input(_L("Other symptom (optional)", "أعراض أخرى (اختياري)"), key="demo_alert_sym_other")
+                    st.multiselect(_L("Triggers / Activity", "محفزات / نشاط"), trig_opts, key="demo_alert_trig_ms")
+                    st.text_input(_L("Other trigger/activity (optional)", "محفز/نشاط آخر (اختياري)"), key="demo_alert_trig_other")
+                    st.text_area(_L("Notes (optional)", "ملاحظات (اختياري)"), height=60, key="demo_alert_note")
+                    if st.button(_L("Simulate append (not saved)", "محاكاة إضافة (لن تُحفَظ)"), key="demo_alert_append_btn"):
+                        st.info(_L("Demo: In Live, this would append to the active alert in Journal.",
+                                   "تجريبي: في الوضع المباشر سيتم إلحاق التفاصيل بتنبيه اليوميات الحالي."))
+
+            if prev_demo and (curr_demo["level"] < prev_demo["level"]):
+                st.success(_L("✅ Improved (demo). What helped?", "✅ تحسّن (تجريبي). ما الذي ساعد؟"))
+                with st.form("recovery_form_demo", clear_on_submit=True):
+                    st.multiselect(_L("Cooling actions used", "إجراءات التبريد التي استُخدمت"), _actions_for_ui(app_language))
+                    st.text_input(_L("Other action (optional)", "إجراء آخر (اختياري)"))
+                    st.text_area(_L("Details (optional)", "تفاصيل (اختياري)"), height=70)
+                    saved_demo = st.form_submit_button(_L("Simulate save (not saved)", "حفظ تجريبي (لن يُحفَظ)"))
+                if saved_demo:
+                    st.info(_L("Demo: In Live, this would save a RECOVERY entry with your actions and notes.",
+                               "تجريبي: في الوضع المباشر سيتم حفظ مدخلة تعافٍ بهذه الإجراءات والملاحظات."))
+
+            if st.session_state["sim_live"]:
+                st.session_state["sim_history"].append({
+                    "ts": datetime.now().strftime("%H:%M:%S"),
+                    "core": sim_core,
+                    "baseline": sim_base,
+                    "feels": sim_feels
+                })
+
+        # Demo chart: Core, Feels‑like & Baseline
+        st.markdown("---")
+        if st.session_state["sim_history"]:
+            df = pd.DataFrame(st.session_state["sim_history"])
+            st.subheader(_L("Core, Feels‑like & Baseline (Demo)", "الأساسية، المحسوسة، وخط الأساس (تجريبي)"))
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=LBL_CORE))
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=LBL_FEELS))
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=LBL_BASELINE))
+            fig.update_layout(
+                height=300, margin=dict(l=10, r=10, t=10, b=10),
+                legend=dict(orientation="h", y=1.1),
+                xaxis_title=_L("Time (Demo session)", "الوقت (جلسة تجريبية)"),
+                yaxis_title=LBL_TEMP_Y
             )
-            st.info(info_text)
-    
-            # Demo state
-            st.session_state.setdefault("sim_core", 36.8)
-            st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
-            st.session_state.setdefault("sim_feels", 32.0)
-            st.session_state.setdefault("sim_hum", 50.0)  # used for risk only
-            st.session_state.setdefault("sim_history", [])
-            st.session_state.setdefault("sim_live", False)
-            st.session_state.setdefault("_demo_risk_track", None)
-            st.session_state.setdefault("_demo_uhthoff_active", False)
-    
-            # Layout
-            colL, colR = st.columns([1, 1])
-    
-            # ---------------- Left column: Inputs + recording ----------------
-            with colL:
-                st.subheader("Inputs" if not is_ar else "المدخلات")
-    
-                st.session_state["sim_core"]  = st.slider(
-                    "Core (°C)" if not is_ar else "الأساسية (°م)",
-                    36.0, 39.5, float(st.session_state["sim_core"]), 0.1
-                )
-                st.session_state["sim_base"]  = st.slider(
-                    "Baseline (°C)" if not is_ar else "خط الأساس (°م)",
-                    36.0, 37.5, float(st.session_state["sim_base"]), 0.1
-                )
-                st.session_state["sim_feels"] = st.slider(
-                    "Feels‑like (°C)" if not is_ar else "المحسوسة (°م)",
-                    25.0, 50.0, float(st.session_state["sim_feels"]), 0.5
-                )
-    
-                with st.expander("Advanced (Humidity)" if not is_ar else "خيارات متقدمة (الرطوبة)"):
-                    st.session_state["sim_hum"] = st.slider(
-                        "Humidity (%)" if not is_ar else "الرطوبة (%)",
-                        10, 95, int(st.session_state["sim_hum"]), 1
-                    )
-    
-                live_toggle = st.toggle(
-                    "Record changes automatically" if not is_ar else "تسجيل التغييرات تلقائيًا",
-                    value=st.session_state["sim_live"]
-                )
-                if live_toggle and not st.session_state["sim_live"]:
-                    st.session_state["sim_history"].append({
-                        "ts": datetime.now().strftime("%H:%M:%S"),
-                        "core": float(st.session_state["sim_core"]),
-                        "baseline": float(st.session_state["sim_base"]),
-                        "feels": float(st.session_state["sim_feels"])
-                    })
-                st.session_state["sim_live"] = live_toggle
-    
-                if st.button("Clear chart" if not is_ar else "مسح الرسم"):
-                    st.session_state["sim_history"].clear()
-                    st.success("Cleared" if not is_ar else "تم المسح")
-    
-            # ---------------- Right column: Status + demo UI (no saves) ----------------
-            with colR:
-                # SAME risk pipeline as Live
-                sim_core   = float(st.session_state["sim_core"])
-                sim_base   = float(st.session_state["sim_base"])
-                sim_feels  = float(st.session_state["sim_feels"])
-                sim_hum    = float(st.session_state["sim_hum"])
-    
-                sim_risk   = compute_risk_minimal(sim_feels, sim_hum, sim_core, sim_base)
-                sim_risk   = apply_uhthoff_floor(sim_risk, sim_core, sim_base)
-    
-                st.subheader("Status" if not is_ar else "الحالة")
-                st.markdown(f"""
-                <div class="big-card" style="--left:{sim_risk['color']}">
-                  <h3>{sim_risk['icon']} <strong>{_status_label()}: {sim_risk['status']}</strong></h3>
-                  <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
-                </div>
-                """, unsafe_allow_html=True)
-    
-                st.caption(
-                    f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C  •  Humidity (demo): {int(sim_hum)}%"
-                    if not is_ar else
-                    f"Δالأساسية عن الأساس: {sim_core - sim_base:+.1f}°م  •  الرطوبة (تجريبي): {int(sim_hum)}%"
-                )
-    
-                # Demo latch + risk tracking (NO journaling)
-                update_demo_uhthoff_latch(sim_core, sim_base)
-                curr_demo = {
-                    "status": sim_risk["status"],
-                    "level": _STATUS_LEVEL.get(sim_risk["status"], 0),
-                    "time_iso": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
-                    "core": sim_core, "feels": sim_feels, "humidity": sim_hum
-                }
-                prev_demo = st.session_state.get("_demo_risk_track")
-                st.session_state["_demo_risk_track"] = curr_demo
-    
-                # DEMO: Alert details UI (no save)
-                if st.session_state["_demo_uhthoff_active"]:
-                    sym_opts  = _symptoms_for_ui(app_language)
-                    trig_opts = _triggers_for_ui(app_language)
-                    with st.expander(
-                        "Alert details (demo — not saved)" if not is_ar else "تفاصيل التنبيه (تجريبي — لا يُحفَظ)"
-                    ):
-                        sel_sym = st.multiselect(
-                            "Symptoms" if not is_ar else "الأعراض",
-                            sym_opts, key="demo_alert_sym_ms"
-                        )
-                        sym_other = st.text_input(
-                            "Other symptom (optional)" if not is_ar else "أعراض أخرى (اختياري)",
-                            key="demo_alert_sym_other"
-                        )
-                        sel_trig = st.multiselect(
-                            "Triggers / Activity" if not is_ar else "محفزات / نشاط",
-                            trig_opts, key="demo_alert_trig_ms"
-                        )
-                        trig_other = st.text_input(
-                            "Other trigger/activity (optional)" if not is_ar else "محفز/نشاط آخر (اختياري)",
-                            key="demo_alert_trig_other"
-                        )
-                        note = st.text_area(
-                            "Notes (optional)" if not is_ar else "ملاحظات (اختياري)",
-                            height=60, key="demo_alert_note"
-                        )
-                        if st.button(
-                            "Simulate append (not saved)" if not is_ar else "محاكاة إضافة (لن تُحفَظ)",
-                            key="demo_alert_append_btn"
-                        ):
-                            st.info(
-                                "Demo: In Live, this would append to the active alert in Journal."
-                                if not is_ar else
-                                "تجريبي: في الوضع المباشر سيتم إلحاق التفاصيل بتنبيه اليوميات الحالي."
-                            )
-    
-                # DEMO: Recovery form (show on improvement) — no save
-                if prev_demo and (curr_demo["level"] < prev_demo["level"]):
-                    st.success(
-                        "✅ Improved (demo). What helped?" if not is_ar else "✅ تحسّن (تجريبي). ما الذي ساعد؟"
-                    )
-                    with st.form("recovery_form_demo", clear_on_submit=True):
-                        acts = st.multiselect(
-                            "Cooling actions used" if not is_ar else "إجراءات التبريد التي استُخدمت",
-                            _actions_for_ui(app_language)
-                        )
-                        act_other = st.text_input(
-                            "Other action (optional)" if not is_ar else "إجراء آخر (اختياري)"
-                        )
-                        note = st.text_area(
-                            "Details (optional)" if not is_ar else "تفاصيل (اختياري)",
-                            height=70
-                        )
-                        saved_demo = st.form_submit_button(
-                            "Simulate save (not saved)" if not is_ar else "حفظ تجريبي (لن يُحفَظ)"
-                        )
-                    if saved_demo:
-                        st.info(
-                            "Demo: In Live, this would save a RECOVERY entry with your actions and notes."
-                            if not is_ar else
-                            "تجريبي: في الوضع المباشر سيتم حفظ مدخلة تعافٍ بهذه الإجراءات والملاحظات."
-                        )
-    
-                # Record point if tracking
-                if st.session_state["sim_live"]:
-                    st.session_state["sim_history"].append({
-                        "ts": datetime.now().strftime("%H:%M:%S"),
-                        "core": sim_core,
-                        "baseline": sim_base,
-                        "feels": sim_feels
-                    })
-    
-            # Demo chart: Core, Feels‑like & Baseline (Demo)
-            st.markdown("---")
-            if st.session_state["sim_history"]:
-                df = pd.DataFrame(st.session_state["sim_history"])
-                st.subheader(
-                    "Core, Feels‑like & Baseline (Demo)" if not is_ar else "الأساسية، المحسوسة، وخط الأساس (تجريبي)"
-                )
-                fig = go.Figure()
-                fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=("Core" if not is_ar else "الأساسية")))
-                fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=("Feels‑like" if not is_ar else "المحسوسة")))
-                fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=("Baseline" if not is_ar else "خط الأساس")))
-                fig.update_layout(
-                    height=300, margin=dict(l=10, r=10, t=10, b=10),
-                    legend=dict(orientation="h", y=1.1),
-                    xaxis_title=("Time (Demo session)" if not is_ar else "الوقت (جلسة تجريبية)"),
-                    yaxis_title=("Temperature (°C)" if not is_ar else "درجة الحرارة (°م)")
-                )
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info(
-                    "Adjust the sliders (and enable recording) to see the chart."
-                    if not is_ar else
-                    "حرّك المنزلقات (وفعِّل التسجيل) لرؤية الرسم."
-                )
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info(_L("Adjust the sliders (and enable recording) to see the chart.",
+                       "حرّك المنزلقات (وفعِّل التسجيل) لرؤية الرسم."))
 
 
 # ================== JOURNAL (includes RECOVERY) ==================
