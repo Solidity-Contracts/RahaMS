@@ -1340,43 +1340,53 @@ def update_demo_uhthoff_latch(core: Optional[float], baseline: Optional[float]):
         st.session_state["_demo_uhthoff_active"] = False
 
 # ---------- Page ----------
+# --- small helpers (keep if you don't already have them) ---
+from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
+import statistics
+import pandas as pd
+import plotly.graph_objects as go
+
+def _L(en: str, ar: str) -> str:
+    return ar if (app_language == "Arabic") else en
+
+def get_active_tz():
+    """Use user's saved timezone if available; fallback to Asia/Dubai; then UTC."""
+    try:
+        if "user" in st.session_state:
+            prefs = load_user_prefs(st.session_state["user"]) or {}
+            tz_code = prefs.get("timezone") or st.session_state.get("settings_tz")
+            if tz_code:
+                return ZoneInfo(tz_code)
+    except Exception:
+        pass
+    try:
+        return ZoneInfo("Asia/Dubai")
+    except Exception:
+        return timezone.utc
+
+def _status_label():
+    return T.get("status", _L("Status", "الحالة"))
+
+# -----------------------------------------------------------
+#                      TABS VERSION
+# -----------------------------------------------------------
 def render_monitor():
     st.title("☀️ " + T["risk_dashboard"])
     if "user" not in st.session_state:
         st.warning(T["login_first"])
         return
 
-    # Persist selected tab (live/demo) across reruns & language changes
-    st.session_state.setdefault("monitor_tab", "live")
-    tab_options = ["live", "demo"]
-    tab_labels = {
-        "live": _L("📡 Live Sensor Data", "📡 بيانات مباشرة"),
-        "demo": _L("🔬 Learn & Practice", "🔬 تعلّم وتدرّب")
-    }
+    tabs = st.tabs([
+        _L("📡 Live Sensor Data", "📡 بيانات مباشرة"),
+        _L("🔬 Learn & Practice", "🔬 تعلّم وتدرّب")
+    ])
 
-    # Common labels (localized)
-    LBL_SENSOR_HUB = _L("🔌 Sensor Hub", "🔌 محور المستشعرات")
-    LBL_DEVICE     = _L("Device", "الجهاز")
-    LBL_LAST       = _L("Last", "آخر تحديث")
-    LBL_STALE      = _L("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.", "⚠️ القراءات قديمة (>3 دقائق). تحقق من الطاقة/الواي فاي.")
-    LBL_LIVE       = _L("Live", "مباشر")
-    LBL_FEELS      = _L("Feels‑like", "المحسوسة")
-    LBL_HUM        = _L("Humidity", "الرطوبة")
-    LBL_BASELINE   = _L("Baseline", "خط الأساس")
-    LBL_CORE       = _L("Core", "الأساسية")
-    LBL_PERI       = _L("Peripheral", "الطرفية")
-    LBL_DELTA      = _L("ΔCore from baseline", "Δالأساسية عن الأساس")
-    LBL_RAW        = _L("Raw data", "البيانات الخام")
-    LBL_TIME_LOCAL = _L("Time (Local)", "الوقت (المحلي)")
-    LBL_TEMP_Y     = _L("Temperature (°C)", "درجة الحرارة (°م)")
-    LBL_SAMPLING   = _L("Sampling: ~{m:.1f} min between points • Window: ~{h:.1f} h",
-                        "التقاط: ~{m:.1f} دقيقة بين النقاط • نافذة: ~{h:.1f} ساعة")
-
-    # ----------------------------
-    # LIVE TAB
-    # ----------------------------
-    if selected == "live":
-        # Intro expander
+    # =========================================================
+    # TAB 1 — LIVE SENSOR DATA
+    # =========================================================
+    with tabs[0]:
+        # Intro
         with st.expander(_L("🔎 About sensors & temperatures", "🔎 عن المستشعرات والقراءات"), expanded=False):
             st.markdown(_L(
                 "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
@@ -1387,27 +1397,29 @@ def render_monitor():
                 "- نسجّل **تنبيهًا** تلقائيًا عند بداية أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
             ))
 
-        # City / Weather
+        # City / device
         default_city = st.session_state.get("current_city")
         if not default_city:
             prefs = load_user_prefs(st.session_state["user"])
-            default_city = prefs.get("home_city") or "Abu Dhabi,AE"
-        col_city, col_dev = st.columns([2,1])
+            default_city = (prefs.get("home_city") or "Abu Dhabi,AE")
+        col_city, col_dev = st.columns([2, 1])
         with col_city:
             city = st.selectbox("📍 " + T["quick_pick"], GCC_CITIES,
                                 index=(GCC_CITIES.index(default_city) if default_city in GCC_CITIES else 0),
-                                key="monitor_city", format_func=lambda c: city_label(c, app_language))
+                                key="monitor_city",
+                                format_func=lambda c: city_label(c, app_language))
             st.session_state["current_city"] = city
         with col_dev:
             st.session_state.setdefault("device_id", "esp8266-01")
             st.session_state["device_id"] = st.text_input(_L("🔌 Device ID", "🔌 معرّف الجهاز"),
                                                           st.session_state["device_id"])
 
+        # Weather + baseline
         weather, w_err, _ = get_weather_cached(city)
         baseline = float(st.session_state.get("baseline", 37.0))
-        st.caption(f"{LBL_BASELINE}: **{baseline:.1f}°C**")
+        st.caption(_L(f"Baseline: **{baseline:.1f}°C**", f"خط الأساس: **{baseline:.1f}°م**"))
 
-        # Latest sample & series
+        # Latest + time window
         device_id = st.session_state["device_id"]
         sample = fetch_latest_sensor_sample(device_id)
         series = fetch_sensor_series(device_id, limit=240)
@@ -1419,7 +1431,8 @@ def render_monitor():
             try:
                 dt = datetime.fromisoformat(sample["at"].replace("Z","+00:00"))
                 mins = int((datetime.now(timezone.utc) - dt).total_seconds() // 60)
-                last_update_label = dt.astimezone(active_tz).strftime("%Y-%m-%d %H:%M") + _L(f" • {mins}m ago", f" • قبل {mins} دقيقة")
+                last_update_label = dt.astimezone(active_tz).strftime("%Y-%m-%d %H:%M") + \
+                                    (_L(f" • {mins}m ago", f" • قبل {mins} دقيقة"))
                 is_stale = mins >= 3
             except Exception:
                 pass
@@ -1427,14 +1440,17 @@ def render_monitor():
         # Top strip
         colA, colB, colC, colD = st.columns([1.6,1,1,1.4])
         with colA:
-            st.markdown(f"**{LBL_SENSOR_HUB}**")
-            st.caption(f"{LBL_DEVICE}: {device_id} • {LBL_LAST}: {last_update_label}" + (f" • {LBL_STALE}" if is_stale else ""))
+            st.markdown(_L("**🔌 Sensor Hub**", "**🔌 محور المستشعرات**"))
+            st.caption(_L(
+                f"Device: {device_id} • Last: {last_update_label}",
+                f"الجهاز: {device_id} • آخر تحديث: {last_update_label}"
+            ) + ( _L(" • ⚠️ stale", " • ⚠️ قديمة") if is_stale else "" ))
         with colB:
             fl = weather.get("feels_like") if weather else None
-            st.metric(LBL_FEELS, f"{fl:.1f}°C" if fl is not None else "—")
+            st.metric(_L("Feels‑like", "المحسوسة"), f"{fl:.1f}°C" if fl is not None else "—")
         with colC:
             hum = weather.get("humidity") if weather else None
-            st.metric(LBL_HUM, f"{int(hum)}%" if hum is not None else "—")
+            st.metric(_L("Humidity", "الرطوبة"), f"{int(hum)}%" if hum is not None else "—")
         with colD:
             if st.button(T.get("refresh_weather", _L("🔄 Refresh weather now", "🔄 تحديث الطقس الآن"))):
                 try: get_weather.clear()
@@ -1442,32 +1458,41 @@ def render_monitor():
                 st.session_state["_weather_cache"] = {}
                 st.rerun()
 
-        # Metrics row (+ ΔCore)
+        # Metrics
         col1, col2, col3, col4 = st.columns(4)
         core_val = sample.get("core") if sample else None
         peri_val = sample.get("peripheral") if sample else None
         with col1:
             if core_val is not None:
                 delta = core_val - baseline
-                st.metric(LBL_CORE, f"{core_val:.1f}°C", f"{delta:+.1f}°C",
-                          delta_color="inverse" if delta >= 0.5 else "normal")
+                st.metric(_L("Core", "الأساسية"), f"{core_val:.1f}°C", f"{delta:+.1f}°C",
+                          delta_color=("inverse" if delta >= 0.5 else "normal"))
             else:
-                st.info(f"{LBL_CORE}: —")
+                st.info(_L("Core: —", "الأساسية: —"))
         with col2:
             if peri_val is not None:
-                st.metric(LBL_PERI, f"{peri_val:.1f}°C")
+                st.metric(_L("Peripheral", "الطرفية"), f"{peri_val:.1f}°C")
             else:
-                st.info(f"{LBL_PERI}: —")
+                st.info(_L("Peripheral: —", "الطرفية: —"))
         with col3:
-            st.caption(f"{LBL_DELTA}: {core_val - baseline:+.1f}°C" if core_val is not None else f"{LBL_DELTA}: —")
+            if core_val is not None:
+                st.caption(_L(f"ΔCore from baseline: {core_val - baseline:+.1f}°C",
+                              f"Δالأساسية عن الأساس: {core_val - baseline:+.1f}°م"))
+            else:
+                st.caption(_L("ΔCore: —", "Δالأساسية: —"))
         with col4:
-            (st.success(LBL_LIVE) if not is_stale else st.error(LBL_STALE))
+            if is_stale:
+                st.error(_L("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.",
+                            "⚠️ القراءات قديمة (>3 دقائق). تحقق من الطاقة/الواي فاي."))
+            else:
+                st.success(_L("Live", "مباشر"))
 
-        # Risk + Uhthoff floor + latch + auto‑journal
+        # Risk + Uhthoff + logging
         risk = None
         if weather and (core_val is not None):
             risk = compute_risk_minimal(weather["feels_like"], weather["humidity"], core_val, baseline, app_language)
             risk = apply_uhthoff_floor(risk, core_val, baseline, app_language)
+
             st.markdown(f"""
             <div class="big-card" style="--left:{risk['color']}">
               <h3>{risk['icon']} <strong>{_status_label()}: {risk['status']}</strong></h3>
@@ -1475,7 +1500,6 @@ def render_monitor():
             </div>
             """, unsafe_allow_html=True)
 
-            # Latch + auto-journal on first Uhthoff trigger
             update_uhthoff_latch(core_val, baseline)
             if st.session_state["_uhthoff_active"] and not st.session_state["_uhthoff_alert_journaled"]:
                 entry = {
@@ -1493,10 +1517,10 @@ def render_monitor():
                 st.session_state["_uhthoff_alert_journaled"] = True
                 st.warning(_L("⚠️ Uhthoff trigger logged to Journal", "⚠️ تم تسجيل تنبيه أوتهوف في اليوميات"))
 
-            # Alert details (dropdowns; journaling only)
-            sym_opts  = _symptoms_for_ui(app_language)
-            trig_opts = _triggers_for_ui(app_language)
+            # Alert details (only when active)
             if st.session_state["_uhthoff_active"]:
+                sym_opts  = _symptoms_for_ui(app_language)
+                trig_opts = _triggers_for_ui(app_language)
                 with st.expander(_L("Add symptoms/notes to this alert", "أضف أعراض/ملاحظات لهذا التنبيه")):
                     sel_sym = st.multiselect(_L("Symptoms", "الأعراض"), sym_opts, key="alert_sym_ms")
                     sym_other = st.text_input(_L("Other symptom (optional)", "أعراض أخرى (اختياري)"), key="alert_sym_other")
@@ -1519,10 +1543,10 @@ def render_monitor():
         elif not weather:
             st.error(f"{T['weather_fail']}: {w_err or '—'}")
 
-        # Manual alert (journaling only)
-        sym_opts  = _symptoms_for_ui(app_language)
-        trig_opts = _triggers_for_ui(app_language)
+        # Manual alert
         with st.expander(_L("Log alert manually", "سجّل تنبيهًا يدويًا")):
+            sym_opts  = _symptoms_for_ui(app_language)
+            trig_opts = _triggers_for_ui(app_language)
             sel_sym = st.multiselect(_L("Symptoms", "الأعراض"), sym_opts, key="man_sym_ms")
             sym_other = st.text_input(_L("Other symptom (optional)", "أعراض أخرى (اختياري)"), key="man_sym_other")
             sel_trig = st.multiselect(_L("Triggers / Activity", "محفزات / نشاط"), trig_opts, key="man_trig_ms")
@@ -1547,11 +1571,11 @@ def render_monitor():
                 insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
                 st.success(_L("Saved", "تم الحفظ"))
 
-        # Recovery logging when status improves
-        if weather and ("risk" in locals() and risk is not None):
+        # Recovery log on improvement
+        if weather and ('risk' in locals() and risk is not None):
             curr = {
                 "status": risk["status"],
-                "level": _STATUS_LEVEL.get(risk["status"], 0),
+                "level": {"Safe":0,"Caution":1,"High":2,"Danger":3}[risk["status"]],
                 "time_iso": utc_iso_now(),
                 "core": float(core_val) if core_val is not None else None,
                 "periph": float(peri_val) if peri_val is not None else None,
@@ -1565,10 +1589,8 @@ def render_monitor():
                 st.success(_L(f"✅ Improved: {prev['status']} → {curr['status']}. What helped?",
                               f"✅ تحسّن: {prev['status']} → {curr['status']}. ما الذي ساعد؟"))
                 with st.form("recovery_form_live", clear_on_submit=True):
-                    acts = st.multiselect(
-                        _L("Cooling actions used", "إجراءات التبريد التي استُخدمت"),
-                        _actions_for_ui(app_language)
-                    )
+                    acts = st.multiselect(_L("Cooling actions used", "إجراءات التبريد التي استُخدمت"),
+                                          _actions_for_ui(app_language))
                     act_other = st.text_input(_L("Other action (optional)", "إجراء آخر (اختياري)"))
                     note = st.text_area(_L("Details (optional)", "تفاصيل (اختياري)"), height=70)
                     saved = st.form_submit_button(_L("Save Recovery", "حفظ التعافي"))
@@ -1605,59 +1627,63 @@ def render_monitor():
             peri_s = [float(r["peripheral_c"]) if r.get("peripheral_c") is not None else None for r in series]
             fl_s   = [float(r["feels_like"]) if ("feels_like" in r and r["feels_like"] is not None) else None for r in series]
 
-            # Chart 1: Core & Peripheral (Live)
+            # 1) Core & Peripheral
             st.subheader(_L("Core & Peripheral (Live)", "الأساسية والطرفية (مباشر)"))
             fig1 = go.Figure()
-            fig1.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=LBL_CORE))
-            fig1.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=LBL_PERI))
+            fig1.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=_L("Core","الأساسية")))
+            fig1.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=_L("Peripheral","الطرفية")))
             fig1.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                               xaxis_title=LBL_TIME_LOCAL, yaxis_title=LBL_TEMP_Y,
+                               xaxis_title=_L("Time (Local)","الوقت (المحلي)"),
+                               yaxis_title=_L("Temperature (°C)","درجة الحرارة (°م)"),
                                legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig1, use_container_width=True)
 
             # Raw data (after chart 1)
-            with st.expander(LBL_RAW, expanded=False):
+            with st.expander(_L("Raw data","البيانات الخام"), expanded=False):
                 df = pd.DataFrame({
-                    LBL_TIME_LOCAL: [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
-                    f"{LBL_CORE} (°C)": core_s,
-                    f"{LBL_PERI} (°C)": peri_s,
+                    _L("Time (Local)","الوقت (المحلي)"): [t.strftime("%Y-%m-%d %H:%M:%S") for t in times],
+                    _L("Core (°C)","الأساسية (°م)"): core_s,
+                    _L("Peripheral (°C)","الطرفية (°م)"): peri_s,
                 })
                 st.dataframe(df.iloc[::-1], use_container_width=True)
 
-            # Sampling caption
+            # sampling caption
             if len(times) >= 2:
                 gaps_sec = [(times[i]-times[i-1]).total_seconds() for i in range(1, len(times))]
                 med_gap = statistics.median(gaps_sec)
                 hours = (times[-1] - times[0]).total_seconds() / 3600
-                st.caption(LBL_SAMPLING.format(m=med_gap/60, h=hours))
+                st.caption(_L(f"Sampling: ~{med_gap/60:.1f} min between points • Window: ~{hours:.1f} h",
+                              f"التقاط: ~{med_gap/60:.1f} دقيقة بين النقاط • نافذة: ~{hours:.1f} ساعة"))
 
-            # Chart 2: Core, Peripheral & Feels‑like (Live)
-            st.subheader(_L("Core, Peripheral & Feels‑like (Live)", "الأساسية، الطرفية والمحسوسة (مباشر)"))
+            # 2) Core, Peripheral & Feels-like
+            st.subheader(_L("Core, Peripheral & Feels‑like (Live)",
+                            "الأساسية، الطرفية والمحسوسة (مباشر)"))
             fig2 = go.Figure()
-            fig2.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=LBL_CORE))
-            fig2.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=LBL_PERI))
+            fig2.add_trace(go.Scatter(x=times, y=core_s, mode="lines+markers", name=_L("Core","الأساسية")))
+            fig2.add_trace(go.Scatter(x=times, y=peri_s, mode="lines+markers", name=_L("Peripheral","الطرفية")))
             if any(v is not None for v in fl_s):
-                fig2.add_trace(go.Scatter(x=times, y=fl_s, mode="lines+markers", name=LBL_FEELS))
+                fig2.add_trace(go.Scatter(x=times, y=fl_s, mode="lines+markers", name=_L("Feels‑like","المحسوسة")))
             else:
                 fl_now = float(weather["feels_like"]) if (weather and weather.get("feels_like") is not None) else None
                 if fl_now is not None and len(times) > 0:
                     fig2.add_trace(go.Scatter(
                         x=times, y=[fl_now]*len(times), mode="lines",
-                        name=_L("Feels‑like (current)", "المحسوسة (الحالية)"),
+                        name=_L("Feels‑like (current)","المحسوسة (الحالية)"),
                         line=dict(dash="dash")
                     ))
             fig2.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
-                               xaxis_title=LBL_TIME_LOCAL, yaxis_title=LBL_TEMP_Y,
+                               xaxis_title=_L("Time (Local)","الوقت (المحلي)"),
+                               yaxis_title=_L("Temperature (°C)","درجة الحرارة (°م)"),
                                legend=dict(orientation="h", y=1.1))
             st.plotly_chart(fig2, use_container_width=True)
         else:
             st.info(_L("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.",
                        "لا توجد قراءات حديثة من Supabase بعد. عند رفع الجهاز للبيانات ستظهر الرسوم هنا."))
 
-    # ----------------------------
-    # DEMO TAB (no journaling)
-    # ----------------------------
-    else:
+    # =========================================================
+    # TAB 2 — DEMO / LEARN (simulation only; no journaling)
+    # =========================================================
+    with tabs[1]:
         st.info(_L(
             "Adjust the Core body temperature, Baseline, and Feels‑like temperature. "
             "The risk assessment uses the same calculation method as Live. "
@@ -1670,7 +1696,7 @@ def render_monitor():
         st.session_state.setdefault("sim_core", 36.8)
         st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
         st.session_state.setdefault("sim_feels", 32.0)
-        st.session_state.setdefault("sim_hum", 50.0)
+        st.session_state.setdefault("sim_hum", 50.0)  # risk only
         st.session_state.setdefault("sim_history", [])
         st.session_state.setdefault("sim_live", False)
         st.session_state.setdefault("_demo_risk_track", None)
@@ -1685,7 +1711,7 @@ def render_monitor():
             with st.expander(_L("Advanced (Humidity)", "خيارات متقدمة (الرطوبة)")):
                 st.session_state["sim_hum"] = st.slider(_L("Humidity (%)", "الرطوبة (%)"), 10, 95, int(st.session_state["sim_hum"]), 1)
 
-            live_toggle = st.toggle(_L("Record changes automatically", "تسجيل التغييرات تلقائيًا"), value=st.session_state["sim_live"])
+            live_toggle = st.toggle(_L("Record changes automatically","تسجيل التغييرات تلقائيًا"), value=st.session_state["sim_live"])
             if live_toggle and not st.session_state["sim_live"]:
                 st.session_state["sim_history"].append({
                     "ts": datetime.now().strftime("%H:%M:%S"),
@@ -1704,6 +1730,7 @@ def render_monitor():
             sim_base   = float(st.session_state["sim_base"])
             sim_feels  = float(st.session_state["sim_feels"])
             sim_hum    = float(st.session_state["sim_hum"])
+
             sim_risk   = compute_risk_minimal(sim_feels, sim_hum, sim_core, sim_base, app_language)
             sim_risk   = apply_uhthoff_floor(sim_risk, sim_core, sim_base, app_language)
 
@@ -1722,14 +1749,14 @@ def render_monitor():
             update_demo_uhthoff_latch(sim_core, sim_base)
             curr_demo = {
                 "status": sim_risk["status"],
-                "level": _STATUS_LEVEL.get(sim_risk["status"], 0),
+                "level": {"Safe":0,"Caution":1,"High":2,"Danger":3}[sim_risk["status"]],
                 "time_iso": datetime.now(timezone.utc).isoformat(timespec="seconds").replace("+00:00","Z"),
                 "core": sim_core, "feels": sim_feels, "humidity": sim_hum
             }
             prev_demo = st.session_state.get("_demo_risk_track")
             st.session_state["_demo_risk_track"] = curr_demo
 
-            # Show same UI affordances (no saves)
+            # Same UI affordances (no saves in demo)
             if st.session_state["_demo_uhthoff_active"]:
                 sym_opts  = _symptoms_for_ui(app_language)
                 trig_opts = _triggers_for_ui(app_language)
@@ -1749,38 +1776,35 @@ def render_monitor():
                     st.multiselect(_L("Cooling actions used", "إجراءات التبريد التي استُخدمت"), _actions_for_ui(app_language))
                     st.text_input(_L("Other action (optional)", "إجراء آخر (اختياري)"))
                     st.text_area(_L("Details (optional)", "تفاصيل (اختياري)"), height=70)
-                    saved_demo = st.form_submit_button(_L("Simulate save (not saved)", "حفظ تجريبي (لن يُحفَظ)"))
-                if saved_demo:
+                    save_demo = st.form_submit_button(_L("Simulate save (not saved)", "حفظ تجريبي (لن يُحفَظ)"))
+                if save_demo:
                     st.info(_L("Demo: In Live, this would save a RECOVERY entry with your actions and notes.",
                                "تجريبي: في الوضع المباشر سيتم حفظ مدخلة تعافٍ بهذه الإجراءات والملاحظات."))
 
             if st.session_state["sim_live"]:
                 st.session_state["sim_history"].append({
                     "ts": datetime.now().strftime("%H:%M:%S"),
-                    "core": sim_core,
-                    "baseline": sim_base,
-                    "feels": sim_feels
+                    "core": sim_core, "baseline": sim_base, "feels": sim_feels
                 })
 
-        # Demo chart: Core, Feels‑like & Baseline
+        # Demo chart
         st.markdown("---")
         if st.session_state["sim_history"]:
             df = pd.DataFrame(st.session_state["sim_history"])
             st.subheader(_L("Core, Feels‑like & Baseline (Demo)", "الأساسية، المحسوسة، وخط الأساس (تجريبي)"))
             fig = go.Figure()
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=LBL_CORE))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=LBL_FEELS))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=LBL_BASELINE))
-            fig.update_layout(
-                height=300, margin=dict(l=10, r=10, t=10, b=10),
-                legend=dict(orientation="h", y=1.1),
-                xaxis_title=_L("Time (Demo session)", "الوقت (جلسة تجريبية)"),
-                yaxis_title=LBL_TEMP_Y
-            )
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name=_L("Core","الأساسية")))
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name=_L("Feels‑like","المحسوسة")))
+            fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name=_L("Baseline","خط الأساس")))
+            fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
+                              legend=dict(orientation="h", y=1.1),
+                              xaxis_title=_L("Time (Demo session)","الوقت (جلسة تجريبية)"),
+                              yaxis_title=_L("Temperature (°C)","درجة الحرارة (°م)"))
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info(_L("Adjust the sliders (and enable recording) to see the chart.",
                        "حرّك المنزلقات (وفعِّل التسجيل) لرؤية الرسم."))
+
 
 
 # ================== JOURNAL (includes RECOVERY) ==================
