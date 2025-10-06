@@ -28,7 +28,6 @@ from supabase import create_client
 
 # ================== CONFIG ==================
 st.set_page_config(page_title="Tanzim MS", page_icon="🌡️", layout="wide")
-active_tz = get_active_tz()
 
 # Secrets
 OPENAI_API_KEY     = st.secrets.get("OPENAI_API_KEY", "")
