@@ -1286,9 +1286,8 @@ def _status_label():
 def render_monitor():
     st.title("☀️ " + T["risk_dashboard"])
     if "user" not in st.session_state:
-        st.warning(T["login_first"])
-        return
-
+        st.warning(T["login_first"]); return
+        
     tabs = st.tabs([
         "📡 Live Sensor Data" if app_language=="English" else "📡 بيانات مباشرة",
         "🔬 Learn & Practice" if app_language=="English" else "🔬 تعلّم وتدرّب"
