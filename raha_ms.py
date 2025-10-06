@@ -1720,7 +1720,7 @@ def render_monitor():
             fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name="Baseline"))
             fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
                               legend=dict(orientation="h", y=1.1),
-                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)"))
+                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)")
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Adjust the sliders (and enable recording) to see the chart.")
