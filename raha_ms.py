@@ -333,11 +333,42 @@ init_db()
 # ================== SUPABASE ==================
 @st.cache_resource
 def get_supabase(url: str, key: str):
-    # cache is now keyed by url/key, avoiding a 'stuck' None
-    client = create_client(url, key)
-    return client
+    return create_client(url, key)
 
 sb = get_supabase(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+def _debug_supabase_check():
+    """Call this once from the sidebar to see if RLS/policies are blocking reads."""
+    st.sidebar.subheader("🔎 Supabase check")
+    try:
+        # 0) Does the table exist / can anon read *anything*?
+        r0 = sb.table("sensor_readings").select("count(*)").execute()
+        st.sidebar.write("sensor_readings count():", r0.data)
+
+        # 1) Show the latest row regardless of device (tests 'order' + 'created_at')
+        r1 = (sb.table("sensor_readings")
+                .select("device_id,core_c,peripheral_c,created_at")
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute())
+        st.sidebar.write("Latest row:", r1.data)
+
+        # 2) Filter by your device id to confirm the filter works
+        r2 = (sb.table("sensor_readings")
+                .select("core_c,peripheral_c,created_at")
+                .eq("device_id", "esp8266-01")  # <-- your device id
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute())
+        st.sidebar.write("Latest for esp8266-01:", r2.data)
+    except Exception as e:
+        # SEE the real failure (RLS/permissions/column name/etc.)
+        st.sidebar.exception(e)
+
+if st.sidebar.button("Run Supabase check"):
+    _debug_supabase_check()
+
+
 
 def fetch_latest_sensor_sample(device_id: str) -> dict | None:
     sb = get_supabase()
