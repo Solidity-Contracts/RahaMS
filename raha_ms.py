@@ -1339,31 +1339,8 @@ def update_demo_uhthoff_latch(core: Optional[float], baseline: Optional[float]):
     if st.session_state["_demo_uhthoff_active"] and (delta < UHTHOFF_CLEAR):
         st.session_state["_demo_uhthoff_active"] = False
 
-# ---------- Page ----------
-# --- small helpers (keep if you don't already have them) ---
-from datetime import datetime, timezone
-from zoneinfo import ZoneInfo
-import statistics
-import pandas as pd
-import plotly.graph_objects as go
-
 def _L(en: str, ar: str) -> str:
     return ar if (app_language == "Arabic") else en
-
-def get_active_tz():
-    """Use user's saved timezone if available; fallback to Asia/Dubai; then UTC."""
-    try:
-        if "user" in st.session_state:
-            prefs = load_user_prefs(st.session_state["user"]) or {}
-            tz_code = prefs.get("timezone") or st.session_state.get("settings_tz")
-            if tz_code:
-                return ZoneInfo(tz_code)
-    except Exception:
-        pass
-    try:
-        return ZoneInfo("Asia/Dubai")
-    except Exception:
-        return timezone.utc
 
 def _status_label():
     return T.get("status", _L("Status", "الحالة"))
@@ -1811,29 +1788,40 @@ def render_monitor():
 def render_journal():
     st.title("📒 " + T["journal"])
     if "user" not in st.session_state:
-        st.warning(T["login_first"]); return
+        st.warning(T["login_first"])
+        return
+
+    # Use the dynamic timezone (same behavior as Monitor)
+    active_tz = get_active_tz()
 
     st.caption(T["journal_hint"])
+
     # Daily quick logger
     col1, col2, col3, col4 = st.columns(4)
     with col1:
-        mood_options = ["🙂 Okay", "😌 Calm", "😕 Low", "😣 Stressed", "😴 Tired"] if app_language=="English" else ["🙂 بخير", "😌 هادئ", "😕 منخفض", "😣 متوتر", "😴 متعب"]
-        mood = st.selectbox(T["mood"], mood_options)
+        mood_options = (
+            ["🙂 Okay", "😌 Calm", "😕 Low", "😣 Stressed", "😴 Tired"]
+            if app_language=="English" else
+            ["🙂 بخير", "😌 هادئ", "😕 منخفض", "😣 متوتر", "😴 متعب"]
+        )
+        mood = st.selectbox(T["mood"], mood_options, key="jr_mood")
     with col2:
-        hydration = st.slider(T["hydration"], 0, 12, 6, key="hydration_slider")
+        hydration = st.slider(T["hydration"], 0, 12, 6, key="jr_hydration_slider")
     with col3:
-        sleep = st.slider(T["sleep"], 0, 12, 7, key="sleep_slider")
+        sleep = st.slider(T["sleep"], 0, 12, 7, key="jr_sleep_slider")
     with col4:
         fatigue_options = [f"{i}/10" for i in range(0,11)]
-        fatigue = st.selectbox(T["fatigue"], fatigue_options, index=4)
+        fatigue = st.selectbox(T["fatigue"], fatigue_options, index=4, key="jr_fatigue_sel")
 
     trigger_options = TRIGGERS_EN if app_language=="English" else TRIGGERS_AR
     symptom_options = SYMPTOMS_EN if app_language=="English" else SYMPTOMS_AR
-    chosen_tr = st.multiselect(("Triggers (optional)" if app_language=="English" else "المحفزات (اختياري)"), trigger_options)
-    tr_other = st.text_input(f"{'Other' if app_language=='English' else 'أخرى'} ({T['trigger']})", "")
-    chosen_sy = st.multiselect(("Symptoms (optional)" if app_language=="English" else "الأعراض (اختياري)"), symptom_options)
-    sy_other = st.text_input(f"{'Other' if app_language=='English' else 'أخرى'} ({T['symptom']})", "")
-    free_note = st.text_area(T["free_note"], height=100)
+    chosen_tr = st.multiselect(("Triggers (optional)" if app_language=="English" else "المحفزات (اختياري)"),
+                               trigger_options, key="jr_triggers_ms")
+    tr_other = st.text_input(f"{'Other' if app_language=='English' else 'أخرى'} ({T['trigger']})", "", key="jr_trigger_other")
+    chosen_sy = st.multiselect(("Symptoms (optional)" if app_language=="English" else "الأعراض (اختياري)"),
+                               symptom_options, key="jr_symptoms_ms")
+    sy_other = st.text_input(f"{'Other' if app_language=='English' else 'أخرى'} ({T['symptom']})", "", key="jr_symptom_other")
+    free_note = st.text_area(T["free_note"], height=100, key="jr_free_note")
 
     if st.button(("Save to Journal" if app_language=="English" else "حفظ في اليوميات"), key="journal_save"):
         entry = {
@@ -1848,6 +1836,7 @@ def render_journal():
 
     st.markdown("---")
 
+    # Load rows (SQLite as per your current implementation)
     c = get_conn().cursor()
     c.execute("SELECT date, entry FROM journal WHERE username=? ORDER BY date DESC", (st.session_state["user"],))
     rows = c.fetchall()
@@ -1856,22 +1845,27 @@ def render_journal():
         return
 
     available_types = ["PLAN","ALERT","ALERT_AUTO","RECOVERY","DAILY","NOTE"]
-    type_filter = st.multiselect(T["filter_by_type"], options=available_types, default=available_types)
+    type_filter = st.multiselect(T["filter_by_type"], options=available_types, default=available_types, key="jr_type_filter")
     page_size = 12
     st.session_state.setdefault("journal_offset", 0)
     start = st.session_state["journal_offset"]; end = start + 200
     chunk = rows[start:end]
 
     def _render_entry(raw_entry_json):
-        try: obj = json.loads(raw_entry_json)
-        except Exception: obj = {"type":"NOTE","at": utc_iso_now(), "text": str(raw_entry_json)}
+        try:
+            obj = json.loads(raw_entry_json)
+        except Exception:
+            obj = {"type":"NOTE","at": utc_iso_now(), "text": str(raw_entry_json)}
         t = obj.get("type","NOTE")
         when = obj.get("at", utc_iso_now())
         try:
             dt = _dt.fromisoformat(when.replace("Z","+00:00"))
         except Exception:
             dt = _dt.now(timezone.utc)
-        when_label = dt.astimezone(TZ_DUBAI).strftime("%Y-%m-%d %H:%M")
+
+        # >>> replaced TZ_DUBAI with active_tz
+        when_label = dt.astimezone(active_tz).strftime("%Y-%m-%d %H:%M")
+
         if t == "RECOVERY":
             from_s = obj.get("from_status","?"); to_s = obj.get("to_status","?")
             acts   = obj.get("actions", []); dur = obj.get("duration_min", None)
@@ -1899,11 +1893,12 @@ def render_journal():
                 note = (obj.get("note") or "").strip()
                 if note: lines.append("**Note:** " + note)
                 return header, "\n\n".join(lines), "🧊", t
+
         elif t == "PLAN":
             city = obj.get("city","—"); act = obj.get("activity","—")
             start_t = obj.get("start","—"); end_t = obj.get("end","—")
             fl = obj.get("feels_like"); hum = obj.get("humidity")
-            meta = f"Feels‑like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else ""
+            meta = (f"Feels‑like {round(fl,1)}°C • Humidity {int(hum)}%" if (fl is not None and hum is not None) else "")
             if app_language=="Arabic":
                 header = f"**{when_label}** — **خطة** ({city})"
                 body = f"**النشاط:** {act}\n\n**الوقت:** {start_t} → {end_t}\n\n{meta}"
@@ -1911,6 +1906,7 @@ def render_journal():
                 header = f"**{when_label}** — **Plan** ({city})"
                 body = f"**Activity:** {act}\n\n**Time:** {start_t} → {end_t}\n\n{meta}"
             return header, body, "🗓️", t
+
         elif t in ("ALERT","ALERT_AUTO"):
             core = obj.get("core_temp") or obj.get("body_temp"); periph = obj.get("peripheral_temp"); base = obj.get("baseline")
             delta = (core - base) if (core is not None and base is not None) else None
@@ -1935,6 +1931,7 @@ def render_journal():
                 if reasons: lines.append(f"**Reasons:** " + ", ".join(map(str,reasons)))
                 if symptoms: lines.append(f"**Symptoms:** " + ", ".join(map(str,symptoms)))
                 return header, "\n\n".join(lines), "🚨", t
+
         elif t == "DAILY":
             mood = obj.get("mood","—"); hyd = obj.get("hydration_glasses","—")
             sleep = obj.get("sleep_hours","—"); fat = obj.get("fatigue","—")
@@ -1947,6 +1944,7 @@ def render_journal():
             note = (obj.get("note") or "").strip()
             if note: lines.append(("**Note:** " if app_language=="English" else "**ملاحظة:** ") + note)
             return header, "\n\n".join(lines), "🧩", t
+
         else:
             text = obj.get("text") or obj.get("note") or "—"
             header = f"**{when_label}** — **Note**" if app_language=="English" else f"**{when_label}** — **ملاحظة**"
@@ -1955,19 +1953,23 @@ def render_journal():
     parsed = []
     for dt_raw, raw_json in chunk:
         title, body, icon, t = _render_entry(raw_json)
-        if t not in type_filter: continue
+        if t not in type_filter:
+            continue
         try:
             dt = _dt.fromisoformat(dt_raw.replace("Z","+00:00"))
         except Exception:
             dt = _dt.now(timezone.utc)
-        day_key = dt.astimezone(TZ_DUBAI).strftime("%A, %d %B %Y")
+        # >>> replaced TZ_DUBAI with active_tz
+        day_key = dt.astimezone(active_tz).strftime("%A, %d %B %Y")
         parsed.append((day_key, title, body, icon))
 
     current_day = None; shown = 0
     for day, title, body, icon in parsed:
-        if shown >= page_size: break
+        if shown >= page_size:
+            break
         if day != current_day:
-            st.markdown(f"## {day}"); current_day = day
+            st.markdown(f"## {day}")
+            current_day = day
         st.markdown(f"""
         <div class="big-card" style="--left:#94a3b8;margin-bottom:12px;">
           <h3 style="margin:0">{icon} {title}</h3>
@@ -1980,11 +1982,14 @@ def render_journal():
     with colp1:
         if st.session_state["journal_offset"] > 0:
             if st.button(T["newer"], key="jr_newer"):
-                st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - page_size); st.rerun()
+                st.session_state["journal_offset"] = max(0, st.session_state["journal_offset"] - page_size)
+                st.rerun()
     with colp2:
         if (start + shown) < len(rows):
             if st.button(T["older"], key="jr_older"):
-                st.session_state["journal_offset"] += page_size; st.rerun()
+                st.session_state["journal_offset"] += page_size
+                st.rerun()
+
 
 # ================== ASSISTANT ==================
 def render_assistant():
