@@ -368,9 +368,8 @@ def _debug_supabase_check():
     st.sidebar.subheader("🔎 Supabase check")
     try:
         # 0) Does the table exist / can anon read *anything*?
-        # This gets the count without returning actual data
-        r0 = sb.table("sensor_readings").select("*", count="exact").execute()
-        count = len(r0.data)  # This gives you the count
+        r0 = sb.table("sensor_readings").select("id", count="exact").execute()
+        count = r0.count  # This gives you the count directly
 
         # 1) Show the latest row regardless of device (tests 'order' + 'created_at')
         r1 = (sb.table("sensor_readings")
