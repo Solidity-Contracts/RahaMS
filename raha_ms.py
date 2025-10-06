@@ -38,9 +38,6 @@ OPENWEATHER_API_KEY= st.secrets.get("OPENWEATHER_API_KEY", "")
 SUPABASE_URL       = st.secrets.get("SUPABASE_URL", "")
 SUPABASE_ANON_KEY  = st.secrets.get("SUPABASE_ANON_KEY", "")
 
-#SUPABASE_URL = st.secrets.get["SUPABASE_URL"]
-#SUPABASE_ANON_KEY  = st.secrets.get["SUPABASE_ANON_KEY"]
-
 # Matplotlib: Arabic-safe
 matplotlib.rcParams["axes.unicode_minus"] = False
 _ARABIC_FONTS_TRY = ["Noto Naskh Arabic", "Amiri", "DejaVu Sans", "Arial"]
@@ -335,18 +332,15 @@ init_db()
 
 # ================== SUPABASE ==================
 @st.cache_resource
-def get_supabase():
-    if not SUPABASE_URL or not SUPABASE_ANON_KEY or not create_client:
-        return None
-    try:
-        return create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-    except Exception:
-        return None
-        
-sb = get_supabase()
+def get_supabase(url: str, key: str):
+    # cache is now keyed by url/key, avoiding a 'stuck' None
+    client = create_client(url, key)
+    return client
+
+sb = get_supabase(SUPABASE_URL, SUPABASE_ANON_KEY)
 
 def fetch_latest_sensor_sample(device_id: str) -> dict | None:
-    #sb = get_supabase()
+    sb = get_supabase()
     if not sb or not device_id:
         return None
     try:
