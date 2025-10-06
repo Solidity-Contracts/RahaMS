@@ -32,8 +32,12 @@ TZ_DUBAI = ZoneInfo("Asia/Dubai")
 OPENAI_API_KEY     = st.secrets.get("OPENAI_API_KEY", "")
 DEEPSEEK_API_KEY   = st.secrets.get("DEEPSEEK_API_KEY", "")
 OPENWEATHER_API_KEY= st.secrets.get("OPENWEATHER_API_KEY", "")
-SUPABASE_URL       = st.secrets.get("SUPABASE_URL", "")
-SUPABASE_ANON_KEY  = st.secrets.get("SUPABASE_ANON_KEY", "")
+
+# SUPABASE_URL       = st.secrets.get("SUPABASE_URL", "")
+# SUPABASE_ANON_KEY  = st.secrets.get("SUPABASE_ANON_KEY", "")
+
+SUPABASE_URL = st.secrets["supabase"]["SUPABASE_URL"]
+SUPABASE_ANON_KEY  = st.secrets["supabase"]["SUPABASE_ANON_KEY"]
 
 # Matplotlib: Arabic-safe
 matplotlib.rcParams["axes.unicode_minus"] = False
