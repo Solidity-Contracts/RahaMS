@@ -1175,7 +1175,7 @@ def compute_risk_minimal(feels_like, humidity, core, baseline):
     """
     score = 0
 
-    # Environment (feels-like)
+    # Environment (feels-like tiers)
     if feels_like is not None:
         fl = float(feels_like)
         if   fl >= 42: score += 4
@@ -1183,12 +1183,12 @@ def compute_risk_minimal(feels_like, humidity, core, baseline):
         elif fl >= 35: score += 2
         elif fl >= 32: score += 1
 
-    # Humidity penalty if it's hot
+    # Humidity penalty when hot
     if humidity is not None and feels_like is not None:
         if float(humidity) >= 60 and float(feels_like) >= 32:
             score += 1
 
-    # Uhthoff contribution (ΔCore)
+    # Uhthoff (ΔCore)
     if core is not None and baseline is not None:
         delta = float(core) - float(baseline)
         if   delta >= 1.0: score += 2
@@ -1234,26 +1234,19 @@ def apply_uhthoff_floor(risk: dict, core: float | None, baseline: float | None) 
 # ---------- Uhthoff hysteresis / latch for Live tab ----------
 UHTHOFF_RAISE = 0.5  # raise at +0.5°C
 UHTHOFF_CLEAR = 0.3  # clear only once below +0.3°C
-
 def update_uhthoff_latch(core: float | None, baseline: float | None):
     """Track an Uhthoff episode (rising edge + clear) for Live tab."""
     st.session_state.setdefault("_uhthoff_active", False)
     st.session_state.setdefault("_uhthoff_started_iso", None)
     st.session_state.setdefault("_uhthoff_alert_journaled", False)
-
     if core is None or baseline is None:
         return
-
     delta = float(core) - float(baseline)
     active_prev = st.session_state["_uhthoff_active"]
-
-    # Rising edge
     if (not active_prev) and (delta >= UHTHOFF_RAISE):
         st.session_state["_uhthoff_active"] = True
         st.session_state["_uhthoff_started_iso"] = utc_iso_now()
         st.session_state["_uhthoff_alert_journaled"] = False
-
-    # Clear when safely below
     if active_prev and (delta < UHTHOFF_CLEAR):
         st.session_state["_uhthoff_active"] = False
         st.session_state["_uhthoff_started_iso"] = None
@@ -1278,15 +1271,15 @@ def render_monitor():
         with st.expander("🔎 About sensors & temperatures" if app_language=="English" else "🔎 عن المستشعرات والقراءات", expanded=False):
             if app_language=="English":
                 st.markdown(
-                    "- **Core** vs **Baseline** (yours). Uhthoff triggers at **+0.5°C** (ΔCore).\n"
-                    "- **Peripheral** ≈ skin/ambient; **Feels‑like/Humidity** from weather.\n"
-                    "- We log an **Alert** once when Uhthoff triggers; on improvement, you can log a **Recovery**."
+                    "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
+                    "- **Peripheral** ≈ skin/ambient; **Feels‑like & Humidity** from weather.\n"
+                    "- We auto‑log an **Alert** on Uhthoff; when improved, you can log a **Recovery**."
                 )
             else:
                 st.markdown(
-                    "- **الأساسية** مقابل **الأساس** (الخاص بك). تنبيه أوتهوف عند **+0.5°م** (ΔCore).\n"
-                    "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة/الرطوبة** من الطقس.\n"
-                    "- نسجّل **تنبيهًا** عند التفعيل؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
+                    "- **الأساسية مقابل الأساس (ΔCore)** — تنبيه أوتهوف عند **+0.5°م**.\n"
+                    "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة والرطوبة** من الطقس.\n"
+                    "- نسجّل **تنبيهًا** تلقائيًا عند أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
                 )
 
         # ---- City / Weather ----
@@ -1349,7 +1342,6 @@ def render_monitor():
         col1, col2, col3, col4 = st.columns(4)
         core_val = sample.get("core") if sample else None
         peri_val = sample.get("peripheral") if sample else None
-
         with col1:
             if core_val is not None:
                 delta = core_val - baseline
@@ -1368,17 +1360,13 @@ def render_monitor():
             else:
                 st.caption("ΔCore: —")
         with col4:
-            if is_stale:
-                st.error("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.")
-            else:
-                st.success("Live")
+            st.success("Live") if not is_stale else st.error("⚠️ Readings stale (>3 min). Check power/Wi‑Fi.")
 
         # ---- Risk + Uhthoff floor + latch + auto‑journal ----
         risk = None
         if weather and (core_val is not None):
             risk = compute_risk_minimal(weather["feels_like"], weather["humidity"], core_val, baseline)
             risk = apply_uhthoff_floor(risk, core_val, baseline)
-
             st.markdown(f"""
             <div class="big-card" style="--left:{risk['color']}">
               <h3>{risk['icon']} <strong>{T.get('status', 'Status' if app_language=='English' else 'الحالة')}: {risk['status']}</strong></h3>
@@ -1555,26 +1543,26 @@ def render_monitor():
             st.info("No recent Supabase readings yet. Once your device uploads, you’ll see a live chart here.")
 
     # =========================================================
-    # TAB 2 — DEMO / LEARN (parity with Live)
+    # TAB 2 — DEMO / LEARN (Core + Feels‑like + Baseline only)
     # =========================================================
     with tabs[1]:
-        st.info("Practice with simulated values; same logic as Live (Uhthoff + environment).")
+        st.info("Adjust Core, Baseline, and Feels‑like. Same risk logic as Live. Humidity available under Advanced.")
         st.session_state.setdefault("sim_core", 36.8)
         st.session_state.setdefault("sim_base", st.session_state.get("baseline", 37.0))
         st.session_state.setdefault("sim_feels", 32.0)
-        st.session_state.setdefault("sim_hum", 45.0)
-        st.session_state.setdefault("sim_peri", 33.0)
+        st.session_state.setdefault("sim_hum", 50.0)  # used for risk, not plotted
         st.session_state.setdefault("sim_history", [])
         st.session_state.setdefault("sim_live", False)
 
         colL, colR = st.columns([1,1])
         with colL:
-            st.subheader("Values")
+            st.subheader("Inputs")
             st.session_state["sim_core"]  = st.slider("Core (°C)", 36.0, 39.5, float(st.session_state["sim_core"]), 0.1)
             st.session_state["sim_base"]  = st.slider("Baseline (°C)", 36.0, 37.5, float(st.session_state["sim_base"]), 0.1)
             st.session_state["sim_feels"] = st.slider("Feels‑like (°C)", 25.0, 50.0, float(st.session_state["sim_feels"]), 0.5)
-            st.session_state["sim_hum"]   = st.slider("Humidity (%)", 10, 95, int(st.session_state["sim_hum"]), 1)
-            st.session_state["sim_peri"]  = st.slider("Peripheral (°C)", 25.0, 42.0, float(st.session_state["sim_peri"]), 0.5)
+
+            with st.expander("Advanced (Humidity)"):
+                st.session_state["sim_hum"] = st.slider("Humidity (%)", 10, 95, int(st.session_state["sim_hum"]), 1)
 
             live_toggle = st.toggle("Record changes automatically", value=st.session_state["sim_live"])
             if live_toggle and not st.session_state["sim_live"]:
@@ -1582,9 +1570,7 @@ def render_monitor():
                     "ts": datetime.now().strftime("%H:%M:%S"),
                     "core": float(st.session_state["sim_core"]),
                     "baseline": float(st.session_state["sim_base"]),
-                    "feels": float(st.session_state["sim_feels"]),
-                    "humidity": int(st.session_state["sim_hum"]),
-                    "peripheral": float(st.session_state["sim_peri"])
+                    "feels": float(st.session_state["sim_feels"])
                 })
             st.session_state["sim_live"] = live_toggle
 
@@ -1608,7 +1594,7 @@ def render_monitor():
               <p style="margin:6px 0 0 0">{sim_risk['advice']}</p>
             </div>
             """, unsafe_allow_html=True)
-            st.caption(f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C")
+            st.caption(f"ΔCore from baseline: {sim_core - sim_base:+.1f}°C  •  Humidity (demo): {int(sim_hum)}%")
 
             # Record if tracking
             if st.session_state["sim_live"]:
@@ -1616,27 +1602,34 @@ def render_monitor():
                     "ts": datetime.now().strftime("%H:%M:%S"),
                     "core": sim_core,
                     "baseline": sim_base,
-                    "feels": sim_feels,
-                    "humidity": int(sim_hum),
-                    "peripheral": float(st.session_state["sim_peri"])
+                    "feels": sim_feels
                 })
 
-        # Demo chart: Core, Peripheral & Feels‑like (Demo)
+        # Demo chart: Core, Feels‑like & Baseline (Demo)
         st.markdown("---")
         if st.session_state["sim_history"]:
             df = pd.DataFrame(st.session_state["sim_history"])
-            st.subheader("Core, Peripheral & Feels‑like (Demo)")
+            st.subheader("Core, Feels‑like & Baseline (Demo)")
             fig = go.Figure()
             fig.add_trace(go.Scatter(x=df["ts"], y=df["core"], mode="lines+markers", name="Core"))
-            fig.add_trace(go.Scatter(x=df["ts"], y=df["peripheral"], mode="lines+markers", name="Peripheral"))
             fig.add_trace(go.Scatter(x=df["ts"], y=df["feels"], mode="lines+markers", name="Feels‑like"))
             fig.add_trace(go.Scatter(x=df["ts"], y=df["baseline"], mode="lines", name="Baseline"))
             fig.update_layout(height=300, margin=dict(l=10,r=10,t=10,b=10),
                               legend=dict(orientation="h", y=1.1),
-                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)")
+                              xaxis_title="Time (Demo session)", yaxis_title="Temperature (°C)"))
             st.plotly_chart(fig, use_container_width=True)
         else:
             st.info("Adjust the sliders (and enable recording) to see the chart.")
+
+        # Optional: Allow saving demo state to Journal (disabled by default)
+        with st.expander("Save this demo state to Journal (optional)"):
+            if st.button("Save demo snapshot"):
+                entry = {
+                    "type":"NOTE","at": utc_iso_now(),
+                    "text": f"[DEMO] Core={sim_core:.1f}°C, Baseline={sim_base:.1f}°C, Δ={sim_core-sim_base:+.1f}°C, Feels‑like={sim_feels:.1f}°C, Humidity={int(sim_hum)}%"
+                }
+                insert_journal(st.session_state.get("user","guest"), utc_iso_now(), entry)
+                st.success("Saved a demo snapshot to Journal")
 
 # ================== JOURNAL (includes RECOVERY) ==================
 def render_journal():
