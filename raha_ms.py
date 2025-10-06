@@ -1364,15 +1364,43 @@ def render_monitor():
     # =========================================================
     with tabs[0]:
         # Intro
-        with st.expander(_L("🔎 About sensors & temperatures", "🔎 عن المستشعرات والقراءات"), expanded=False):
-            st.markdown(_L(
-                "- **Core vs Baseline (ΔCore)** — Uhthoff triggers at **+0.5°C**.\n"
-                "- **Peripheral** ≈ skin/ambient; **Feels‑like & Humidity** from weather.\n"
-                "- We auto‑log an **Alert** when Uhthoff first triggers; on improvement, you can log a **Recovery**.",
-                "- **الأساسية مقابل الأساس (ΔCore)** — تنبيه أوتهوف عند **+0.5°م**.\n"
-                "- **الطرفية** ≈ الجلد/البيئة؛ **المحسوسة والرطوبة** من الطقس.\n"
-                "- نسجّل **تنبيهًا** تلقائيًا عند بداية أوتهوف؛ وعند التحسّن يمكنك تسجيل **تعافٍ**."
-            ))
+        with st.expander("🔎 About sensors & temperatures" if app_language=="English" else "🔎 عن المستشعرات والقراءات", expanded=False):
+            if app_language == "English":
+                st.markdown("""
+        **We use medical‑grade sensors connected to an ESP8266 microcontroller:**
+        
+        - **MAX30205**: Clinical‑grade digital sensor for **peripheral (skin) temperature**  
+          (±0.1 °C accuracy; ideal for wearable health monitoring)
+        
+        - **MLX90614**: Infrared sensor for **core body temperature**  
+          (non‑contact measurement with ±0.5 °C accuracy; estimates internal temperature)
+        
+        - **ESP8266 microcontroller**: Reads both sensors and sends data to the cloud
+        
+        **What these temperatures mean:**
+        - **Core temperature**: Your internal body temperature — the most important indicator of heat stress
+        - **Peripheral temperature**: Your skin temperature — reacts quickly to environmental changes
+        - **Feels‑like**: Combined effect of air temperature + humidity from **OpenWeather API** data
+        - **Baseline**: Your personal “normal” temperature (**set in Settings**) used for alert thresholds
+        """)
+            else:
+                st.markdown("""
+        **نستخدم مستشعرات بدرجة طبية موصولة بوحدة ESP8266:**
+        
+        - **MAX30205**: مستشعر رقمي سريري لقياس **حرارة الجلد (الطرفية)**  
+          (بدقة ±0.1°م، مناسب للمراقبة القابلة للارتداء)
+        
+        - **MLX90614**: مستشعر بالأشعة تحت الحمراء لقياس **الحرارة الأساسية**  
+          (قياس غير تلامسي بدقة ±0.5°م، يقدّر الحرارة الداخلية)
+        
+        - **المتحكم الدقيق ESP8266**: يقرأ المستشعرين ويرسل البيانات إلى السحابة
+        
+        **ماذا تعني هذه القراءات:**
+        - **الحرارة الأساسية**: حرارة الجسم الداخلية — المؤشر الأهم للإجهاد الحراري
+        - **الحرارة الطرفية**: حرارة الجلد — تستجيب سريعًا لتغيّرات البيئة
+        - **المحسوسة**: مزيج درجة حرارة الهواء + الرطوبة من **واجهة OpenWeather**
+        - **خط الأساس**: درجتك الطبيعية (**تُضبط من الإعدادات**) وتُستخدم لعتبات التنبيه
+        """)
 
         # City / device
         default_city = st.session_state.get("current_city")
