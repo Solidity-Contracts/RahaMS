@@ -1353,13 +1353,6 @@ def render_monitor():
         "live": _L("📡 Live Sensor Data", "📡 بيانات مباشرة"),
         "demo": _L("🔬 Learn & Practice", "🔬 تعلّم وتدرّب")
     }
-    selected = st.radio(
-        label=_L("View", "العرض"),
-        options=tab_options,
-        format_func=lambda k: tab_labels[k],
-        horizontal=True,
-        key="monitor_tab"
-    )
 
     # Common labels (localized)
     LBL_SENSOR_HUB = _L("🔌 Sensor Hub", "🔌 محور المستشعرات")
