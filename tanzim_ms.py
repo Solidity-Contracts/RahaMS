@@ -997,7 +997,78 @@ def render_about_page(lang: str = "English"):
 
     # ---------- TAB: Overview & roadmap ----------
     with t_overview:
-
+        # ————————————————————————————————
+        # Overview 
+        # ————————————————————————————————
+        st.markdown("### " + T_("Overview", "نظرة عامة"))
+        st.markdown(T_(
+            """- **Monitor — Live:** Real sensor or manual entry; alerts are saved to your Journal.
+    - **Learn & Practice:** Simulate values to see how alerts would react (no saving).
+    - **Planner:** Find safer 2‑hour windows for your city and add a plan to Journal.
+    - **Journal:** One quick daily note; alerts and plans also show here.
+    - **AI Companion:** Short, bilingual guidance aware of your city and logs.""",
+            """- **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
+    - **تعلّم وتدرّب:** حاكِ القيم لترى تفاعل التنبيهات (من دون حفظ).
+    - **المخطّط:** اعثر على فترات ساعتين أكثر أمانًا وأضف خطة لليوميات.
+    - **اليوميّات:** ملاحظة يومية سريعة؛ كما تظهر هنا التنبيهات والخطط.
+    - **المرافق الذكي:** إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجلك."""
+        ))
+    
+        st.caption(T_(
+            "You’ll see Core / Peripheral / Baseline / Feels‑like explained where they matter (e.g., in Monitor).",
+            "سترى شرح الأساسية/الطرفية/الأساس/المحسوسة حيث يلزم (مثل صفحة المراقبة)."
+        ))
+    
+        st.markdown("---")
+    
+        # ————————————————————————————————
+        # Heat‑risk levels (show the cards once here)
+        # ————————————————————————————————
+        st.markdown("### " + T_("Heat‑risk levels you’ll see in the app", "مستويات الخطر الحراري في التطبيق"))
+        st.caption(T_(
+            "These are the same colors you’ll encounter in Monitor & Planner.",
+            "هذه هي الألوان نفسها التي ستراها في المراقبة والمخطّط."
+        ))
+    
+        def risk_card(title_en, title_ar, emoji, color, lines_en, lines_ar):
+            st.markdown(
+                f"""
+                <div class="big-card" style="--left:{color};margin-bottom:10px">
+                  <h3 style="margin:0">{emoji} <strong>{T_(title_en, title_ar)}</strong></h3>
+                  <p class="small" style="margin:.4rem 0 0 0">{T_('<br>'.join(lines_en), '<br>'.join(lines_ar))}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+    
+        col1, col2 = st.columns(2)
+        with col1:
+            risk_card(
+                "Safe (Green)", "آمن (أخضر)", "🟢", "green",
+                ["You look safe.", "Keep cool and hydrated."],
+                ["فترة آمنة.", "ابقَ باردًا ورطّب."]
+            )
+            risk_card(
+                "Caution (Yellow)", "حذر (أصفر)", "🟡", "orange",
+                ["Mild risk.", "Hydrate, pace, prefer shade/AC."],
+                ["خطر خفيف.", "رطّب، نظّم الجهد، ظل/مكيّف."]
+            )
+        with col2:
+            risk_card(
+                "High (Orange)", "مرتفع (برتقالي)", "🟠", "orangered",
+                ["Elevated risk.", "Limit outdoor time, pre‑cool, rest."],
+                ["خطر مرتفع.", "قلّل الخروج، برّد مسبقًا، استرح."]
+            )
+            risk_card(
+                "Danger (Red)", "خطر مرتفع (أحمر)", "🔴", "red",
+                ["High risk.", "Move to AC, active cooling; seek care if severe."],
+                ["خطر شديد.", "ادخل لمكيّف، تبريد نشط؛ اطلب رعاية إذا شديد."]
+            )
+    
+        st.caption(T_(
+            "Your actual status depends on your readings versus baseline and current weather.",
+            "تختلف حالتك فعليًا حسب قراءاتك مقابل الأساس والطقس الحالي."
+        ))
 
     # ---------- TAB: Temperatures & risk ----------
     with t_temps:
