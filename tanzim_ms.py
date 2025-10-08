@@ -1014,11 +1014,6 @@ def render_about_page(lang: str = "English"):
     - **المرافق الذكي:** إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجلك."""
         ))
     
-        st.caption(T_(
-            "You’ll see Core / Peripheral / Baseline / Feels‑like explained where they matter (e.g., in Monitor).",
-            "سترى شرح الأساسية/الطرفية/الأساس/المحسوسة حيث يلزم (مثل صفحة المراقبة)."
-        ))
-    
         st.markdown("---")
     
         # ————————————————————————————————
