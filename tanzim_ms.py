@@ -980,20 +980,20 @@ def render_about_page(lang: str = "English"):
     )
 
     # ------------------------ TABS ------------------------
-tab_labels_en = [
-    "🧭 Overview & roadmap",
-    "🌡️ Temperatures & risk",
-    "🚀 First‑time setup",
-    "📑 Page & tab guide",
-]
-tab_labels_ar = [
-    "🧭 نظرة عامة وخارطة طريق",
-    "🌡️ الحرارات والتقييم",
-    "🚀 التهيئة لأول مرة",
-    "📑 دليل الصفحات والتبويبات",
-]
-
-t_overview, t_temps, t_start, t_guide = st.tabs(tab_labels_ar if is_ar else tab_labels_en)
+    tab_labels_en = [
+        "🧭 Overview & roadmap",
+        "🌡️ Temperatures & risk",
+        "🚀 First‑time setup",
+        "📑 Page & tab guide",
+    ]
+    tab_labels_ar = [
+        "🧭 نظرة عامة وخارطة طريق",
+        "🌡️ الحرارات والتقييم",
+        "🚀 التهيئة لأول مرة",
+        "📑 دليل الصفحات والتبويبات",
+    ]
+    
+    t_overview, t_temps, t_start, t_guide = st.tabs(tab_labels_ar if is_ar else tab_labels_en)
 
     # ---------- TAB: Overview & roadmap ----------
     with t_overview:
