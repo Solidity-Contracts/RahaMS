@@ -1061,12 +1061,12 @@ def render_about_page(lang: str = "English"):
         st.markdown("### " + T_("Where next?", "إلى أين بعد ذلك؟"))
         st.markdown(T_(
             _dd("""- **Temperatures & risk:** Learn the numbers and see the risk cards.
-    - **First-time setup:** A guided checklist to finish setup.
-    - **Page & tab guide:** A map of each page and its tabs.
+        - **First-time setup:** A guided checklist to finish setup.
+        - **Page & tab guide:** A map of each page and its tabs.
     """),
             _dd("""- **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
-    - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
-    - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب.
+        - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
+        - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب.
     """)
         ))
     
