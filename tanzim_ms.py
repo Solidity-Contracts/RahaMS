@@ -997,42 +997,144 @@ def render_about_page(lang: str = "English"):
 
     # ---------- TAB: Overview & roadmap ----------
     with t_overview:
-        st.markdown("### " + T_("What you can do", "ماذا يمكنك أن تفعل"))
+        # ————————————————————————————————
+        # 1) What you can do — action first
+        # ————————————————————————————————
+        st.markdown("### " + T_("🧭 What you can do — action first", "🧭 ماذا تفعل الآن — بلغة الفعل"))
         st.markdown(T_(
-            "- **Monitor — Live:** Real‑time **Core & Peripheral** vs **Baseline** with **Feels‑like** and **Humidity**, plus clear alerts.\n"
-            "- **Monitor — Learn & Practice:** Try scenarios (heat/humidity/activity) without saving to Journal.\n"
-            "- **Planner:** Find the **safest 2‑hour windows** in your city.\n"
-            "- **Journal:** One quick daily note to spot **patterns & triggers**.\n"
-            "- **AI Companion:** Bilingual, practical tips aware of your **city** and **recent logs**.",
-            "- **المراقبة — مباشر:** متابعة **الأساسية والطرفية** مقابل **خط الأساس** مع **المحسوس** و**الرطوبة** وتنبيهات واضحة.\n"
-            "- **المراقبة — تعلّم وتدرّب:** جرّب سيناريوهات (حرارة/رطوبة/نشاط) من دون حفظ في اليوميات.\n"
-            "- **المخطِّط:** اعثر على **أكثر فترات ساعتين أمانًا** في مدينتك.\n"
-            "- **اليوميّات:** ملاحظة يومية سريعة لرصد **الأنماط والمحفِّزات**.\n"
-            "- **المرافق الذكي:** نصائح ثنائية اللغة واعية بــ **مدينتك** و**سجلّك الحديث**."
+            """- 📡 **Monitor — Live:** Check your **core & peripheral** against your **baseline** with **feels‑like** & **humidity**; get **clear alerts**.
+    - 🔬 **Monitor — Learn & Practice:** **Simulate** heat, humidity, and activity to see **how alerts change** — **no saving** to Journal.
+    - 🗺️ **Planner:** Pick the **safest 2‑hour windows** for your city today (one‑click plan).
+    - 📒 **Journal:** Log a **quick daily note** to spot **patterns & triggers**; alerts/plans also save here.
+    - 🤖 **AI Companion:** Ask for **cooling**, **pacing**, **safe windows**, **fasting/prayer** tips—aware of your **city** and **journal**.""",
+            """- 📡 **المراقبة — مباشر:** تحقّق من **الأساسية والطرفية** مقابل **خطّك الأساسي** مع **المحسوس** و**الرطوبة**؛ واحصل على **تنبيهات واضحة**.
+    - 🔬 **المراقبة — تعلّم وتدرّب:** **حاكِ** الحرارة والرطوبة والنشاط لترى **كيف تتغيّر التنبيهات** — **من دون حفظ** في اليوميّات.
+    - 🗺️ **المخطّط:** اختر **أكثر فترات ساعتين أمانًا** لمدينتك اليوم (خطة بنقرة واحدة).
+    - 📒 **اليوميّات:** سجّل **ملاحظة يومية سريعة** لرصد **الأنماط والمحفزات**؛ كما تُحفظ هنا التنبيهات والخطط.
+    - 🤖 **المرافق الذكي:** اسأل عن **التبريد**، **تنظيم الجهد**، **الفترات الآمنة**، **الصيام/الصلاة** — واعٍ بـ **مدينتك** و**سجلك**."""
         ))
-
-        st.markdown("### " + T_("Your roadmap", "خارطة طريقك"))
-        c1, c2 = st.columns(2)
-        with c1:
-            st.markdown("**" + T_("Today", "اليوم") + "**")
-            st.markdown(T_(
-                "- Create an account from the **sidebar**.\n"
-                "- In **Settings**: set **Baseline**, **Home City**, **Timezone**, **Emergency contacts**, and **AI style**.\n"
-                "- Open **Monitor → Learn & Practice** to understand alerts.",
-                "- أنشئ حسابًا من **الشريط الجانبي**.\n"
-                "- في **الإعدادات**: اضبط **خط الأساس** و**المدينة** و**المنطقة الزمنية** و**جهات الطوارئ** و**أسلوب إجابات المساعد**.\n"
-                "- افتح **المراقبة ← تعلّم وتدرّب** لفهم التنبيهات."
+    
+        # ————————————————————————————————
+        # 2) Heat‑risk 4‑card legend
+        # ————————————————————————————————
+        st.markdown("#### " + T_("🌈 Heat‑risk cards you’ll see", "🌈 بطاقات مستوى الخطر"))
+        st.markdown(T_(
+            """
+    <div class="panel">
+      <span class="pill">🟢 Safe</span>
+      <span class="pill">🟡 Caution</span>
+      <span class="pill">🟠 High</span>
+      <span class="pill">🔴 Danger</span>
+      <div class="small" style="margin-top:.35rem">These colors appear in Monitor, Planner, and Journal.</div>
+    </div>
+            """,
+            """
+    <div class="panel">
+      <span class="pill">🟢 آمن</span>
+      <span class="pill">🟡 حذر</span>
+      <span class="pill">🟠 مرتفع</span>
+      <span class="pill">🔴 خطر مرتفع</span>
+      <div class="small" style="margin-top:.35rem">سترى هذه الألوان في المراقبة والمخطّط واليوميّات.</div>
+    </div>
+            """
+        ), unsafe_allow_html=True)
+    
+        # ————————————————————————————————
+        # 3) What the numbers mean (iconized)
+        # ————————————————————————————————
+        st.markdown("### " + T_("🌡️ What the numbers mean", "🌡️ ماذا تعني الأرقام"))
+        st.markdown(T_(
+            """- 🔥 **Core temperature:** Internal body temperature (key for heat stress).
+    - 🖐️ **Peripheral temperature:** Skin temperature — changes quickly with the environment.
+    - 🎯 **Baseline:** Your usual temperature — what Tanzim MS compares against.
+    - 🌡️💧 **Feels‑like & humidity:** Weather factors that can raise risk.
+    - Δ **Δ vs baseline:** How far you are from your baseline; alerts use this.""",
+            """- 🔥 **الأساسية:** حرارة الجسم الداخلية (الأهم للإجهاد الحراري).
+    - 🖐️ **الطرفية:** حرارة الجلد — تتغيّر سريعًا مع البيئة.
+    - 🎯 **الأساس:** حرارتك المعتادة — يقارن التطبيق بها.
+    - 🌡️💧 **المحسوس والرطوبة:** عوامل الطقس التي قد ترفع الخطر.
+    - Δ **الفرق عن الأساس:** مقدار ابتعادك عن الأساس؛ تُبنى عليه التنبيهات."""
+        ))
+    
+        # ————————————————————————————————
+        # 4) Live vs Learn & Practice — with icons
+        # ————————————————————————————————
+        st.markdown("#### " + T_("📡 Live vs 🔬 Learn & Practice — what’s the difference?",
+                                 "#### 📡 مباشر مقابل 🔬 تعلّم وتدرّب — ما الفرق؟"))
+        cA, cB = st.columns(2)
+        with cA:
+            st.markdown("**" + T_("📡 Live", "📡 مباشر") + "**" + T_("""  
+    - Real sensor or manual entry  
+    - Affects alerts & recommendations  
+    - **Saves** to Journal  
+    - Good for: daily use, baseline tracking""",
+            """  
+    - حساس فعلي أو إدخال يدوي  
+    - يؤثّر في التنبيهات والإرشادات  
+    - **يُحفَظ** في اليوميّات  
+    - مناسب لـ: الاستخدام اليومي وتتبع الأساس"""
             ))
-        with c2:
-            st.markdown("**" + T_("This week", "هذا الأسبوع") + "**")
-            st.markdown(T_(
-                "- Use **Monitor → Live** during activities; log a **daily note**.\n"
-                "- Ask the **AI Companion** for cooling, pacing, and safe windows.\n"
-                "- Check the **Planner** before going out.",
-                "- استخدم **المراقبة ← مباشر** أثناء النشاط؛ أضف **ملاحظة يومية**.\n"
-                "- اسأل **المرافق الذكي** عن التبريد وتنظيم الجهد والفترات الآمنة.\n"
-                "- راجع **المخطّط** قبل الخروج."
+        with cB:
+            st.markdown("**" + T_("🔬 Learn & Practice", "🔬 تعلّم وتدرّب") + "**" + T_("""  
+    - Simulated values  
+    - Shows how alerts react  
+    - **Does not save** to Journal  
+    - Good for: learning, testing scenarios""",
+            """  
+    - قيم مُحاكاة  
+    - يوضّح تفاعل التنبيهات  
+    - **لا يُحفَظ** في اليوميّات  
+    - مناسب لـ: التعلّم وتجربة السيناريوهات"""
             ))
+    
+        # ————————————————————————————————
+        # 5) Alert levels & quick actions — as color cards
+        # ————————————————————————————————
+        st.markdown("### " + T_("🚦 Alert levels & quick actions", "🚦 مستويات التنبيه وخطوات سريعة"))
+    
+        st.markdown(T_(
+            """<div class="big-card" style="--left:#16a34a">
+      <h3>🟢 <strong>Safe</strong></h3>
+      <p class="small">Keep cool and hydrated; maintain your pace.</p>
+    </div>""",
+            """<div class="big-card" style="--left:#16a34a">
+      <h3>🟢 <strong>آمن</strong></h3>
+      <p class="small">ابقَ باردًا ورطّب جيدًا؛ حافظ على وتيرتك.</p>
+    </div>"""
+        ), unsafe_allow_html=True)
+    
+        st.markdown(T_(
+            """<div class="big-card" style="--left:#f59e0b">
+      <h3>🟡 <strong>Caution</strong></h3>
+      <p class="small">Hydrate, pace yourself, prefer shade/AC, take short rests.</p>
+    </div>""",
+            """<div class="big-card" style="--left:#f59e0b">
+      <h3>🟡 <strong>حذر</strong></h3>
+      <p class="small">رطّب، نظّم جهدك، فضّل الظل/المكيّف، وخذ فترات راحة قصيرة.</p>
+    </div>"""
+        ), unsafe_allow_html=True)
+    
+        st.markdown(T_(
+            """<div class="big-card" style="--left:orangered">
+      <h3>🟠 <strong>High</strong></h3>
+      <p class="small">Limit outdoor time, pre‑cool, frequent rests, consider electrolytes.</p>
+    </div>""",
+            """<div class="big-card" style="--left:orangered">
+      <h3>🟠 <strong>مرتفع</strong></h3>
+      <p class="small">قلّل الوقت خارجًا، برّد مسبقًا، راحات متكررة، وفكّر بالإلكتروليت.</p>
+    </div>"""
+        ), unsafe_allow_html=True)
+    
+        st.markdown(T_(
+            """<div class="big-card" style="--left:#dc2626">
+      <h3>🔴 <strong>Danger</strong></h3>
+      <p class="small">Move to AC, stop exertion, active cooling, hydrate; seek care if severe/unusual.</p>
+    </div>""",
+            """<div class="big-card" style="--left:#dc2626">
+      <h3>🔴 <strong>خطر مرتفع</strong></h3>
+      <p class="small">انتقل للمكيّف، أوقف الجهد، استخدم تبريدًا نشطًا، رطّب؛ اطلب رعاية عند أعراض شديدة/غير معتادة.</p>
+    </div>"""
+        ), unsafe_allow_html=True)
 
     # ---------- TAB: Temperatures & risk ----------
     with t_temps:
