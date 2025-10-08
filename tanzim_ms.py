@@ -18,6 +18,7 @@ import matplotlib.pyplot as plt
 from matplotlib.font_manager import FontProperties
 import pandas as pd
 import plotly.graph_objects as go
+from textwrap import dedent as _dd
 
 #try:
 #    from supabase import create_client, Client
@@ -996,24 +997,31 @@ def render_about_page(lang: str = "English"):
     t_overview, t_temps, t_start, t_guide = st.tabs(tab_labels_ar if is_ar else tab_labels_en)
 
     # ---------- TAB: Overview & roadmap ----------
+    
+    
     with t_overview:
         # ————————————————————————————————
         # Overview 
         # ————————————————————————————————
         st.markdown("### " + T_("Overview", "نظرة عامة"))
+    
         st.markdown(T_(
-            """**What’s in the app**
-        - **Monitor — Live:** Real sensor or manual entry; alerts save to Journal.
-        - **Learn & Practice:** Simulate values to see how alerts would react (no saving).
-        - **Planner:** Safer 2‑hour windows for your city; add plans to Journal.
-        - **Journal:** One quick daily note; alerts/plans appear here.
-        - **AI Companion:** Short, bilingual guidance aware of your city and logs.""",
-            """**مكوّنات التطبيق**
-        - **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
-        - **تعلّم وتدرّب:** حاكِ القيم لترى تفاعل التنبيهات (من دون حفظ).
-        - **المخطّط:** فترات ساعتين أكثر أمانًا في مدينتك؛ أضف خططًا لليوميات.
-        - **اليوميّات:** ملاحظة يومية سريعة؛ تظهر هنا التنبيهات والخطط.
-        - **المرافق الذكي:** إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجلك."""
+            _dd("""**What’s in the app**
+    
+    - **Monitor — Live:** Real sensor or manual entry; alerts save to Journal.
+    - **Learn & Practice:** Simulate values to see how alerts would react (no saving).
+    - **Planner:** Safer 2-hour windows for your city; add plans to Journal.
+    - **Journal:** One quick daily note; alerts/plans appear here.
+    - **AI Companion:** Short, bilingual guidance aware of your city and logs.
+    """),
+            _dd("""**مكوّنات التطبيق**
+    
+    - **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
+    - **تعلّم وتدرّب:** حاكِ القيم لترى تفاعل التنبيهات (من دون حفظ).
+    - **المخطّط:** فترات ساعتين أكثر أمانًا في مدينتك؛ أضف خططًا لليوميات.
+    - **اليوميّات:** ملاحظة يومية سريعة؛ تظهر هنا التنبيهات والخطط.
+    - **المرافق الذكي:** إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجلك.
+    """)
         ))
     
         st.markdown("---")
@@ -1030,7 +1038,7 @@ def render_about_page(lang: str = "English"):
       <div><b>1)</b> Create an account <span class="pill">Sidebar → Login / Register</span></div>
       <div><b>2)</b> Set your Baseline & Home City <span class="pill">Settings → Baseline & City</span></div>
       <div><b>3)</b> Try alerts safely <span class="pill">Monitor → Learn & Practice</span></div>
-      <div><b>4)</b> Use Live day‑to‑day; add a quick Journal note daily</div>
+      <div><b>4)</b> Use Live day-to-day; add a quick Journal note daily</div>
     </div>
     """,
                 """
@@ -1052,21 +1060,21 @@ def render_about_page(lang: str = "English"):
         # ————————————————————————————————
         st.markdown("### " + T_("Where next?", "إلى أين بعد ذلك؟"))
         st.markdown(T_(
-            """- **Temperatures & risk:** Learn the numbers and see the risk cards.
-        - **First‑time setup:** A guided checklist to finish setup.
-        - **Page & tab guide:** A map of each page and its tabs.""",
-            """- **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
-        - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
-        - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب."""
+            _dd("""- **Temperatures & risk:** Learn the numbers and see the risk cards.
+    - **First-time setup:** A guided checklist to finish setup.
+    - **Page & tab guide:** A map of each page and its tabs.
+    """),
+            _dd("""- **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
+    - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
+    - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب.
+    """)
         ))
     
         st.caption(T_(
             "Your data stays in your local database; guidance is general wellness only. Seek medical care for severe or unusual symptoms.",
             "تبقى بياناتك محليًا؛ الإرشاد عام للصحة فقط. اطلب رعاية طبية عند أعراض شديدة أو غير معتادة."
         ))
-    
 
-    
 
     # ---------- TAB: Temperatures & risk ----------
     with t_temps:
