@@ -1006,7 +1006,8 @@ def render_about_page(lang: str = "English"):
         st.markdown("### " + T_("Overview", "نظرة عامة"))
     
         st.markdown(T_(
-            _dd("""**What’s in the app**
+            _dd("""
+    **What’s in the app**
     
     - **Monitor — Live:** Real sensor or manual entry; alerts save to Journal.
     - **Learn & Practice:** Simulate values to see how alerts would react (no saving).
@@ -1014,7 +1015,8 @@ def render_about_page(lang: str = "English"):
     - **Journal:** One quick daily note; alerts/plans appear here.
     - **AI Companion:** Short, bilingual guidance aware of your city and logs.
     """),
-            _dd("""**مكوّنات التطبيق**
+            _dd("""
+    **مكوّنات التطبيق**
     
     - **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
     - **تعلّم وتدرّب:** حاكِ القيم لترى تفاعل التنبيهات (من دون حفظ).
@@ -1060,13 +1062,15 @@ def render_about_page(lang: str = "English"):
         # ————————————————————————————————
         st.markdown("### " + T_("Where next?", "إلى أين بعد ذلك؟"))
         st.markdown(T_(
-            _dd("""- **Temperatures & risk:** Learn the numbers and see the risk cards.
-        - **First-time setup:** A guided checklist to finish setup.
-        - **Page & tab guide:** A map of each page and its tabs.
+            _dd("""
+    - **Temperatures & risk:** Learn the numbers and see the risk cards.
+    - **First-time setup:** A guided checklist to finish setup.
+    - **Page & tab guide:** A map of each page and its tabs.
     """),
-            _dd("""- **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
-        - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
-        - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب.
+            _dd("""
+    - **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
+    - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
+    - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب.
     """)
         ))
     
