@@ -899,222 +899,96 @@ def ai_chat(prompt_text: str, lang: str):
     # Nothing worked
     return None, "ai_unavailable"
 
-import streamlit as st
 
-# ================== ABOUT (Action-first, Live vs Learn & Practice, AR/EN, RTL-aware, NO navigation buttons) ==================
 
-def render_about_page(lang: str = "English"):
-    is_ar = (lang == "Arabic")
+# ================== ABOUT — First‑time friendly, action‑first, 4 safety cards, EN/AR, NO dummy nav ==================
+has_baseline = (st.session_state.get("baseline_c") is not None) or (st.session_state.get("baseline") is not None)
+has_city = bool(st.session_state.get("home_city") or st.session_state.get("current_city"))
+sensors_paired = bool(st.session_state.get("sensors_paired"))
+tried_practice = bool(st.session_state.get("learn_visited") or st.session_state.get("practice_visited"))
+plan_today = bool(st.session_state.get("plan_saved_today"))
+note_today = bool(st.session_state.get("journal_entry_today"))
 
-    def T_(en: str, ar: str) -> str:
-        return ar if is_ar else en
 
-    # --- RTL/CSS (scoped) ---
-    st.markdown(
-        (
-            "<style> .about-wrap{direction:rtl;text-align:right} .step-card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px;background:linear-gradient(90deg, rgba(34,197,94,.07), rgba(14,165,233,.07))} .muted{opacity:.85} .road{font-size:14px;opacity:.9} .pill{display:inline-block;padding:.15rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-inline:.35rem 0} .panel{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:10px} .tag{font-size:.75rem;opacity:.9;border:1px solid rgba(0,0,0,.12);border-radius:6px;padding:2px 6px;margin-left:6px}</style>"
-            if is_ar
-            else "<style> .step-card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px;background:linear-gradient(90deg, rgba(34,197,94,.07), rgba(14,165,233,.07))} .muted{opacity:.85} .road{font-size:14px;opacity:.9} .pill{display:inline-block;padding:.15rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-right:.35rem} .panel{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:10px} .tag{font-size:.75rem;opacity:.9;border:1px solid rgba(0,0,0,.12);border-radius:6px;padding:2px 6px;margin-left:6px}</style>"
-        ),
-        unsafe_allow_html=True,
-    )
+st.markdown("""<div class='step' style='margin-bottom:10px'>
+<b>""" + T_("First time?", "أول مرة؟") + """</b> """ + T_(
+"Register in <i>Settings</i> so we can save your baseline, city, and Journal entries.",
+"سجّل من <i>الإعدادات</i> لنحفظ خط الأساس والمدينة ومدخلات اليوميات."
+) + "</div>" , unsafe_allow_html=True)
 
-    wrap_open = '<div class="about-wrap">' if is_ar else '<div>'
-    st.markdown(wrap_open, unsafe_allow_html=True)
 
-    # ---------- HERO ----------
-    st.markdown(
-        f"""
-        <div class=\"step-card\" style=\"margin-bottom:10px\">
-          <h2 style=\"margin:0\">{'👋 أهلاً بك في' if is_ar else '👋 Welcome to'} <b>Tanzim MS</b></h2>
-          <p class=\"muted\" style=\"margin:.25rem 0 0 0\">{T_(
-            'A bilingual (Arabic‑first) heat‑safety companion for people with MS in the Gulf. It matches your readings to your baseline and real local weather, then gives early, simple actions.',
-            'رفيق ثنائي اللغة (الأولوية للعربية) للأمان الحراري لمرضى التصلّب المتعدّد في الخليج. يقارن قراءاتك بخطّك الأساسي وبالطقس المحلي الفعلي ثم يقدّم خطوات مبكرة وبسيطة.'
-          )}</p>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+total = 6
+done = sum([
+1 if registered else 0,
+1 if (has_baseline and has_city) else 0,
+1 if (sensors_paired or tried_practice) else 0,
+1 if plan_today else 0,
+1 if note_today else 0,
+1, # AI always available
+])
+try:
+st.progress(done/total)
+except Exception:
+pass
 
-    # ---------- TABS ----------
-    t1, t2 = st.tabs([
-        T_("What is Tanzim MS?", "ما هو تنظيم إم إس؟"),
-        T_("Start here (first‑time)", "البدء لأول مرة")
-    ])
 
-    # ---- TAB 1: What is Tanzim MS? ----
-    with t1:
-        st.markdown("### " + T_("What you can do — action first", "ماذا تفعل الآن — بلغة الفعل"))
-        st.markdown(T_(
-            """- **Monitor — Live:** Check your **core & peripheral temperatures** **in real time** against your **baseline**; see **feels‑like** and **humidity**; get **clear alerts** when thresholds are crossed.
-- **Monitor — Learn & Practice:** **Simulate scenarios** (e.g., heat, humidity, activity) to see how **alerts & tips** change — **without saving** to your Journal.
-- **Planner:** Choose the **safest 2‑hour windows** for your city today.
-- **Journal:** Log **one quick note** a day to spot **patterns & triggers**.
-- **AI Companion:** **Ask** short, bilingual questions and get guidance aware of your **city** and **logs**.""",
-            """- **المراقبة — مباشر:** تحقّق من **حرارتك الأساسية والطرفية** **لحظيًا** مقابل **خطّك الأساسي**؛ شاهد **المحسوس** و**الرطوبة**؛ واحصل على **تنبيهات واضحة** عند تجاوز العتبات.
-- **المراقبة — تعلّم وتدرّب:** **حاكِ السيناريوهات** (حرارة، رطوبة، نشاط) لترى كيف تتغيّر **التنبيهات والنصائح** — **من دون حفظ** في اليوميّات.
-- **المخطّط:** اختر **أكثر فترات ساعتين أمانًا** في مدينتك اليوم.
-- **اليوميّات:** سجّل **ملاحظة يومية سريعة** لرصد **الأنماط والمحفزات**.
-- **المرافق الذكي:** **اسأل** أسئلة قصيرة ثنائية اللغة لتحصل على إرشاد واعٍ بـ **مدينتك** و**سجّلك**."""
-        ))
+def status_line(ok: bool, where_en: str, where_ar: str):
+badge = ("✅ " + T_("Complete", "مكتمل")) if ok else ("⭕️ " + T_("Needed", "مطلوب"))
+where = T_(where_en, where_ar)
+st.markdown(f"{badge} <span class='pill'>{where}</span>", unsafe_allow_html=True)
 
-        st.markdown("#### " + T_("Live vs Learn & Practice — what’s the difference?", "المباشر مقابل تعلّم وتدرّب — ما الفرق؟"))
-        cA, cB = st.columns(2)
-        with cA:
-            st.markdown("**" + T_("Live", "مباشر") + "**" + T_("""  
-- Real sensor or manual entry  
-- Affects alerts & recommendations  
-- **Saves** to Journal  
-- Good for: daily use, baseline tracking""",
-            """  
-- حساس فعلي أو إدخال يدوي  
-- يؤثّر في التنبيهات والإرشادات  
-- **يُحفَظ** في اليوميّات  
-- مناسب لـ: الاستخدام اليومي وتتبع الأساس"""))
-        with cB:
-            st.markdown("**" + T_("Learn & Practice", "تعلّم وتدرّب") + "**" + T_("""  
-- Simulated data  
-- Shows how alerts react  
-- **Does not save** to Journal  
-- Good for: learning, testing scenarios""",
-            """  
-- بيانات مُحاكاة  
-- يوضح تفاعل التنبيهات  
-- **لا يُحفَظ** في اليوميّات  
-- مناسب لـ: التعلّم وتجربة السيناريوهات"""))
 
-        st.markdown("---")
-        st.markdown("### " + T_("What the numbers mean", "ماذا تعني الأرقام"))
-        st.markdown(T_(
-            """- **Core temperature:** Internal body temperature (most relevant for heat stress).  
-- **Peripheral temperature:** Skin temperature — changes quickly with the environment.  
-- **Baseline:** Your usual temperature — what Tanzim MS compares against.  
-- **Feels‑like & humidity:** Weather factors that can raise risk.  
-- **Δ vs baseline:** How far you are from your baseline; alerts use this.""",
-            """- **الأساسية:** حرارة جسمك الداخلية (الأهم للإجهاد الحراري).  
-- **الطرفية:** حرارة الجلد — تتغيّر سريعًا مع البيئة.  
-- **الأساس:** حرارتك المعتادة — يقارن التطبيق بها.  
-- **المحسوس والرطوبة:** عوامل الطقس التي قد ترفع الخطر.  
-- **Δ مقابل الأساس:** مقدار ابتعادك عن الأساس؛ تُبنى عليه التنبيهات."""
-        ))
+with st.container(border=True):
+st.markdown("#### 1) " + T_("Register", "إنشاء حساب"))
+st.caption(T_("Enables saving your data.", "يُفعّل حفظ بياناتك."))
+status_line(registered, "Go to: Settings → Register", "اذهب إلى: الإعدادات ← إنشاء حساب")
 
-        st.markdown("### " + T_("Alert levels & quick actions", "مستويات التنبيه وخطوات سريعة"))
-        st.markdown(T_(
-            """- **Heads‑up:** Small rise or warm weather → **slow down**, sip water, seek shade.  
-- **Caution:** Rising further or humid → **pre‑cool** (cool pack/AC), shorten outing, rest.  
-- **Stop & cool:** High rise or symptoms → **go indoors**, use **active cooling**, and rest. If symptoms are severe/unusual, seek medical care.""",
-            """- **تنبيه بسيط:** ارتفاع طفيف أو طقس دافئ → **خفّف النشاط**، ارتشف ماءً، ابحث عن ظل.  
-- **انتباه:** ارتفاع أكبر أو رطوبة → **تبريد مسبق** (كمّادات/مكيّف)، قصّر الخروج، استرح.  
-- **توقّف وبرّد:** ارتفاع كبير أو أعراض → **ادخل لمكان مكيّف**، استخدم **تبريدًا نشطًا**، واسترح. عند أعراض شديدة/غير معتادة اطلب رعاية طبية."""
-        ))
 
-    # ---- TAB 2: Start here (first‑time) ----
-    with t2:
-        registered = bool(st.session_state.get("is_registered"))
-        has_baseline = st.session_state.get("baseline_c") is not None
-        has_city = bool(st.session_state.get("home_city"))
-        sensors_paired = bool(st.session_state.get("sensors_paired"))
-        tried_practice = bool(st.session_state.get("learn_visited") or st.session_state.get("practice_visited") or st.session_state.get("demo_visited"))
+with st.container(border=True):
+st.markdown("#### 2) " + T_("Set baseline & home city", "اضبط خط الأساس والمدينة"))
+st.caption(T_("Baseline = your usual temperature. City powers local weather.", "خط الأساس = حرارتك المعتادة. المدينة تزودنا بالطقس المحلي."))
+status_line(has_baseline and has_city, "Settings → Baseline & City", "الإعدادات ← خط الأساس والمدينة")
 
-        # First‑time callout
-        if not registered:
-            st.markdown(
-                T_(
-                    """
-                    <div class='step-card' style='border-color:rgba(220,38,38,.25);background:linear-gradient(90deg, rgba(220,38,38,.06), rgba(14,165,233,.06))'>
-                      <b>First time?</b> Register in <i>Settings</i> to save your baseline, city, and logs.
-                    </div>
-                    """,
-                    """
-                    <div class='step-card' style='border-color:rgba(220,38,38,.25);background:linear-gradient(90deg, rgba(220,38,38,.06), rgba(14,165,233,.06))'>
-                      <b>أول مرة؟</b> قم <i>بالتسجيل</i> من <i>الإعدادات</i> لحفظ الأساس والمدينة والسجلات.
-                    </div>
-                    """,
-                ),
-                unsafe_allow_html=True,
-            )
 
-        # Completion meter
-        total = 5
-        done_count = sum([
-            1 if registered else 0,
-            1 if (has_baseline and has_city) else 0,
-            1 if (sensors_paired or tried_practice) else 0,  # sensors optional; practice counts too
-            1 if (has_baseline and has_city) else 0,  # ready for Monitor/Planner/Journal
-            1,  # AI always available
-        ])
-        st.markdown("### " + T_("New user checklist", "قائمة البدء للمستخدم الجديد"))
-        try:
-            st.progress(done_count / total)
-        except Exception:
-            pass
+with st.container(border=True):
+st.markdown("#### 3) " + T_("Choose how to try Monitor", "اختر كيف تجرب المراقبة"))
+st.caption(T_(
+"Live (saves to Journal) with sensors or manual entry, OR Learn & Practice (simulation; doesn’t save).",
+"مباشر (يُحفَظ في اليوميات) عبر حساسات أو إدخال يدوي، أو تعلّم وتدرّب (محاكاة لا تُحفَظ)."
+))
+status_line(sensors_paired or tried_practice, "Live or Learn & Practice", "مباشر أو تعلّم وتدرّب")
 
-        def status_line(ready: bool, where_en: str, where_ar: str):
-            status = ("✅ " + T_("Complete", "مكتمل")) if ready else ("⭕️ " + T_("Needed", "مطلوب"))
-            where = T_(where_en, where_ar)
-            st.markdown(f"{status}  <span class='pill'>{where}</span>", unsafe_allow_html=True)
 
-        # Steps
-        with st.container(border=True):
-            st.markdown("#### 1) " + T_("Register (first time)", "سجّل لأول مرة"))
-            st.caption(T_("Enables saving your baseline, city, and logs.", "يُفعّل حفظ الأساس والمدينة والسجلات."))
-            status_line(registered, "Go to: Settings → Register", "اذهب إلى: الإعدادات ← التسجيل")
+with st.container(border=True):
+st.markdown("#### 4) " + T_("Plan your day (Planner)", "خطّط يومك (المخطّط)"))
+st.caption(T_("Pick a 2‑hour safe window and <b>save your plan to Journal</b>.", "اختر فترة ساعتين آمنة ثم <b>احفظ الخطة في اليوميات</b>."), unsafe_allow_html=True)
+status_line(plan_today, "Planner: Save plan to Journal", "المخطّط: احفظ الخطة في اليوميات")
 
-        with st.container(border=True):
-            st.markdown("#### 2) " + T_("Set baseline & home city", "اضبط الخطّ الأساسي والمدينة"))
-            st.caption(T_(
-                "Baseline = your usual temperature. Home City powers weather.",
-                "الأساس = حرارتك المعتادة. تعتمد الطقس على مدينتك."
-            ))
-            status_line(has_baseline and has_city, "Go to: Settings → Baseline & City", "اذهب إلى: الإعدادات ← الأساس والمدينة")
 
-        with st.container(border=True):
-            st.markdown("#### 3) " + T_("(Optional) Pair sensors or skip", "(اختياري) اربط الحساسات أو تجاوزه"))
-            st.caption(T_(
-                "Use MLX90614 & MAX30205 via ESP8266. You can also skip and use **Live (manual entry)** or **Learn & Practice**.",
-                "استخدم MLX90614 وMAX30205 عبر ESP8266. يمكنك التجاوز واستخدام **المباشر (إدخال يدوي)** أو **تعلّم وتدرّب**."
-            ))
-            status_line(sensors_paired or tried_practice, "Optional step", "خطوة اختيارية")
+with st.container(border=True):
+st.markdown("#### 5) " + T_("Open Journal", "افتح اليوميات"))
+st.caption(T_(
+"See your <b>auto alerts</b>, manual alerts, saved plans, and notes together.",
+"شاهد <b>التنبيهات التلقائية</b> والتنبيهات اليدوية والخطط والملاحظات معًا."
+), unsafe_allow_html=True)
+status_line(note_today, "Add a quick note today", "أضف ملاحظة سريعة اليوم")
 
-        with st.container(border=True):
-            st.markdown("#### 4) " + T_("Open Monitor — Live & Learn & Practice", "افتح المراقبة — مباشر وتعلّم وتدرّب"))
-            st.caption(T_(
-                "Live saves to Journal; Learn & Practice does not. Try Learn & Practice first to learn alerts, then use Live for your day.",
-                "المباشر يُحفَظ في اليوميات؛ تعلّم وتدرّب لا يُحفَظ. جرّب تعلّم وتدرّب أولًا لتتعلّم التنبيهات ثم استخدم المباشر ليومك."
-            ))
-            status_line(has_baseline and has_city, "Then: Monitor → Live / Learn & Practice", "ثم: المراقبة ← مباشر / تعلّم وتدرّب")
 
-        with st.container(border=True):
-            st.markdown("#### 5) " + T_("Journal & AI", "اليوميّات والمرافق"))
-            st.caption(T_(
-                "Add one quick note daily; ask the AI for safe windows and cooling tips.",
-                "أضف ملاحظة يومية سريعة؛ واسأل المرافق عن فترات آمنة ونصائح تبريد."
-            ))
-            status_line(True, "Anytime: Journal / AI Companion", "في أي وقت: اليوميّات / المرافق الذكي")
+with st.container(border=True):
+st.markdown("#### 6) 🤖 " + T_("Ask the AI", "اسأل المرافق الذكي"))
+st.caption(T_("Ask for safe windows and pre‑cool tips (Arabic or English).", "اسأل عن فترات آمنة ونصائح التبريد (عربي أو إنجليزي)."))
+status_line(True, "Anytime: AI Companion", "في أي وقت: المرافق الذكي")
 
-        st.markdown("---")
-        st.markdown("### " + T_("For your feedback later", "لأجل ملاحظاتك لاحقًا"))
-        st.markdown(T_(
-            """When we ask for a short survey after trying the app, please think about:  
-- **Usefulness:** Did alerts and tips help you decide what to do?  
-- **Ease:** Was it easy to set up baseline & city and understand Live vs Learn & Practice?  
-- **Clarity:** Were the words and icons clear (especially in Arabic)?  
-- **Trust:** Did the numbers/alerts feel sensible for your day?""",
-            """عند طلب استبيان قصير بعد التجربة، فكّر في:  
-- **الفائدة:** هل ساعدتك التنبيهات والنصائح على اتخاذ قرار؟  
-- **السهولة:** هل كان ضبط الأساس والمدينة وفهم مباشر/تعلّم وتدرّب سهلًا؟  
-- **الوضوح:** هل كانت العبارات والرموز واضحة (خصوصًا بالعربية)؟  
-- **الثقة:** هل بدت الأرقام/التنبيهات منطقية ليومك؟"""
-        ))
 
-        st.markdown("---")
-        st.markdown("### " + T_("Privacy & safety", "الخصوصية والسلامة"))
-        st.write(T_(
-            "Your data stays on this device/database for your care. Tanzim MS gives general wellness guidance only. For severe or unusual symptoms, seek urgent medical care.",
-            "تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يوفّر تنظيم إم إس إرشادًا عامًا للصحة فقط. عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
-        ))
+st.markdown("---")
+st.markdown("### " + T_("Privacy & safety", "الخصوصية والسلامة"))
+st.write(T_(
+"Your data stays on this device/database for your care. Tanzim MS gives general wellness guidance only. For severe or unusual symptoms, seek urgent medical care.",
+"تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يوفر تنظيم إم إس إرشادًا عامًا للصحة فقط. عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
+))
 
-    st.markdown("</div>", unsafe_allow_html=True)
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
 
@@ -1523,12 +1397,6 @@ def render_monitor():
           (non‑contact measurement with ±0.5 °C accuracy; estimates internal temperature)
         
         - **ESP8266 microcontroller**: Reads both sensors and sends data to the cloud
-        
-        **What these temperatures mean:**
-        - **Core temperature**: Your internal body temperature — the most important indicator of heat stress
-        - **Peripheral temperature**: Your skin temperature — reacts quickly to environmental changes
-        - **Feels‑like**: Combined effect of air temperature + humidity from **OpenWeather API** data
-        - **Baseline**: Your personal “normal” temperature (**set in Settings**) used for alert thresholds
         """)
             else:
                 st.markdown("""
@@ -1540,13 +1408,7 @@ def render_monitor():
         - **MLX90614**: مستشعر بالأشعة تحت الحمراء لقياس **الحرارة الأساسية**  
           (قياس غير تلامسي بدقة ±0.5°م، يقدّر الحرارة الداخلية)
         
-        - **المتحكم الدقيق ESP8266**: يقرأ المستشعرين ويرسل البيانات إلى السحابة
-        
-        **ماذا تعني هذه القراءات:**
-        - **الحرارة الأساسية**: حرارة الجسم الداخلية — المؤشر الأهم للإجهاد الحراري
-        - **الحرارة الطرفية**: حرارة الجلد — تستجيب سريعًا لتغيّرات البيئة
-        - **المحسوسة**: مزيج درجة حرارة الهواء + الرطوبة من **واجهة OpenWeather**
-        - **خط الأساس**: درجتك الطبيعية (**تُضبط من الإعدادات**) وتُستخدم لعتبات التنبيه
+        - **المتحكم الدقيق ESP8266**: يقرأ المستشعرين ويرسل البيانات إلى السحابة  
         """)
 
         # City / device
