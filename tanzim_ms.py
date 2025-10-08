@@ -988,6 +988,104 @@ def render_about_page(lang: str = "English"):
     </style>
     """, unsafe_allow_html=True)
 
+    st.markdown("""
+    <style>
+    /* —— Shared tweaks (both themes) —— */
+    .about-wrap .card,
+    .about-wrap .panel,
+    .about-wrap .big-card,
+    .about-wrap .risk-card{
+      background: var(--card-bg);
+      color: var(--card-fg);
+      border: 1px solid var(--chip-border);
+      border-radius: 12px;
+    }
+    
+    /* risk cards still take their color from --left (you already set this inline) */
+    .about-wrap .risk-card{
+      padding: 12px;
+      border-left: 10px solid var(--left, var(--chip-border));
+    }
+    
+    /* Generic cards/panels */
+    .about-wrap .card{ padding: 10px; }
+    .about-wrap .panel{ padding: 12px; }
+    .about-wrap .big-card{
+      padding: 16px;
+      border-left: 10px solid var(--left, var(--chip-border));
+    }
+    
+    /* Pills: slightly filled so they stand out in dark */
+    .about-wrap .pill{
+      display: inline-block;
+      padding: .2rem .6rem;
+      border-radius: 999px;
+      border: 1px solid var(--chip-border);
+      background: transparent;
+      color: var(--card-fg);
+      font-size: .85rem;
+    }
+    
+    /* ————— Dark-mode specific fixes ————— */
+    @media (prefers-color-scheme: dark){
+      /* Make borders readable on dark */
+      .about-wrap .card,
+      .about-wrap .panel,
+      .about-wrap .big-card,
+      .about-wrap .risk-card{
+        /* Subtle elevated surface vs page bg */
+        background: color-mix(in srgb, var(--card-bg) 92%, var(--card-fg) 8%);
+        border-color: color-mix(in srgb, var(--chip-border) 90%, transparent);
+        /* Outline instead of deep drop-shadow (better on dark) */
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--card-fg) 10%, transparent);
+      }
+    
+      /* Give risk stripe a soft glow so the color reads on dark */
+      .about-wrap .risk-card{
+        box-shadow:
+          0 0 0 1px color-mix(in srgb, var(--card-fg) 10%, transparent),
+          0 0 18px color-mix(in srgb, var(--left, #999) 24%, transparent);
+      }
+    
+      /* Pills: a hint of fill so they don’t disappear */
+      .about-wrap .pill{
+        background: color-mix(in srgb, var(--card-fg) 7%, transparent);
+        border-color: color-mix(in srgb, var(--chip-border) 85%, transparent);
+      }
+    
+      /* Muted/secondary text: raise contrast just a bit on dark */
+      .about-wrap .muted, .about-wrap .small{
+        color: color-mix(in srgb, var(--card-fg) 80%, var(--card-bg) 20%) !important;
+        opacity: 1;
+      }
+    }
+    
+    /* Fallback for browsers without color-mix(): keep it simple */
+    @supports not (color: color-mix(in srgb, red 50%, white 50%)){
+      .about-wrap .card,
+      .about-wrap .panel,
+      .about-wrap .big-card,
+      .about-wrap .risk-card{
+        box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      }
+      @media (prefers-color-scheme: dark){
+        .about-wrap .card,
+        .about-wrap .panel,
+        .about-wrap .big-card,
+        .about-wrap .risk-card{
+          border-color: rgba(255,255,255,.18);
+          box-shadow: 0 0 0 1px rgba(255,255,255,.06);
+        }
+        .about-wrap .risk-card{ box-shadow: 0 0 0 1px rgba(255,255,255,.06), 0 0 16px rgba(255,0,0,.12); }
+        .about-wrap .pill{ background: rgba(255,255,255,.06); border-color: rgba(255,255,255,.18); }
+        .about-wrap .muted, .about-wrap .small{ color: rgba(255,255,255,.86) !important; }
+      }
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+
     # ------------------------ HERO ------------------------
     st.markdown(
         f"""
