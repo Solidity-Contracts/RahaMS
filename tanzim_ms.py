@@ -899,7 +899,9 @@ def ai_chat(prompt_text: str, lang: str):
     # Nothing worked
     return None, "ai_unavailable"
 
-# ================== ABOUT (Two tabs, clear roadmap, AR/EN, RTL-aware, NO cross-page buttons) ==================
+import streamlit as st
+
+# ================== ABOUT (Two tabs, clear roadmap, AR/EN, RTL-aware) ==================
 
 def render_about_page(lang: str = "English"):
     is_ar = (lang == "Arabic")
@@ -946,34 +948,24 @@ def render_about_page(lang: str = "English"):
         with c1:
             st.markdown("### " + T_("Why heat matters in MS", "لماذا تؤثر الحرارة في التصلّب المتعدد"))
             st.markdown(T_(
-                "- Even a ~0.5°C rise can temporarily worsen symptoms (Uhthoff’s phenomenon).
-"
-                "- Gulf humidity makes heat feel heavier and recovery slower.
-"
-                "- Early, small actions (pre‑cooling, shade/AC, pacing) prevent bad days.",
-                "- حتى زيادة ≈ 0.5°م قد تُفاقِم الأعراض مؤقتًا (ظاهرة أوتهوف).
-"
-                "- رطوبة الخليج تجعل الحر أثقل ويبطؤ التعافي.
-"
-                "- الخطوات المبكرة الصغيرة (تبريد مسبق، ظل/مكيّف، تنظيم الجهد) تمنع سوء الأيام."
+                """- Even a ~0.5°C rise can temporarily worsen symptoms (Uhthoff’s phenomenon).
+- Gulf humidity makes heat feel heavier and recovery slower.
+- Early, small actions (pre‑cooling, shade/AC, pacing) prevent bad days.""",
+                """- حتى زيادة ≈ 0.5°م قد تُفاقِم الأعراض مؤقتًا (ظاهرة أوتهوف).
+- رطوبة الخليج تجعل الحر أثقل ويبطؤ التعافي.
+- الخطوات المبكرة الصغيرة (تبريد مسبق، ظل/مكيّف، تنظيم الجهد) تمنع سوء الأيام."""
             ))
         with c2:
             st.markdown("### " + T_("What you can do with it", "ماذا يقدّم لك التطبيق"))
             st.markdown(T_(
-                "- **Monitor**: Core & peripheral vs baseline + feels‑like & humidity with clear alerts.
-"
-                "- **Planner**: Safest 2‑hour windows for your city, updated through the day.
-"
-                "- **Journal**: One quick daily note to spot patterns.
-"
-                "- **AI Companion**: Short, bilingual guidance aware of your city and logs.",
-                "- **المراقبة**: الأساسية والطرفية مقابل خطّك الأساسي + المحسوس والرطوبة مع تنبيهات واضحة.
-"
-                "- **المخطّط**: أفضل فترات آمنة لساعتين في مدينتك، وتتحدّث خلال اليوم.
-"
-                "- **اليوميّات**: ملاحظة يومية سريعة لرصد الأنماط.
-"
-                "- **المرافق الذكي**: إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجّلك."
+                """- **Monitor**: Core & peripheral vs baseline + feels‑like & humidity with clear alerts.
+- **Planner**: Safest 2‑hour windows for your city, updated through the day.
+- **Journal**: One quick daily note to spot patterns.
+- **AI Companion**: Short, bilingual guidance aware of your city and logs.""",
+                """- **المراقبة**: الأساسية والطرفية مقابل خطّك الأساسي + المحسوس والرطوبة مع تنبيهات واضحة.
+- **المخطّط**: أفضل فترات آمنة لساعتين في مدينتك، وتتحدّث خلال اليوم.
+- **اليوميّات**: ملاحظة يومية سريعة لرصد الأنماط.
+- **المرافق الذكي**: إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجّلك."""
             ))
 
         st.markdown("---")
@@ -1060,8 +1052,7 @@ def render_about_page(lang: str = "English"):
             ))
             status_line(True, "Anytime: AI Companion page", "في أي وقت: صفحة المرافق الذكي")
 
-        st.caption("
-" + T_(
+        st.caption("\n" + T_(
             "Legend — ✅ Complete · ⭕️ Needed · Sensors are optional; Demo works without hardware.",
             "الدليل — ✅ مكتمل · ⭕️ مطلوب · الحساسات اختيارية؛ يعمل العرض دون عتاد."
         ))
@@ -1075,6 +1066,7 @@ def render_about_page(lang: str = "English"):
         ))
 
     st.markdown("</div>", unsafe_allow_html=True)
+
 
 # ================== PLANNER ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
