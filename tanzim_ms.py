@@ -19,12 +19,6 @@ from matplotlib.font_manager import FontProperties
 import pandas as pd
 import plotly.graph_objects as go
 from textwrap import dedent as _dd
-
-#try:
-#    from supabase import create_client, Client
-#except Exception:
-#    create_client, Client = None, None
-
 from supabase import create_client
 
 # ================== CONFIG ==================
@@ -917,52 +911,82 @@ def render_about_page(lang: str = "English"):
         return ar if is_ar else en
 
     # ------------------------ Scoped styles ------------------------
-    st.markdown(
-        (
-            """
-            <style>
-              .about-wrap { direction: rtl; text-align: right; }
-              .hero { border: 1px solid rgba(0,0,0,.08); border-radius: 14px; padding: 14px;
-                      background: linear-gradient(90deg, rgba(14,165,233,.08), rgba(34,197,94,.08)); }
-              .pill { display:inline-block; padding: .15rem .6rem; border: 1px solid rgba(0,0,0,.12);
-                      border-radius: 999px; background: rgba(0,0,0,.03); font-size: .85rem; margin-inline: .25rem 0; }
-              .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
-              @media (max-width: 820px){ .grid { grid-template-columns: 1fr; } }
-              .card { background: var(--card-bg,#fff); color: var(--card-fg,#0f172a); border:1px solid rgba(0,0,0,.08);
-                      border-radius: 12px; padding: 12px; }
-              .risk-card { border-left: 10px solid var(--left); padding-left: 12px; }
-              .muted { opacity: .85; font-size: 0.95rem; }
-              .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-                     border:1px solid rgba(0,0,0,.15); border-bottom-width: 2px; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.04); }
-              .step-ok { color: #16a34a; font-weight: 600; }
-              .step-need { color: #b45309; font-weight: 600; }
-            </style>
-            """
-            if is_ar else
-            """
-            <style>
-              .hero { border: 1px solid rgba(0,0,0,.08); border-radius: 14px; padding: 14px;
-                      background: linear-gradient(90deg, rgba(14,165,233,.08), rgba(34,197,94,.08)); }
-              .pill { display:inline-block; padding: .15rem .6rem; border: 1px solid rgba(0,0,0,.12);
-                      border-radius: 999px; background: rgba(0,0,0,.03); font-size: .85rem; margin-right: .25rem; }
-              .grid { display:grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap:12px; }
-              @media (max-width: 820px){ .grid { grid-template-columns: 1fr; } }
-              .card { background: var(--card-bg,#fff); color: var(--card-fg,#0f172a); border:1px solid rgba(0,0,0,.08);
-                      border-radius: 12px; padding: 12px; }
-              .risk-card { border-left: 10px solid var(--left); padding-left: 12px; }
-              .muted { opacity: .85; font-size: 0.95rem; }
-              .kbd { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
-                     border:1px solid rgba(0,0,0,.15); border-bottom-width: 2px; padding: 2px 6px; border-radius: 6px; background: rgba(0,0,0,.04); }
-              .step-ok { color: #16a34a; font-weight: 600; }
-              .step-need { color: #b45309; font-weight: 600; }
-            </style>
-            """
-        ),
-        unsafe_allow_html=True,
-    )
-
-    wrap_open = '<div class="about-wrap">' if not is_ar else '<div class="about-wrap">'
-    st.markdown(wrap_open, unsafe_allow_html=True)
+    st.markdown("""
+    <style>
+    /* Respect OS/browser theme */
+    :root { color-scheme: light dark; }
+    
+    /* Reuse app-wide tokens you already defined */
+    .about-wrap { color: var(--card-fg); }
+    .about-wrap h2, .about-wrap h3, .about-wrap p, .about-wrap .small { color: var(--card-fg); }
+    
+    /* Cards/panels that adapt to theme */
+    .big-card{
+      background: var(--card-bg);
+      color: var(--card-fg);
+      padding: 18px;
+      border-radius: 14px;
+      border-left: 10px solid var(--left, var(--chip-border));
+      border: 1px solid var(--chip-border);
+      box-shadow: 0 2px 8px rgba(0,0,0,.06);
+    }
+    .panel{
+      background: var(--card-bg);
+      color: var(--card-fg);
+      border: 1px solid var(--chip-border);
+      border-radius: 12px;
+      padding: 10px;
+    }
+    
+    /* Subtle “badge/pill” that works on both themes */
+    .pill{
+      display: inline-block;
+      padding: .15rem .55rem;
+      border: 1px solid var(--chip-border);
+      border-radius: 999px;
+      background: transparent;
+      color: var(--card-fg);
+      font-size: .85rem;
+    }
+    
+    /* Secondary text */
+    .small, .muted { color: var(--muted-fg) !important; opacity: 1; }
+    
+    /* Simple grid cards used in Temperatures section */
+    .grid{
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px,1fr));
+      gap: 10px;
+    }
+    .card{
+      background: var(--card-bg);
+      color: var(--card-fg);
+      border: 1px solid var(--chip-border);
+      border-radius: 10px;
+      padding: 10px;
+    }
+    
+    /* Risk cards reuse big-card with a colored left bar via --left */
+    .risk-card{
+      background: var(--card-bg);
+      color: var(--card-fg);
+      border: 1px solid var(--chip-border);
+      border-left: 10px solid var(--left, var(--chip-border));
+      border-radius: 12px;
+      padding: 10px;
+    }
+    
+    /* Keep lists readable in both modes */
+    .about-wrap ul, .about-wrap ol { margin: .5rem 0; }
+    .about-wrap li { margin-bottom: .35rem; }
+    
+    /* Links inherit themed colors */
+    .about-wrap a { color: inherit; text-decoration: underline; }
+    
+    /* RTL compatibility for Arabic */
+    [dir="rtl"] .about-wrap { direction: rtl; text-align: right; }
+    </style>
+    """, unsafe_allow_html=True)
 
     # ------------------------ HERO ------------------------
     st.markdown(
