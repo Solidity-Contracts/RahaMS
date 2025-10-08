@@ -1002,16 +1002,67 @@ def render_about_page(lang: str = "English"):
         # ————————————————————————————————
         st.markdown("### " + T_("Overview", "نظرة عامة"))
         st.markdown(T_(
-            """- **Monitor — Live:** Real sensor or manual entry; alerts are saved to your Journal.
+            """**What’s in the app**
+    - **Monitor — Live:** Real sensor or manual entry; alerts save to Journal.
     - **Learn & Practice:** Simulate values to see how alerts would react (no saving).
-    - **Planner:** Find safer 2‑hour windows for your city and add a plan to Journal.
-    - **Journal:** One quick daily note; alerts and plans also show here.
+    - **Planner:** Safer 2‑hour windows for your city; add plans to Journal.
+    - **Journal:** One quick daily note; alerts/plans appear here.
     - **AI Companion:** Short, bilingual guidance aware of your city and logs.""",
-            """- **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
+            """**مكوّنات التطبيق**
+    - **المراقبة — مباشر:** حساس فعلي أو إدخال يدوي؛ تُحفَظ التنبيهات في اليوميات.
     - **تعلّم وتدرّب:** حاكِ القيم لترى تفاعل التنبيهات (من دون حفظ).
-    - **المخطّط:** اعثر على فترات ساعتين أكثر أمانًا وأضف خطة لليوميات.
-    - **اليوميّات:** ملاحظة يومية سريعة؛ كما تظهر هنا التنبيهات والخطط.
+    - **المخطّط:** فترات ساعتين أكثر أمانًا في مدينتك؛ أضف خططًا لليوميات.
+    - **اليوميّات:** ملاحظة يومية سريعة؛ تظهر هنا التنبيهات والخطط.
     - **المرافق الذكي:** إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجلك."""
+        ))
+    
+        st.markdown("---")
+    
+        # ————————————————————————————————
+        # Quick roadmap (no duplication with other tabs)
+        # ————————————————————————————————
+        st.markdown("### " + T_("Quick roadmap (60 seconds)", "خارطة سريعة (60 ثانية)"))
+    
+        st.markdown(
+            T_(
+                """
+    <div class="panel road">
+      <div><b>1)</b> Create an account <span class="pill">Sidebar → Login / Register</span></div>
+      <div><b>2)</b> Set your Baseline & Home City <span class="pill">Settings → Baseline & City</span></div>
+      <div><b>3)</b> Try alerts safely <span class="pill">Monitor → Learn & Practice</span></div>
+      <div><b>4)</b> Use Live day‑to‑day; add a quick Journal note daily</div>
+    </div>
+    """,
+                """
+    <div class="panel road" style="text-align:right">
+      <div><b>1)</b> أنشئ حسابًا <span class="pill">الشريط الجانبي ← تسجيل الدخول/إنشاء حساب</span></div>
+      <div><b>2)</b> اضبط خطّ الأساس والمدينة <span class="pill">الإعدادات ← الأساس والمدينة</span></div>
+      <div><b>3)</b> تعرّف على التنبيهات بأمان <span class="pill">المراقبة ← تعلّم وتدرّب</span></div>
+      <div><b>4)</b> استخدم «مباشر» يوميًا؛ وأضف ملاحظة سريعة في اليوميات</div>
+    </div>
+    """
+            ),
+            unsafe_allow_html=True
+        )
+    
+        st.markdown("---")
+    
+        # ————————————————————————————————
+        # Where to go next (pointers, not duplication)
+        # ————————————————————————————————
+        st.markdown("### " + T_("Where next?", "إلى أين بعد ذلك؟"))
+        st.markdown(T_(
+            """- **Temperatures & risk:** Learn the numbers and see the risk cards.
+    - **First‑time setup:** A guided checklist to finish setup.
+    - **Page & tab guide:** A map of each page and its tabs.""",
+            """- **الحرارات والتقييم:** تعرّف على القيم وشاهد بطاقات التقييم.
+    - **البدء لأول مرة:** قائمة إرشادية لإكمال الإعداد.
+    - **دليل الصفحات والتبويبات:** خريطة مبسطة لكل صفحة وتبويب."""
+        ))
+    
+        st.caption(T_(
+            "Your data stays in your local database; guidance is general wellness only. Seek medical care for severe or unusual symptoms.",
+            "تبقى بياناتك محليًا؛ الإرشاد عام للصحة فقط. اطلب رعاية طبية عند أعراض شديدة أو غير معتادة."
         ))
     
 
