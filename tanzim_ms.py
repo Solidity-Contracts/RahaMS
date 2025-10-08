@@ -901,94 +901,216 @@ def ai_chat(prompt_text: str, lang: str):
 
 
 
-# ================== ABOUT — First‑time friendly, action‑first, 4 safety cards, EN/AR, NO dummy nav ==================
-has_baseline = (st.session_state.get("baseline_c") is not None) or (st.session_state.get("baseline") is not None)
-has_city = bool(st.session_state.get("home_city") or st.session_state.get("current_city"))
-sensors_paired = bool(st.session_state.get("sensors_paired"))
-tried_practice = bool(st.session_state.get("learn_visited") or st.session_state.get("practice_visited"))
-plan_today = bool(st.session_state.get("plan_saved_today"))
-note_today = bool(st.session_state.get("journal_entry_today"))
+# ================== ABOUT — First‑time friendly, action‑first, 4 safety cards, EN/AR ==================
 
+def render_about_page(lang: str = "English"):
+    is_ar = (lang == "Arabic")
 
-st.markdown("""<div class='step' style='margin-bottom:10px'>
-<b>""" + T_("First time?", "أول مرة؟") + """</b> """ + T_(
-"Register in <i>Settings</i> so we can save your baseline, city, and Journal entries.",
-"سجّل من <i>الإعدادات</i> لنحفظ خط الأساس والمدينة ومدخلات اليوميات."
-) + "</div>" , unsafe_allow_html=True)
+    def T_(en: str, ar: str) -> str:
+        return ar if is_ar else en
 
+    # --- Scoped styles (RTL aware + safety cards + pills) ---
+    st.markdown(
+        (
+            """
+            <style>
+              .about-wrap{direction:rtl;text-align:right}
+              .muted{opacity:.9}
+              .step{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px}
+              .hero{background:linear-gradient(90deg, rgba(34,197,94,.10), rgba(14,165,233,.10))}
+              .pill{display:inline-block;padding:.1rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-inline:.35rem 0}
+              .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+              @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+              .card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px}
+              .safe{background:#ecfdf5;border-left:8px solid #22c55e}
+              .caution{background:#fffbeb;border-left:8px solid #eab308}
+              .high{background:#fff7ed;border-left:8px solid #f97316}
+              .danger{background:#fef2f2;border-left:8px solid #ef4444}
+            </style>
+            """
+            if is_ar
+            else
+            """
+            <style>
+              .muted{opacity:.9}
+              .step{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px}
+              .hero{background:linear-gradient(90deg, rgba(34,197,94,.10), rgba(14,165,233,.10))}
+              .pill{display:inline-block;padding:.1rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-right:.35rem}
+              .grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+              @media (max-width:900px){.grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+              .card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px}
+              .safe{background:#ecfdf5;border-left:8px solid #22c55e}
+              .caution{background:#fffbeb;border-left:8px solid #eab308}
+              .high{background:#fff7ed;border-left:8px solid #f97316}
+              .danger{background:#fef2f2;border-left:8px solid #ef4444}
+            </style>
+            """
+        ),
+        unsafe_allow_html=True,
+    )
 
-total = 6
-done = sum([
-1 if registered else 0,
-1 if (has_baseline and has_city) else 0,
-1 if (sensors_paired or tried_practice) else 0,
-1 if plan_today else 0,
-1 if note_today else 0,
-1, # AI always available
-])
-try:
-st.progress(done/total)
-except Exception:
-pass
+    st.markdown('<div class="about-wrap">' if is_ar else '<div>', unsafe_allow_html=True)
 
+    # ---------- HERO ----------
+    st.markdown(
+        f"""
+        <div class=\"step hero\" style=\"margin-bottom:10px\">
+          <h2 style=\"margin:0\">{'👋 أهلاً بك في' if is_ar else '👋 Welcome to'} <b>Tanzim MS</b></h2>
+          <p class=\"muted\" style=\"margin:.25rem 0 0 0\">{T_(
+            'A Gulf‑aware companion for MS. It checks your core & peripheral <b>temperatures</b> in real time against your personal baseline and the actual local weather, then turns that into simple, early actions.',
+            'رفيق واعٍ بالخليج للتصلّب المتعدّد. يفحص <b>حرارتك الأساسية والطرفية</b> لحظيًا مقابل خطّك الأساسي والطقس المحلي الفعلي، ثم يحوّلها إلى خطوات مبكرة وبسيطة.'
+          )}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-def status_line(ok: bool, where_en: str, where_ar: str):
-badge = ("✅ " + T_("Complete", "مكتمل")) if ok else ("⭕️ " + T_("Needed", "مطلوب"))
-where = T_(where_en, where_ar)
-st.markdown(f"{badge} <span class='pill'>{where}</span>", unsafe_allow_html=True)
+    # ---------- TABS ----------
+    t1, t2 = st.tabs([
+        T_("Safety levels & overview", "مستويات الأمان ونبذة") ,
+        T_("Start here (first‑time)", "ابدأ من هنا (أول مرة)")
+    ])
 
+    # ---- TAB 1: Safety levels first + what the app does ----
+    with t1:
+        st.markdown("### " + T_("Safety levels you’ll see", "مستويات الأمان التي ستراها"))
+        st.caption(T_(
+            "We combine your Δ vs baseline with feels‑like & humidity. Guidance only — not medical advice.",
+            "نجمع الفرق عن خط الأساس مع المحسوسة والرطوبة. إرشاد عام — وليست نصيحة طبية."
+        ))
+        st.markdown("<div class='grid'>", unsafe_allow_html=True)
+        st.markdown(T_(
+            """
+            <div class='card safe'><b>🟢 Safe</b><br>Near baseline; weather OK.<br><i>Keep normal pace; hydrate.</i></div>
+            <div class='card caution'><b>🟡 Caution</b><br>Small rise or warm/humid.<br><i>Slow down; shade/AC; sip water.</i></div>
+            <div class='card high'><b>🟠 High</b><br>Bigger rise or sticky humidity.<br><i>Pre‑cool; shorten outing; rest.</i></div>
+            <div class='card danger'><b>🔴 Danger</b><br>Big rise or symptoms.<br><i>Go indoors; active cooling; rest. If severe/unusual, seek care.</i></div>
+            """,
+            """
+            <div class='card safe'><b>🟢 آمن</b><br>قريب من الأساس وطقس مريح.<br><i>استمر كالمعتاد؛ اشرب ماءً.</i></div>
+            <div class='card caution'><b>🟡 انتباه</b><br>ارتفاع طفيف أو طقس دافئ/رطب.<br><i>خفّف السرعة؛ ظل/مكيّف؛ ارتشف ماءً.</i></div>
+            <div class='card high'><b>🟠 مرتفع</b><br>ارتفاع أكبر أو رطوبة لزجة.<br><i>تبريد مسبق؛ قصّر الخروج؛ استرح.</i></div>
+            <div class='card danger'><b>🔴 خطر</b><br>ارتفاع كبير أو أعراض.<br><i>ادخل لمكان مكيّف؛ تبريد نشط؛ استرح. عند الشدة/الغرابة اطلب رعاية.</i></div>
+            """
+        ), unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
-with st.container(border=True):
-st.markdown("#### 1) " + T_("Register", "إنشاء حساب"))
-st.caption(T_("Enables saving your data.", "يُفعّل حفظ بياناتك."))
-status_line(registered, "Go to: Settings → Register", "اذهب إلى: الإعدادات ← إنشاء حساب")
+        st.markdown("### " + T_("What you can do — action first", "ماذا تفعل الآن — بلغة الفعل"))
+        st.markdown(T_(
+            """
+- **Monitor — Live:** Check your **core & peripheral temperatures** in real time vs **baseline**; see **feels‑like** & **humidity**; get **clear alerts**.
+- **Monitor — Learn & Practice:** **Simulate** heat/humidity/activity to see how **alerts & tips** change — **doesn’t save** to Journal.
+- **Planner:** **Plan your day** by picking the **safest 2‑hour windows** and **save your plan to Journal**.
+- **Journal:** Review your **auto alerts**, manual **alerts**, **saved plans**, and **notes** in one place.
+- **AI Companion:** **Ask** short questions (AR/EN) for practical cooling and timing advice.
+            """,
+            """
+- **المراقبة — مباشر:** افحص **الأساسية والطرفية** لحظيًا مقابل **خط الأساس**؛ شاهد **المحسوسة** و**الرطوبة**؛ واحصل على **تنبيهات واضحة**.
+- **المراقبة — تعلّم وتدرّب:** **حاكِ** الحرارة/الرطوبة/النشاط لترى تغيّر **التنبيهات والنصائح** — **لا يُحفَظ** في اليوميات.
+- **المخطّط:** **خطّط يومك** باختيار **أكثر فترات ساعتين أمانًا** ثم **احفظ الخطة في اليوميات**.
+- **اليوميّات:** راجع **التنبيهات التلقائية** و**التنبيهات اليدوية** و**الخطط المحفوظة** و**ملاحظاتك** معًا.
+- **المرافق الذكي:** **اسأل** (عربي/إنجليزي) لنصائح عملية للتبريد وتوقيت الأنشطة.
+            """
+        ))
 
+        st.markdown("### " + T_("Numbers you’ll see", "ماذا تعني الأرقام"))
+        st.markdown(T_(
+            """
+- **Core temperature:** Internal body temperature (most relevant for heat stress).
+- **Peripheral temperature:** Skin temperature — changes quickly with environment.
+- **Baseline:** Your usual temperature — what Tanzim MS compares against.
+- **Feels‑like & Humidity:** Weather factors that can raise risk.
+- **Δ vs baseline:** How far you are from your baseline; alerts use this.
+            """,
+            """
+- **الأساسية:** حرارة الجسم الداخلية (الأهم للإجهاد الحراري).
+- **الطرفية:** حرارة الجلد — تتغير سريعًا مع البيئة.
+- **خط الأساس:** حرارتك المعتادة — يقارن التطبيق بها.
+- **المحسوسة والرطوبة:** عوامل الطقس التي قد ترفع الخطر.
+- **Δ مقابل الأساس:** مقدار ابتعادك عن الأساس؛ تعتمد عليه التنبيهات.
+            """
+        ))
 
-with st.container(border=True):
-st.markdown("#### 2) " + T_("Set baseline & home city", "اضبط خط الأساس والمدينة"))
-st.caption(T_("Baseline = your usual temperature. City powers local weather.", "خط الأساس = حرارتك المعتادة. المدينة تزودنا بالطقس المحلي."))
-status_line(has_baseline and has_city, "Settings → Baseline & City", "الإعدادات ← خط الأساس والمدينة")
+    # ---- TAB 2: First‑time roadmap (no dummy buttons) ----
+    with t2:
+        registered = bool(st.session_state.get("is_registered"))
+        # accept either baseline_c or baseline as set
+        has_baseline = (st.session_state.get("baseline_c") is not None) or (st.session_state.get("baseline") is not None)
+        has_city = bool(st.session_state.get("home_city") or st.session_state.get("current_city"))
+        sensors_paired = bool(st.session_state.get("sensors_paired"))
+        tried_practice = bool(st.session_state.get("learn_visited") or st.session_state.get("practice_visited"))
+        plan_today = bool(st.session_state.get("plan_saved_today"))
+        note_today = bool(st.session_state.get("journal_entry_today"))
 
+        st.markdown("""<div class='step' style='margin-bottom:10px'>
+        <b>""" + T_("First time?", "أول مرة؟") + """</b> """ + T_(
+            "Register in <i>Settings</i> so we can save your baseline, city, and Journal entries.",
+            "سجّل من <i>الإعدادات</i> لنحفظ خط الأساس والمدينة ومدخلات اليوميات."
+        ) + "</div>" , unsafe_allow_html=True)
 
-with st.container(border=True):
-st.markdown("#### 3) " + T_("Choose how to try Monitor", "اختر كيف تجرب المراقبة"))
-st.caption(T_(
-"Live (saves to Journal) with sensors or manual entry, OR Learn & Practice (simulation; doesn’t save).",
-"مباشر (يُحفَظ في اليوميات) عبر حساسات أو إدخال يدوي، أو تعلّم وتدرّب (محاكاة لا تُحفَظ)."
-))
-status_line(sensors_paired or tried_practice, "Live or Learn & Practice", "مباشر أو تعلّم وتدرّب")
+        total = 6
+        done = sum([
+            1 if registered else 0,
+            1 if (has_baseline and has_city) else 0,
+            1 if (sensors_paired or tried_practice) else 0,
+            1 if plan_today else 0,
+            1 if note_today else 0,
+            1,  # AI always available
+        ])
+        try:
+            st.progress(done/total)
+        except Exception:
+            pass
 
+        def status_line(ok: bool, where_en: str, where_ar: str):
+            badge = ("✅ " + T_("Complete", "مكتمل")) if ok else ("⭕️ " + T_("Needed", "مطلوب"))
+            where = T_(where_en, where_ar)
+            st.markdown(f"{badge} <span class='pill'>{where}</span>", unsafe_allow_html=True)
 
-with st.container(border=True):
-st.markdown("#### 4) " + T_("Plan your day (Planner)", "خطّط يومك (المخطّط)"))
-st.caption(T_("Pick a 2‑hour safe window and <b>save your plan to Journal</b>.", "اختر فترة ساعتين آمنة ثم <b>احفظ الخطة في اليوميات</b>."), unsafe_allow_html=True)
-status_line(plan_today, "Planner: Save plan to Journal", "المخطّط: احفظ الخطة في اليوميات")
+        with st.container(border=True):
+            st.markdown("#### 1) " + T_("Register", "إنشاء حساب"))
+            st.caption(T_("Enables saving your data.", "يُفعّل حفظ بياناتك."))
+            status_line(registered, "Go to: Settings → Register", "اذهب إلى: الإعدادات ← إنشاء حساب")
 
+        with st.container(border=True):
+            st.markdown("#### 2) " + T_("Set baseline & home city", "اضبط خط الأساس والمدينة"))
+            st.caption(T_("Baseline = your usual temperature. City powers local weather.", "خط الأساس = حرارتك المعتادة. المدينة تزودنا بالطقس المحلي."))
+            status_line(has_baseline and has_city, "Settings → Baseline & City", "الإعدادات ← خط الأساس والمدينة")
 
-with st.container(border=True):
-st.markdown("#### 5) " + T_("Open Journal", "افتح اليوميات"))
-st.caption(T_(
-"See your <b>auto alerts</b>, manual alerts, saved plans, and notes together.",
-"شاهد <b>التنبيهات التلقائية</b> والتنبيهات اليدوية والخطط والملاحظات معًا."
-), unsafe_allow_html=True)
-status_line(note_today, "Add a quick note today", "أضف ملاحظة سريعة اليوم")
+        with st.container(border=True):
+            st.markdown("#### 3) " + T_("Choose how to try Monitor", "اختر كيف تجرب المراقبة"))
+            st.caption(T_(
+                "Live (saves to Journal) with sensors or manual entry, OR Learn & Practice (simulation; doesn’t save).",
+                "مباشر (يُحفَظ في اليوميات) عبر حساسات أو إدخال يدوي، أو تعلّم وتدرّب (محاكاة لا تُحفَظ)."
+            ))
+            status_line(sensors_paired or tried_practice, "Live or Learn & Practice", "مباشر أو تعلّم وتدرّب")
 
+        with st.container(border=True):
+            st.markdown("#### 4) " + T_("Plan your day (Planner)", "خطّط يومك (المخطّط)"))
+            st.caption(T_("Pick a 2‑hour safe window and <b>save your plan to Journal</b>.", "اختر فترة ساعتين آمنة ثم <b>احفظ الخطة في اليوميات</b>."), unsafe_allow_html=True)
+            status_line(plan_today, "Planner: Save plan to Journal", "المخطّط: احفظ الخطة في اليوميات")
 
-with st.container(border=True):
-st.markdown("#### 6) 🤖 " + T_("Ask the AI", "اسأل المرافق الذكي"))
-st.caption(T_("Ask for safe windows and pre‑cool tips (Arabic or English).", "اسأل عن فترات آمنة ونصائح التبريد (عربي أو إنجليزي)."))
-status_line(True, "Anytime: AI Companion", "في أي وقت: المرافق الذكي")
+        with st.container(border=True):
+            st.markdown("#### 5) " + T_("Open Journal", "افتح اليوميات"))
+            st.caption(T_(
+                "See your <b>auto alerts</b>, manual alerts, saved plans, and notes together.",
+                "شاهد <b>التنبيهات التلقائية</b> والتنبيهات اليدوية والخطط والملاحظات معًا."
+            ), unsafe_allow_html=True)
+            status_line(note_today, "Add a quick note today", "أضف ملاحظة سريعة اليوم")
 
+        with st.container(border=True):
+            st.markdown("#### 6) 🤖 " + T_("Ask the AI", "اسأل المرافق الذكي"))
+            st.caption(T_("Ask for safe windows and pre‑cool tips (Arabic or English).", "اسأل عن فترات آمنة ونصائح التبريد (عربي أو إنجليزي)."))
+            status_line(True, "Anytime: AI Companion", "في أي وقت: المرافق الذكي")
 
-st.markdown("---")
-st.markdown("### " + T_("Privacy & safety", "الخصوصية والسلامة"))
-st.write(T_(
-"Your data stays on this device/database for your care. Tanzim MS gives general wellness guidance only. For severe or unusual symptoms, seek urgent medical care.",
-"تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يوفر تنظيم إم إس إرشادًا عامًا للصحة فقط. عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
-))
+        st.markdown("---")
+        st.markdown("### " + T_("Privacy & safety", "الخصوصية والسلامة"))
+        st.write(T_(
+            "Your data stays on this device/database for your care. Tanzim MS gives general wellness guidance only. For severe or unusual symptoms, seek urgent medical care.",
+            "تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يوفر تنظيم إم إس إرشادًا عامًا للصحة فقط. عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
+        ))
 
-
-st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 
