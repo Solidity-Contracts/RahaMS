@@ -1161,9 +1161,9 @@ def render_about_page(lang: str = "English"):
             _line(True, "Monitor → Learn & Practice", "المراقبة ← تعلّم وتدرّب")
 
         with st.container(border=True):
-            st.markdown("**7) " + T_("(Optional) Pair sensors — or use manual live", "(اختياري) اربط الحساسات — أو استخدم الإدخال اليدوي") + "**")
-            st.caption(T_("You can use the app fully without hardware, using Live + manual entry.",
-                          "يمكنك استخدام التطبيق كاملًا دون عتاد عبر «مباشر» + إدخال يدوي."))
+            st.markdown("**7) " + T_("(Optional) Pair sensors", "(اختياري)اربط الحساسات") + "**")
+            st.caption(T_("You can use the app fully without hardware, using Learn & Practice.",
+                          "يمكنك استخدام التطبيق كاملًا دون عتاد عبر تعلّم وتدرّب."))
             _line(bool(st.session_state.get("sensors_paired")) or True, T_("Optional step","خطوة اختيارية"), T_("اختيارية","اختيارية"))
 
         st.markdown("---")
@@ -1185,9 +1185,9 @@ def render_about_page(lang: str = "English"):
         with st.container(border=True):
             st.markdown("**☀️ " + T_("Heat Safety Monitor", "مراقبة السلامة الحرارية") + "**")
             st.markdown(T_(
-                "- **📡 Live Sensor Data:** Real readings (or manual). Saves alerts to **Journal**; drives recommendations.\n"
+                "- **📡 Live Sensor Data:** Real readings. Saves alerts to **Journal**; drives recommendations.\n"
                 "- **🔬 Learn & Practice:** Simulate Core/Baseline/Feels‑like/Humidity to learn how alerts react — **does not save**.",
-                "- **📡 بيانات مباشرة:** قراءات حقيقية (أو إدخال يدوي). تحفظ التنبيهات في **اليوميات** وتؤثر على الإرشادات.\n"
+                "- **📡 بيانات مباشرة:** قراءات حقيقية. تحفظ التنبيهات في **اليوميات** وتؤثر على الإرشادات.\n"
                 "- **🔬 تعلّم وتدرّب:** حاكِ الأساسية/الأساس/المحسوسة/الرطوبة لفهم التنبيهات — **لا يُحفَظ**."
             ))
 
