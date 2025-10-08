@@ -899,77 +899,182 @@ def ai_chat(prompt_text: str, lang: str):
     # Nothing worked
     return None, "ai_unavailable"
 
-# ================== ABOUT PAGE ==================
+# ================== ABOUT (Two tabs, clear roadmap, AR/EN, RTL-aware, NO cross-page buttons) ==================
+
 def render_about_page(lang: str = "English"):
     is_ar = (lang == "Arabic")
-    def T_(en, ar): return ar if is_ar else en
 
-    st.markdown(f"""
-    <div style="padding:10px 12px;border:1px solid rgba(0,0,0,.06);border-radius:12px;background:
-      linear-gradient(90deg, rgba(34,197,94,.10), rgba(14,165,233,.10));">
-      <h2 style="margin:0">{'👋 أهلاً بك في' if is_ar else '👋 Welcome to'} <b>Tanzim MS</b></h2>
-      <p style="margin:.2rem 0 0 0">
-        {T_(
-          "A Gulf‑aware companion that helps people with MS stay safer in the heat — by matching your readings to your personal baseline and actual local weather.",
-          "رفيق مُصمَّم للخليج يساعد أشخاص التصلب المتعدد على الأمان في الحر — بمقارنة قراءاتك بخطّك الأساسي وطقسك المحلي الفعلي."
-        )}
-      </p>
-    </div>
-    """, unsafe_allow_html=True)
+    def T_(en: str, ar: str) -> str:
+        return ar if is_ar else en
 
-    colA, colB = st.columns([1,1])
-    with colA:
-        st.markdown("### " + T_("Why heat matters in MS", "لماذا تؤثر الحرارة في التصلب المتعدد"))
-        st.markdown(T_(
-            "- Even a ~0.5°C rise can worsen symptoms (Uhthoff’s phenomenon).\n"
-            "- Humidity in the Gulf makes heat feel heavier and recovery slower.\n"
-            "- Small, early actions (pre‑cool, shade/AC, pacing) prevent bad days.",
-            "- حتى زيادة ≈ 0.5°م قد تُفاقم الأعراض (ظاهرة أوتهوف).\n"
-            "- رطوبة الخليج تجعل الحر أثقل والتعافي أبطأ.\n"
-            "- خطوات صغيرة مبكرة (تبريد مسبق، ظل/مكيّف، تنظيم الجهد) تمنع سوء الأيام."
+    # --- Lightweight RTL tuning just for this page ---
+    st.markdown(
+        (
+            "<style> .about-wrap{direction:rtl;text-align:right} .about-cards h3{margin-top:.6rem} .step-card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px;background:linear-gradient(90deg, rgba(34,197,94,.07), rgba(14,165,233,.07))} .muted{opacity:.85} .road{font-size:14px;opacity:.9} .ok{color:#16a34a} .todo{color:#b45309} .opt{color:#0ea5e9} .danger{color:#dc2626} .pill{display:inline-block;padding:.15rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-right:.35rem}</style>"
+            if is_ar
+            else "<style> .about-cards h3{margin-top:.6rem} .step-card{border:1px solid rgba(0,0,0,.08);border-radius:12px;padding:12px;background:linear-gradient(90deg, rgba(34,197,94,.07), rgba(14,165,233,.07))} .muted{opacity:.85} .road{font-size:14px;opacity:.9} .ok{color:#16a34a} .todo{color:#b45309} .opt{color:#0ea5e9} .danger{color:#dc2626} .pill{display:inline-block;padding:.15rem .55rem;border:1px solid rgba(0,0,0,.12);border-radius:999px;background:rgba(0,0,0,.03);font-size:.85rem;margin-right:.35rem}</style>"
+        ),
+        unsafe_allow_html=True,
+    )
+
+    wrap_open = '<div class="about-wrap">' if is_ar else '<div>'
+    st.markdown(wrap_open, unsafe_allow_html=True)
+
+    # ---------- HERO ----------
+    st.markdown(
+        f"""
+        <div class=\"step-card\" style=\"margin-bottom:10px\">
+          <h2 style=\"margin:0\">{'👋 أهلاً بك في' if is_ar else '👋 Welcome to'} <b>Tanzim MS</b></h2>
+          <p class=\"muted\" style=\"margin:.25rem 0 0 0\">{T_(
+            'A bilingual (Arabic‑first) heat‑safety companion for people with MS in the Gulf. It matches your readings to your personal baseline and real local weather to give early, simple actions.',
+            'رفيق ثنائي اللغة (الأولوية للعربية) للأمان الحراري لمرضى التصلّب المتعدّد في الخليج. يقارن قراءاتك بخطّك الأساسي وبالطقس المحلي ليعطي خطوات مبكرة وبسيطة.'
+          )}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    # ---------- TABS ----------
+    t1, t2 = st.tabs([
+        T_("What is Tanzim MS?", "ما هو تنظيم إم إس؟"),
+        T_("Start here (first‑time)", "البدء لأول مرة")
+    ])
+
+    # ---- TAB 1: What is Tanzim MS? ----
+    with t1:
+        c1, c2 = st.columns(2)
+        with c1:
+            st.markdown("### " + T_("Why heat matters in MS", "لماذا تؤثر الحرارة في التصلّب المتعدد"))
+            st.markdown(T_(
+                "- Even a ~0.5°C rise can temporarily worsen symptoms (Uhthoff’s phenomenon).
+"
+                "- Gulf humidity makes heat feel heavier and recovery slower.
+"
+                "- Early, small actions (pre‑cooling, shade/AC, pacing) prevent bad days.",
+                "- حتى زيادة ≈ 0.5°م قد تُفاقِم الأعراض مؤقتًا (ظاهرة أوتهوف).
+"
+                "- رطوبة الخليج تجعل الحر أثقل ويبطؤ التعافي.
+"
+                "- الخطوات المبكرة الصغيرة (تبريد مسبق، ظل/مكيّف، تنظيم الجهد) تمنع سوء الأيام."
+            ))
+        with c2:
+            st.markdown("### " + T_("What you can do with it", "ماذا يقدّم لك التطبيق"))
+            st.markdown(T_(
+                "- **Monitor**: Core & peripheral vs baseline + feels‑like & humidity with clear alerts.
+"
+                "- **Planner**: Safest 2‑hour windows for your city, updated through the day.
+"
+                "- **Journal**: One quick daily note to spot patterns.
+"
+                "- **AI Companion**: Short, bilingual guidance aware of your city and logs.",
+                "- **المراقبة**: الأساسية والطرفية مقابل خطّك الأساسي + المحسوس والرطوبة مع تنبيهات واضحة.
+"
+                "- **المخطّط**: أفضل فترات آمنة لساعتين في مدينتك، وتتحدّث خلال اليوم.
+"
+                "- **اليوميّات**: ملاحظة يومية سريعة لرصد الأنماط.
+"
+                "- **المرافق الذكي**: إرشاد قصير ثنائي اللغة واعٍ بمدينتك وسجّلك."
+            ))
+
+        st.markdown("---")
+        st.markdown("#### " + T_("Roadmap of the app", "خارطة التطبيق"))
+        road = (
+            "🧾 → ⚙️ → 📊 → 🧭 → 📒 → 🤖" if not is_ar else "🤖 ← 📒 ← 🧭 ← 📊 ← ⚙️ ← 🧾"
+        )
+        st.markdown(f"<div class='road'>{T_('Profile → Settings → Monitor → Planner → Journal → AI', 'الملف ← الإعدادات ← المراقبة ← المخطّط ← اليوميّات ← المرافق')}</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='road'>{road}</div>", unsafe_allow_html=True)
+
+    # ---- TAB 2: Start here (first‑time) ----
+    with t2:
+        # Read host app state if available (non-blocking if absent)
+        registered = bool(st.session_state.get("user_profile") or st.session_state.get("is_registered"))
+        has_baseline = st.session_state.get("baseline_c") is not None
+        has_city = bool(st.session_state.get("home_city"))
+        sensors_paired = bool(st.session_state.get("sensors_paired"))
+        tried_demo = bool(st.session_state.get("demo_visited"))
+
+        # Completion meter (0..5)
+        total = 5
+        done_count = sum([
+            1 if registered else 0,
+            1 if (has_baseline and has_city) else 0,
+            1 if (sensors_paired or tried_demo) else 0,
+            1 if (has_baseline and has_city) else 0,  # ready for Monitor/Planner/Journal
+            1  # AI is always available
+        ])
+        st.markdown("### " + T_("New user checklist", "قائمة البدء للمستخدم الجديد"))
+        try:
+            st.progress(done_count/total)
+        except Exception:
+            pass
+
+        # Helper to render status text and non-clickable "where" pills
+        def status_line(ready: bool, where_en: str, where_ar: str):
+            status = ("✅ " + T_("Complete", "مكتمل")) if ready else ("⭕️ " + T_("Needed", "مطلوب"))
+            where = T_(where_en, where_ar)
+            st.markdown(f"{status}  <span class='pill'>{where}</span>", unsafe_allow_html=True)
+
+        # STEP 1 — Registration
+        with st.container(border=True):
+            st.markdown("#### 1) " + T_("Create your profile", "أنشئ ملفك الشخصي"))
+            st.caption(T_(
+                "Tell the app who you are so it can store your settings and logs.",
+                "عرّف التطبيق عليك ليحفظ إعداداتك وسجلّك."
+            ))
+            status_line(registered, "Go to: Settings → Profile", "اذهب إلى: الإعدادات ← الملف الشخصي")
+
+        # STEP 2 — Baseline & City
+        with st.container(border=True):
+            st.markdown("#### 2) " + T_("Set baseline & home city", "اضبط الخطّ الأساسي والمدينة"))
+            st.caption(T_(
+                "Baseline = your usual temperature. The app compares against it; Home City drives weather.",
+                "الخطّ الأساسي = حرارتك المعتادة. يقارن التطبيق بها؛ والمدينة تحدّد الطقس."
+            ))
+            status_line(has_baseline and has_city, "Go to: Settings → Baseline & City", "اذهب إلى: الإعدادات ← الأساس والمدينة")
+
+        # STEP 3 — Sensors OR Demo
+        with st.container(border=True):
+            st.markdown("#### 3) " + T_("Connect sensors (optional) or try Demo", "وصّل الحساسات (اختياري) أو جرّب العرض"))
+            st.caption(T_(
+                "You can pair MLX90614 and MAX30205 via ESP8266 — or just use Demo to learn alerts first.",
+                "يمكنك ربط MLX90614 وMAX30205 عبر ESP8266 — أو استخدم وضع العرض لتتعرّف على التنبيهات أولًا."
+            ))
+            status_line(sensors_paired or tried_demo, "Where: Hardware page or Demo tab", "أين: صفحة العتاد أو تبويب العرض")
+
+        # STEP 4 — See your Monitor
+        with st.container(border=True):
+            st.markdown("#### 4) " + T_("Open Monitor / Planner / Journal", "افتح المراقبة / المخطّط / اليوميّات"))
+            st.caption(T_(
+                "Once baseline & city are set, these views become meaningful.",
+                "بعد ضبط الأساس والمدينة تصبح هذه الصفحات ذات معنى."
+            ))
+            ready = has_baseline and has_city
+            status_line(ready, "Then: Monitor / Planner / Journal", "ثم: المراقبة / المخطط / اليوميات")
+
+        # STEP 5 — Ask the AI
+        with st.container(border=True):
+            st.markdown("#### 5) 🤖 " + T_("Ask the AI Companion", "اسأل المرافق الذكي"))
+            st.caption(T_(
+                "Ask for your safest window today, or how to pre‑cool before going out.",
+                "اسأل عن أفضل فترة آمنة اليوم، أو كيف تبرد مسبقًا قبل الخروج."
+            ))
+            status_line(True, "Anytime: AI Companion page", "في أي وقت: صفحة المرافق الذكي")
+
+        st.caption("
+" + T_(
+            "Legend — ✅ Complete · ⭕️ Needed · Sensors are optional; Demo works without hardware.",
+            "الدليل — ✅ مكتمل · ⭕️ مطلوب · الحساسات اختيارية؛ يعمل العرض دون عتاد."
         ))
-    with colB:
-        st.markdown("### " + T_("Start in 60 seconds", "ابدأ خلال 60 ثانية"))
-        st.markdown(T_(
-            "1. Open **Settings** → set *Baseline* and **Home City**.\n"
-            "2. Visit **Monitor** → see core/peripheral vs feels‑like/humidity.\n"
-            "3. Log one **Daily** entry in **Journal**.\n"
-            "4. Ask the **AI Companion** for a safe window today.",
-            "1. افتح **الإعدادات** → اضبط *الأساس* و**المدينة الأساسية**.\n"
-            "2. زر **المراقبة** → شاهد الأساسية/الطرفية مقابل المحسوس/الرطوبة.\n"
-            "3. سجّل **مدخلة يومية** في **اليوميات**.\n"
-            "4. اسأل **المساعد** عن نافذة آمنة اليوم."
+
+        st.markdown("---")
+        # Privacy & Safety
+        st.markdown("### " + T_("Privacy & safety", "الخصوصية والسلامة"))
+        st.write(T_(
+            "Your data stays on this device/database for your care. Tanzim MS gives general wellness guidance only. For severe or unusual symptoms, seek urgent medical care.",
+            "تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يوفّر تنظيم إم إس توجيهات عامة للصحّة فقط. عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
         ))
 
-    st.markdown("---")
-    st.markdown("### " + T_("What’s inside", "ماذا ستجد"))
-    c1, c2, c3, c4 = st.columns(4)
-    with c1:
-        st.markdown("**📊 " + T_("Monitor", "المراقبة") + "**")
-        st.caption(T_("Live temps vs baseline + alerts, written simply.", "قراءات مباشرة مقابل الأساس + تنبيهات، بشرح مبسط."))
-        #if st.button(T_("Open Monitor", "افتح المراقبة"), key="go_monitor"): 
-            #st.session_state["nav_radio"] = "monitor"; st.session_state["current_page"] = "monitor"; st.rerun()
-    with c2:
-        st.markdown("**🧭 " + T_("Planner", "المخطط") + "**")
-        st.caption(T_("Safest 2‑hour windows for your city; instant tips.", "أفضل فترات لساعتين في مدينتك؛ نصائح فورية."))
-        #if st.button(T_("Open Planner", "افتح المخطط"), key="go_planner"): 
-            #st.session_state["nav_radio"] = "planner"; st.session_state["current_page"] = "planner"; st.rerun()
-    with c3:
-        st.markdown("**📒 " + T_("Journal", "اليوميات") + "**")
-        st.caption(T_("Quick daily logs; export to share with your clinician.", "تسجيلات يومية سريعة؛ تصدير للمشاركة مع طبيبك."))
-        #if st.button(T_("Open Journal", "افتح اليوميات"), key="go_journal"): 
-            #st.session_state["nav_radio"] = "journal"; st.session_state["current_page"] = "journal"; st.rerun()
-    with c4:
-        st.markdown("**🤖 " + T_("AI Companion", "المرافق الذكي") + "**")
-        st.caption(T_("Personal, bilingual guidance; aware of your city & logs.", "إرشاد شخصي ثنائي اللغة؛ واعٍ بمدينتك وسجلّك."))
-        #if st.button(T_("Open Companion", "افتح المساعد"), key="go_assistant"): 
-            #st.session_state["nav_radio"] = "assistant"; st.session_state["current_page"] = "assistant"; st.rerun()
-
-    st.markdown("---")
-    st.caption(T_(
-        "Privacy: Your data stays on this device/database for your care. This app gives general wellness guidance — for severe or unusual symptoms, seek urgent medical care.",
-        "الخصوصية: تبقى بياناتك على هذا الجهاز/قاعدة البيانات لرعايتك. يقدم التطبيق إرشادًا عامًا — عند أعراض شديدة أو غير معتادة، اطلب رعاية طبية فورية."
-    ))
+    st.markdown("</div>", unsafe_allow_html=True)
 
 # ================== PLANNER ==================
 def best_windows_from_forecast(forecast, window_hours=2, top_k=8, max_feels_like=35.0, max_humidity=65, avoid_hours=(10,16)):
