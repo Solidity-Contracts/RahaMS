@@ -1040,7 +1040,7 @@ def render_about_page(lang: str = "English"):
       <div><b>1)</b> Create an account <span class="pill">Sidebar → Login / Register</span></div>
       <div><b>2)</b> Set your Baseline & Home City <span class="pill">Settings → Baseline & City</span></div>
       <div><b>3)</b> Try alerts safely <span class="pill">Monitor → Learn & Practice</span></div>
-      <div><b>4)</b> Use Live day-to-day; add a quick Journal note daily</div>
+      <div><b>4)</b> Add a quick note in <span class="pill">Journal</span></div>
     </div>
     """,
                 """
@@ -1048,7 +1048,7 @@ def render_about_page(lang: str = "English"):
       <div><b>1)</b> أنشئ حسابًا <span class="pill">الشريط الجانبي ← تسجيل الدخول/إنشاء حساب</span></div>
       <div><b>2)</b> اضبط خطّ الأساس والمدينة <span class="pill">الإعدادات ← الأساس والمدينة</span></div>
       <div><b>3)</b> تعرّف على التنبيهات بأمان <span class="pill">المراقبة ← تعلّم وتدرّب</span></div>
-      <div><b>4)</b> استخدم «مباشر» يوميًا؛ وأضف ملاحظة سريعة في اليوميات</div>
+      <div><b>4)</b> أضف ملاحظة سريعة في<span class="pill"> اليوميات</span></div>
     </div>
     """
             ),
