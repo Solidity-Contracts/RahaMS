@@ -300,7 +300,7 @@ st.markdown(ACCESSIBLE_CSS, unsafe_allow_html=True)
 # ================== DB ==================
 @st.cache_resource
 def get_conn():
-    conn = sqlite3.connect("raha_ms.db", check_same_thread=False)
+    conn = sqlite3.connect("tanzim_ms.db", check_same_thread=False)
     conn.execute("PRAGMA foreign_keys = ON;")
     return conn
 
@@ -2550,7 +2550,7 @@ def render_exports():
     blob, mime = build_export_excel_or_zip(st.session_state["user"])
     st.download_button(label=T["export_excel"],
         data=blob,
-        file_name=f"raha_ms_{st.session_state['user']}.xlsx" if mime.endswith("sheet") else f"raha_ms_{st.session_state['user']}.zip",
+        file_name=f"tanzim_ms_{st.session_state['user']}.xlsx" if mime.endswith("sheet") else f"tanzim_ms_{st.session_state['user']}.zip",
         mime=mime, use_container_width=True)
     st.markdown("— or download raw CSVs —" if app_language=="English" else "— أو حمّل ملفات CSV خام —")
     st.download_button("Temps.csv", data=df_t.to_csv(index=False).encode("utf-8"), file_name="Temps.csv", mime="text/csv", use_container_width=True)
