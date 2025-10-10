@@ -820,7 +820,13 @@ def get_fallback_response(prompt, lang, journal_context="", weather_context=""):
     return base
 
 def _system_prompt(lang: str, username: str | None, prompt_text: str):
-    """Builds a complete system prompt with prefs, journal, weather, and learned actions."""
+    """
+    Build a complete system prompt with prefs, journal, weather, and learned actions.
+    Patch adds:
+    - explicit instruction to name real places with time windows when asked
+    - hydration wording ('glasses', never 'g')
+    - a tiny Dubai cheat‑sheet to reduce hallucinations
+    """
     city_code = resolve_city_for_chat(prompt_text)
     wx = get_weather_context(city_code)
     journal = get_recent_journal_context(username, max_entries=5) if username else ""
@@ -838,6 +844,15 @@ def _system_prompt(lang: str, username: str | None, prompt_text: str):
     else:
         sys += "Start with one‑line summary, then up to 5 bullets per section with brief rationale. "
 
+    # 👇 New: ensure the model gives named places + safer time windows when asked
+    sys += (
+        "If the user asks for outdoor places or says 'any specific names', "
+        "assume they want place names. Name 5–8 real parks/beaches/promenades in the inferred city, "
+        "prefer shade and facilities, give a safer time window (e.g., '06:00–08:30' or 'after 18:00'), "
+        "and one short reason each. Avoid generic clarifying questions unless safety depends on it. "
+        "When referencing hydration from logs, say 'glasses' (1 glass ≈ 240 mL), never 'g' or grams. "
+    )
+
     if journal and "No recent journal" not in journal:
         sys += f"\n\nUser's recent journal (summarized):\n{journal}"
     if wx:
@@ -847,14 +862,39 @@ def _system_prompt(lang: str, username: str | None, prompt_text: str):
         if tops:
             sys += f"\n\nPersonalized prior success:\n{tops}\nPrioritize these when appropriate."
 
+    # 👇 Tiny cheat‑sheet for Dubai to reduce hallucinations (safe, non‑exhaustive)
+    if city_code == "Dubai,AE":
+        sys += (
+            "\nLocal outdoor examples for Dubai: Kite Beach (Umm Suqeim); Al Mamzar Beach Park; "
+            "Safa Park; Zabeel Park; Creek Park; Dubai Marina Walk; Ras Al Khor Wildlife Sanctuary; "
+            "Al Qudra Lakes. "
+        )
+
     sys += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     return sys, (city_code or ""), wx
 
+
 def ai_chat(prompt_text: str, lang: str):
-    """OpenAI primary; DeepSeek fallback. Returns (text, error_str|None)."""
+    """
+    Chat orchestrator.
+    Patch adds:
+    - persist resolved city in session for follow‑ups
+    - include short chat history for context (last 8 turns)
+    """
     username = st.session_state.get("user")
-    sys, _, _ = _system_prompt(lang, username, prompt_text)
-    messages = [{"role":"system","content":sys},{"role":"user","content":prompt_text}]
+    sys, city_code, _ = _system_prompt(lang, username, prompt_text)
+
+    # 👇 Persist city so follow-up messages keep the same location context
+    if city_code:
+        st.session_state["current_city"] = city_code
+
+    # 👇 Include brief history so the model knows we're still talking about (e.g.) Dubai
+    messages = [{"role": "system", "content": sys}]
+    for m in st.session_state.get("chat_history", [])[-8:]:
+        if m.get("role") in ("user", "assistant") and m.get("content"):
+            messages.append({"role": m["role"], "content": m["content"]})
+    messages.append({"role": "user", "content": prompt_text})
+
     st.session_state["ai_provider_last"] = None
     st.session_state["ai_last_error"] = None
     st.session_state["ai_last_finish_reason"] = None
@@ -863,14 +903,14 @@ def ai_chat(prompt_text: str, lang: str):
     if OPENAI_API_KEY:
         try:
             url = "https://api.openai.com/v1/chat/completions"
-            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type":"application/json"}
-            data = {"model":"gpt-4o-mini","messages":messages,"temperature":0.7,"max_tokens":600,"stream":False}
+            headers = {"Authorization": f"Bearer {OPENAI_API_KEY}", "Content-Type": "application/json"}
+            data = {"model": "gpt-4o-mini", "messages": messages, "temperature": 0.7, "max_tokens": 600, "stream": False}
             r = requests.post(url, headers=headers, json=data, timeout=20)
             r.raise_for_status()
             j = r.json()
             text = j["choices"][0]["message"]["content"]
             st.session_state["ai_provider_last"] = "OpenAI"
-            st.session_state["ai_last_finish_reason"] = j["choices"][0].get("finish_reason","")
+            st.session_state["ai_last_finish_reason"] = j["choices"][0].get("finish_reason", "")
             return text, None
         except Exception as e:
             st.session_state["ai_last_error"] = f"OpenAI: {e}"
@@ -879,14 +919,14 @@ def ai_chat(prompt_text: str, lang: str):
     if DEEPSEEK_API_KEY:
         try:
             url = "https://api.deepseek.com/chat/completions"
-            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type":"application/json"}
-            data = {"model":"deepseek-chat","messages":messages,"temperature":0.7,"max_tokens":600,"stream":False}
+            headers = {"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"}
+            data = {"model": "deepseek-chat", "messages": messages, "temperature": 0.7, "max_tokens": 600, "stream": False}
             r = requests.post(url, headers=headers, json=data, timeout=20)
             r.raise_for_status()
             j = r.json()
             text = j["choices"][0]["message"]["content"]
             st.session_state["ai_provider_last"] = "DeepSeek"
-            st.session_state["ai_last_finish_reason"] = j["choices"][0].get("finish_reason","")
+            st.session_state["ai_last_finish_reason"] = j["choices"][0].get("finish_reason", "")
             return text, None
         except Exception as e:
             st.session_state["ai_last_error"] = f"DeepSeek: {e}"
