@@ -822,17 +822,19 @@ def get_fallback_response(prompt, lang, journal_context="", weather_context=""):
 def _system_prompt(lang: str, username: str | None, prompt_text: str):
     """
     Build a complete system prompt with prefs, journal, weather, and learned actions.
-    Patch adds:
-    - explicit instruction to name real places with time windows when asked
-    - hydration wording ('glasses', never 'g')
-    - a tiny Dubai cheat‑sheet to reduce hallucinations
+    This version:
+    - keeps the 'name 5–8 places with timings' behavior for ANY inferred city,
+    - adds GCC-wide local example seeds (per city),
+    - keeps hydration wording as 'glasses' (never 'g').
     """
+    # Infer city & contexts
     city_code = resolve_city_for_chat(prompt_text)
     wx = get_weather_context(city_code)
     journal = get_recent_journal_context(username, max_entries=5) if username else ""
     prefs = load_user_prefs(username) if username else {}
     ai_style = (prefs.get("ai_style") or "Concise")
 
+    # Core persona & structure
     sys = (
         "You are Raha MS AI Companion — a warm, empathetic assistant for people with Multiple Sclerosis in the Gulf. "
         "Be practical, culturally aware (Arabic/English; prayer/fasting context), and action‑oriented. "
@@ -844,15 +846,16 @@ def _system_prompt(lang: str, username: str | None, prompt_text: str):
     else:
         sys += "Start with one‑line summary, then up to 5 bullets per section with brief rationale. "
 
-    # 👇 New: ensure the model gives named places + safer time windows when asked
+    # 👉 Place-naming rule (works for ANY inferred city)
     sys += (
-        "If the user asks for outdoor places or says 'any specific names', "
-        "assume they want place names. Name 5–8 real parks/beaches/promenades in the inferred city, "
-        "prefer shade and facilities, give a safer time window (e.g., '06:00–08:30' or 'after 18:00'), "
-        "and one short reason each. Avoid generic clarifying questions unless safety depends on it. "
+        "If the user asks for outdoor places or says 'any specific names', assume they want place names. "
+        "Name 5–8 real parks/beaches/promenades in the inferred city, prefer shade and facilities, "
+        "give a safer time window (e.g., '06:00–08:30' or 'after 18:00') and one short reason each. "
+        "Avoid generic clarifying questions unless safety depends on it. "
         "When referencing hydration from logs, say 'glasses' (1 glass ≈ 240 mL), never 'g' or grams. "
     )
 
+    # Personal context (journal, weather, learned effective actions)
     if journal and "No recent journal" not in journal:
         sys += f"\n\nUser's recent journal (summarized):\n{journal}"
     if wx:
@@ -862,14 +865,69 @@ def _system_prompt(lang: str, username: str | None, prompt_text: str):
         if tops:
             sys += f"\n\nPersonalized prior success:\n{tops}\nPrioritize these when appropriate."
 
-    # 👇 Tiny cheat‑sheet for Dubai to reduce hallucinations (safe, non‑exhaustive)
-    if city_code == "Dubai,AE":
-        sys += (
-            "\nLocal outdoor examples for Dubai: Kite Beach (Umm Suqeim); Al Mamzar Beach Park; "
-            "Safa Park; Zabeel Park; Creek Park; Dubai Marina Walk; Ras Al Khor Wildlife Sanctuary; "
-            "Al Qudra Lakes. "
-        )
+    # 🔎 GCC-wide local example seeds (kept short; proper nouns help reduce hallucinations)
+    GCC_PLACE_EXAMPLES = {
+        "Abu Dhabi,AE": [
+            "Corniche Beach", "Saadiyat Public Beach", "Hudayriat Beach (Marsana)",
+            "Umm Al Emarat Park", "Khalifa Park", "Eastern Mangroves Promenade",
+            "Al Reem Central Park", "Yas Marina Walk"
+        ],
+        "Dubai,AE": [
+            "Kite Beach (Umm Suqeim)", "Al Mamzar Beach Park", "Safa Park", "Zabeel Park",
+            "Creek Park", "Dubai Marina Walk", "Ras Al Khor Wildlife Sanctuary", "Al Qudra Lakes"
+        ],
+        "Sharjah,AE": [
+            "Al Majaz Waterfront", "Al Noor Island", "Al Khan Beach",
+            "Sharjah Beach", "Wasit Wetland Centre", "Sharjah National Park"
+        ],
+        "Doha,QA": [
+            "MIA Park", "Doha Corniche", "Aspire Park",
+            "Katara Beach", "Oxygen Park (Education City)", "Al Bidda Park",
+            "The Pearl — Porto Arabia Promenade"
+        ],
+        "Al Rayyan,QA": [
+            "Aspire Park (Aspire Zone)", "Oxygen Park (Education City)",
+            "Umm Al Seneem Park (air‑conditioned track)"
+        ],
+        "Kuwait City,KW": [
+            "Al Shaheed Park", "Marina Crescent & Walk", "Green Island",
+            "Messila Beach", "Al Kout Beach (Fahaheel)", "Souq Sharq Seafront"
+        ],
+        "Manama,BH": [
+            "Bahrain Bay Waterfront", "Al Fateh Corniche",
+            "Prince Khalifa bin Salman Park (Hidd)",
+            "Arad Fort & Lagoon Park (Muharraq)", "Al Areen Wildlife Park", "Water Garden City Promenade (Seef)"
+        ],
+        "Riyadh,SA": [
+            "King Abdullah Park (Malaz)", "Wadi Hanifah Trail (Diriyah)",
+            "Wadi Namar Park", "Salam Park",
+            "Diplomatic Quarter Parks & Trails", "Al Bujairi Terrace (Diriyah)"
+        ],
+        "Jeddah,SA": [
+            "Jeddah Waterfront (Corniche)", "Prince Majid Park",
+            "Obhur Corniche", "Al Rahma Mosque Promenade (Floating Mosque)",
+            "Arbaeen Lake Walkway"
+        ],
+        "Dammam,SA": [
+            "Dammam Corniche", "Half Moon Bay (with Al Khobar)",
+            "Modon Lake Park (Dammam)", "King Fahd Park (Dammam)", "Al Marjan Island Park"
+        ],
+        "Muscat,OM": [
+            "Mutrah Corniche", "Qurum Beach", "Qurum Natural Park",
+            "Riyam Park", "Al Mouj Marina Walk", "Azaiba/Seeb Beach Promenade"
+        ],
+    }
 
+    if city_code in GCC_PLACE_EXAMPLES:
+        try:
+            # pretty label in the active language if your helper is available
+            city_name = city_label(city_code, lang)  # falls back to code if not found
+        except Exception:
+            city_name = (city_code or "your city").split(",")[0]
+        examples = "; ".join(GCC_PLACE_EXAMPLES[city_code])
+        sys += f"\nLocal outdoor examples for {city_name}: {examples}. "
+
+    # Output language constraint (unchanged)
     sys += " Respond only in Arabic." if lang == "Arabic" else " Respond only in English."
     return sys, (city_code or ""), wx
 
