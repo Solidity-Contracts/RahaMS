@@ -731,7 +731,7 @@ def get_recent_journal_context(username: str, max_entries: int = 5) -> str:
             entry = {"type":"NOTE", "text":str(raw)}
         t = entry.get("type","NOTE")
         if t == "DAILY":
-            lines.append(f"Daily: mood={entry.get('mood','?')}, hydration={entry.get('hydration_glasses','?')}g, sleep={entry.get('sleep_hours','?')}h, fatigue={entry.get('fatigue','?')}")
+            lines.append(f"Daily: mood={entry.get('mood','?')}, hydration={entry.get('hydration_glasses','?')}glasses, sleep={entry.get('sleep_hours','?')}h, fatigue={entry.get('fatigue','?')}")
         elif t in ("ALERT","ALERT_AUTO"):
             core = entry.get("core_temp") or entry.get("body_temp"); base = entry.get("baseline")
             delta = f"+{round(core-base,1)}°C" if (core is not None and base is not None) else ""
